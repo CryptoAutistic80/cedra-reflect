@@ -1,0 +1,65 @@
+{
+  "name": "wallet_custody_lp_fee_transfer_claim_and_swaps",
+  "initial": {
+    "fixed_supply": 2000000,
+    "fee_bps": 100,
+    "amm_fee_bps": 30
+  },
+  "operations": [
+    {"op": "faucet_grant", "actor": "admin", "recipient": "alice", "amount": 200000},
+    {"op": "faucet_grant", "actor": "admin", "recipient": "bob", "amount": 300000},
+    {"op": "faucet_grant", "actor": "admin", "recipient": "carol", "amount": 100000},
+    {"op": "mint_quote", "actor": "admin", "recipient": "admin", "amount": 2000000},
+    {"op": "mint_quote", "actor": "admin", "recipient": "bob", "amount": 100000},
+    {"op": "mint_quote", "actor": "admin", "recipient": "carol", "amount": 100000},
+    {"op": "seed_pool", "actor": "admin", "rfl_amount": 400000, "usd_amount": 800000, "beneficiary": "alice", "min_lp_shares": 1},
+    {"op": "sell", "seller": "bob", "gross_rfl": 10000, "min_quote_out": 0},
+    {"op": "checkpoint_pool"},
+    {"op": "add_liquidity", "provider": "carol", "max_rfl": 10000, "max_usd": 20000, "min_lp_shares": 1},
+    {"op": "sell", "seller": "alice", "gross_rfl": 7000, "min_quote_out": 0},
+    {"op": "transfer_lp_shares", "sender": "alice", "recipient": "bob", "shares": 5000},
+    {"op": "claim_lp", "owner": "alice", "epoch_id": 1, "amount": 0},
+    {"op": "buy", "buyer": "carol", "quote_in": 10000, "min_net_rfl_out": 0}
+  ],
+  "expect": {
+    "index": 224800605564355428909,
+    "index_remainder": 404402,
+    "total_shares": 999846,
+    "lifetime_fees": 223,
+    "lifetime_materialized": 0,
+    "lifetime_custody_routed": 70,
+    "rounding_reserve": 1,
+    "custody_shares": 421490,
+    "custody_settled": 70,
+    "raw": {
+      "alice": 193069,
+      "bob": 290000,
+      "carol": 95287,
+      "pool": 421490,
+      "reward_vault": 153,
+      "lp_reward_vault:1": 1,
+      "distribution_vault": 1000000
+    },
+    "pending": {
+      "alice": 44,
+      "bob": 65,
+      "carol": 21,
+      "pool": 22
+    },
+    "lp_epoch": {
+      "epoch_id": 1,
+      "status": "ACTIVE",
+      "index": 122480837452350659350,
+      "index_remainder": 263450,
+      "total_shares": 579485,
+      "lifetime_received": 70,
+      "lifetime_claimed": 69,
+      "rounding_reserve": 1
+    },
+    "lp_pending": {
+      "alice": 0,
+      "bob": 0,
+      "carol": 0
+    }
+  }
+}

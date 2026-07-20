@@ -1,0 +1,19 @@
+[package]
+name = "TestAmm"
+version = "0.1.0"
+upgrade_policy = "compatible"
+
+[dependencies]
+CedraFramework = { git = "https://github.com/cedra-labs/cedra-framework.git", subdir = "cedra-framework", rev = "01e6ceafae19b900772b343a5af8ae236401e0a8" }
+ReflectionCore = { local = "../reflection-core" }
+TestAssets = { local = "../test-assets" }
+
+[addresses]
+test_amm = "_"
+reflection_core = "_"
+test_assets = "_"
+
+[dev-addresses]
+test_amm = "0xdead"
+reflection_core = "0xcafe"
+test_assets = "0xbabe"

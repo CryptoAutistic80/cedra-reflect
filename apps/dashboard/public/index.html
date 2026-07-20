@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Read-only Reflection Pilot Testnet dashboard preview.">
+    <title>Reflection Pilot Testnet</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <a class="skip-link" href="#screen-faucet">Skip to current screen</a>
+    <aside class="testnet-banner" role="alert" aria-live="assertive" aria-atomic="true">
+      <strong>TESTNET ASSET</strong>
+      <span id="banner-warning">NO MONETARY VALUE — STATE AND ADDRESSES MAY CHANGE</span>
+    </aside>
+    <header class="site-header">
+      <div>
+        <p class="eyebrow">Cedra Testnet · no-value pilot</p>
+        <h1>Reflection Pilot</h1>
+      </div>
+      <p class="read-mode">Read-only deterministic preview. No wallet is requested.</p>
+    </header>
+    <nav class="screen-nav" aria-label="Pilot screens">
+      <button type="button" data-screen="faucet">Faucet</button>
+      <button type="button" data-screen="portfolio">Portfolio</button>
+      <button type="button" data-screen="swap">Swap</button>
+      <button type="button" data-screen="claim">Claim</button>
+      <button type="button" data-screen="protocol">Protocol dashboard</button>
+    </nav>
+    <main>
+      <p id="interaction-status" class="status" role="status" aria-live="polite">Loading deterministic preview data.</p>
+
+      <section id="screen-faucet" class="screen" tabindex="-1" aria-labelledby="faucet-heading">
+        <p class="eyebrow">01 · Test distribution</p>
+        <h2 id="faucet-heading">Faucet</h2>
+        <p>First claim Testnet CED from the official Cedra Testnet faucet for gas. CED and all pilot assets are development-only.</p>
+        <div class="card-grid two-up">
+          <article class="card">
+            <h3>Claim tRFL</h3>
+            <p id="faucet-trfl">—</p>
+            <button type="button" data-draft="trfl">Prepare tRFL claim</button>
+          </article>
+          <article class="card">
+            <h3>Claim tUSD</h3>
+            <p id="faucet-tusd">—</p>
+            <button type="button" data-draft="tusd">Prepare tUSD claim</button>
+          </article>
+        </div>
+        <dl class="detail-list"><div><dt>Cooldown status</dt><dd id="faucet-cooldown">—</dd></div></dl>
+      </section>
+
+      <section id="screen-portfolio" class="screen" tabindex="-1" aria-labelledby="portfolio-heading" hidden>
+        <p class="eyebrow">02 · Holder view</p>
+        <h2 id="portfolio-heading">Portfolio</h2>
+        <div class="card-grid">
+          <article class="metric"><h3>Effective tRFL</h3><p id="portfolio-effective">—</p></article>
+          <article class="metric"><h3>Raw tRFL</h3><p id="portfolio-raw">—</p></article>
+          <article class="metric"><h3>Pending reflections</h3><p id="portfolio-pending">—</p></article>
+          <article class="metric"><h3>Lifetime claimed</h3><p id="portfolio-claimed">—</p></article>
+          <article class="metric"><h3>Eligible-supply share</h3><p id="portfolio-share">—</p></article>
+        </div>
+        <p class="note">Effective balance and pending rewards depend on the result of the Testnet hook compatibility gate. This preview displays the intended accounting view, not a wallet balance.</p>
+      </section>
+
+      <section id="screen-swap" class="screen" tabindex="-1" aria-labelledby="swap-heading" hidden>
+        <p class="eyebrow">03 · Canonical tRFL / tUSD pool</p>
+        <h2 id="swap-heading">Swap</h2>
+        <form class="swap-form" onsubmit="return false">
+          <label for="swap-direction">Direction</label>
+          <select id="swap-direction" name="direction"><option value="sell">Sell tRFL</option><option value="buy">Buy tRFL</option></select>
+          <label for="swap-amount">Gross input (base units)</label>
+          <input id="swap-amount" name="amount" inputmode="numeric" pattern="[0-9]+" value="100000" aria-describedby="swap-help">
+          <p id="swap-help" class="note">Quotes show the exact reflection fee, AMM fee, and net receipt. A submitted swap is unavailable in this preview.</p>
+          <button id="quote-swap" type="button">Calculate quote</button>
+          <button type="button" data-draft="swap">Prepare swap draft</button>
+        </form>
+        <dl class="detail-list quote-list">
+          <div><dt>Gross output/input</dt><dd id="swap-gross">—</dd></div>
+          <div><dt>Reflection fee</dt><dd id="swap-reflection-fee">—</dd></div>
+          <div><dt>AMM fee</dt><dd id="swap-amm-fee">—</dd></div>
+          <div><dt>Net received</dt><dd id="swap-net-received">—</dd></div>
+          <div><dt>Minimum net received</dt><dd id="swap-minimum-received">—</dd></div>
+          <div><dt>Price impact</dt><dd id="swap-impact">—</dd></div>
+          <div><dt>Transaction deadline</dt><dd id="swap-deadline">—</dd></div>
+        </dl>
+      </section>
+
+      <section id="screen-claim" class="screen" tabindex="-1" aria-labelledby="claim-heading" hidden>
+        <p class="eyebrow">04 · Reflection settlement</p>
+        <h2 id="claim-heading">Claim</h2>
+        <div class="card-grid two-up">
+          <article class="metric"><h3>Pending reflections</h3><p id="claim-pending">—</p></article>
+          <article class="metric"><h3>Estimated gas</h3><p id="claim-estimated-gas">—</p></article>
+        </div>
+        <p>In automatic-materialisation mode, spending can settle rewards when the hook probe proves it is safe. In claim-backed mode, use this screen before spending rewards.</p>
+        <button type="button" data-draft="claim-amount">Prepare amount claim</button>
+        <button type="button" data-draft="claim-all">Prepare claim all</button>
+      </section>
+
+      <section id="screen-protocol" class="screen" tabindex="-1" aria-labelledby="protocol-heading" hidden>
+        <p class="eyebrow">05 · Independent accounting witness</p>
+        <h2 id="protocol-heading">Protocol dashboard</h2>
+        <p id="protocol-ledger" class="note">—</p>
+        <div class="card-grid">
+          <article class="metric"><h3>Eligible holders</h3><p id="protocol-holders">—</p></article>
+          <article class="metric"><h3>Eligible supply</h3><p id="protocol-supply">—</p></article>
+          <article class="metric"><h3>Reward-vault balance</h3><p id="protocol-vault">—</p></article>
+          <article class="metric"><h3>Reflection liability</h3><p id="protocol-liability">—</p></article>
+          <article class="metric"><h3>Backing surplus</h3><p id="protocol-surplus">—</p></article>
+          <article class="metric"><h3>Lifetime swap fees</h3><p id="protocol-fees">—</p></article>
+          <article class="metric"><h3>Lifetime materialized</h3><p id="protocol-materialized">—</p></article>
+          <article class="metric"><h3>Current index</h3><p id="protocol-index">—</p></article>
+          <article class="metric"><h3>Pool reserves</h3><p id="protocol-reserves">—</p></article>
+          <article class="metric"><h3>Package version</h3><p id="protocol-version">—</p></article>
+          <article class="metric"><h3>Paused state</h3><p id="protocol-paused">—</p></article>
+        </div>
+      </section>
+    </main>
+    <footer><p>Reflection Pilot Testnet. Assets have no monetary value.</p></footer>
+    <script type="module" src="./assets/apps/dashboard/src/main.js"></script>
+  </body>
+</html>

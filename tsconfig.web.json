@@ -1,0 +1,8 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "apps/dashboard/public/assets"
+  },
+  "include": ["apps/dashboard/src/**/*.ts", "packages/protocol-sdk/src/**/*.ts", "packages/indexer/src/**/*.ts"],
+  "exclude": ["tests/**", "scripts/**", "apps/dashboard/public/**"]
+}

@@ -1,0 +1,31 @@
+# Dependency and build output
+node_modules/
+dist/
+coverage/
+.vite/
+*.tsbuildinfo
+apps/dashboard/public/assets/
+
+# Python
+__pycache__/
+.pytest_cache/
+.hypothesis/
+*.py[cod]
+.venv/
+
+# Move/Cedra build and profile material
+build/
+.move/
+.cedra/
+*.mv
+*.mvcov
+
+# Local operational evidence that may contain account identifiers or signatures
+ops/local/
+ops/release-manifest.*.signed.json
+
+# OS/editor
+.DS_Store
+.idea/
+.vscode/
+.playwright-cli/

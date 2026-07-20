@@ -1,0 +1,23 @@
+{
+  "name": "reflection-pilot-testnet",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Offline-first client, dashboard, and accounting witness for the Cedra Reflection Pilot Testnet.",
+  "scripts": {
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.web.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.web.json --noEmit",
+    "test": "tsc -p tsconfig.json && node dist/tests/run.js",
+    "dashboard": "tsc -p tsconfig.web.json",
+    "demo": "tsc -p tsconfig.json && node dist/scripts/generate-demo-data.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
+  },
+  "dependencies": {
+    "@cedra-labs/ts-sdk": "2.2.8"
+  }
+}

@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "network": "cedra-testnet",
+  "deployment_id": "reflection-pilot-001",
+  "release": "testnet-v0.1.0",
+  "no_value_notice": "TESTNET ASSET — NO MONETARY VALUE — STATE AND ADDRESSES MAY CHANGE",
+  "framework_commit": "RECORD_EXACT_PINNED_FRAMEWORK_COMMIT",
+  "application_commit": "RECORD_GIT_COMMIT_AFTER_REVIEW",
+  "cedra_cli_version": "cedra 1.0.4",
+  "cedra_sdk_version": "2.2.8",
+  "packages": {
+    "reflection_core": {
+      "publisher": "RECORD_CORE_PUBLISHER_ADDRESS",
+      "source_digest": "RECORD_CORE_SOURCE_DIGEST",
+      "compiled_package_digest": "RECORD_CORE_COMPILED_DIGEST",
+      "publish_transaction": "RECORD_CORE_PUBLISH_TRANSACTION",
+      "gas_used": "RECORD_CORE_PUBLISH_GAS",
+      "finalized_ledger_version": "RECORD_CORE_PUBLISH_LEDGER_VERSION"
+    },
+    "test_assets": {
+      "publisher": "RECORD_ASSET_PUBLISHER_ADDRESS",
+      "source_digest": "RECORD_ASSET_SOURCE_DIGEST",
+      "compiled_package_digest": "RECORD_ASSET_COMPILED_DIGEST",
+      "publish_transaction": "RECORD_ASSET_PUBLISH_TRANSACTION",
+      "gas_used": "RECORD_ASSET_PUBLISH_GAS",
+      "finalized_ledger_version": "RECORD_ASSET_PUBLISH_LEDGER_VERSION"
+    },
+    "test_amm": {
+      "publisher": "RECORD_AMM_PUBLISHER_ADDRESS",
+      "source_digest": "RECORD_AMM_SOURCE_DIGEST",
+      "compiled_package_digest": "RECORD_AMM_COMPILED_DIGEST",
+      "publish_transaction": "RECORD_AMM_PUBLISH_TRANSACTION",
+      "gas_used": "RECORD_AMM_PUBLISH_GAS",
+      "finalized_ledger_version": "RECORD_AMM_PUBLISH_LEDGER_VERSION"
+    }
+  },
+  "operational_authority": {
+    "address": "RECORD_DISTINCT_OPERATIONAL_ADDRESS",
+    "core_handoff_transaction": "RECORD_CORE_HANDOFF_TRANSACTION",
+    "faucet_handoff_transaction": "RECORD_FAUCET_HANDOFF_TRANSACTION",
+    "amm_handoff_transaction": "RECORD_AMM_HANDOFF_TRANSACTION",
+    "reconciled_ledger_version": "RECORD_HANDOFF_RECONCILIATION_LEDGER_VERSION"
+  },
+  "objects": {
+    "token_metadata": "RECORD_TRFL_METADATA_ADDRESS",
+    "reward_vault": "RECORD_REWARD_VAULT_ADDRESS",
+    "distribution_vault": "RECORD_DISTRIBUTION_VAULT_ADDRESS",
+    "pool": "RECORD_POOL_ADDRESS",
+    "pool_custody_store": "RECORD_POOL_CUSTODY_STORE_ADDRESS",
+    "pool_quote_reserve_store": "RECORD_POOL_TUSD_STORE_ADDRESS",
+    "lp_share_representation": "account-bound-table",
+    "lp_epoch_registry": "RECORD_LP_EPOCH_REGISTRY_ADDRESS",
+    "active_lp_epoch": "1",
+    "active_lp_state": "RECORD_ACTIVE_LP_STATE_ADDRESS",
+    "lp_reward_vault": "RECORD_LP_REWARD_VAULT_ADDRESS",
+    "mock_usd_metadata": "RECORD_TUSD_METADATA_ADDRESS"
+  },
+  "initialization": {
+    "faucet_transaction": "RECORD_FAUCET_INITIALIZATION_TRANSACTION",
+    "pool_transaction": "RECORD_POOL_INITIALIZATION_TRANSACTION",
+    "seed_transaction": "RECORD_POOL_SEED_TRANSACTION",
+    "finalized_ledger_version": "RECORD_SEED_LEDGER_VERSION",
+    "zero_discrepancy_snapshot": "RECORD_INITIAL_RECONCILIATION_SNAPSHOT_PATH"
+  },
+  "hook_probe": {
+    "devnet_report": "ops/evidence/hook-probe-devnet.json",
+    "testnet_report": "ops/evidence/hook-probe-testnet.json",
+    "mode": "automatic-materialisation-or-claim-backed"
+  },
+  "review": {
+    "independent_review": "RECORD_INDEPENDENT_REVIEW_PATH",
+    "unresolved_critical_findings": 0,
+    "unresolved_high_findings": 0
+  },
+  "approvals": [
+    {
+      "role": "release-approver-1",
+      "identity": "RECORD_APPROVER",
+      "approved_at": "RFC3339_TIMESTAMP",
+      "signature": "EXTERNAL_SIGNATURE_REFERENCE"
+    },
+    {
+      "role": "release-approver-2",
+      "identity": "RECORD_APPROVER",
+      "approved_at": "RFC3339_TIMESTAMP",
+      "signature": "EXTERNAL_SIGNATURE_REFERENCE"
+    }
+  ]
+}

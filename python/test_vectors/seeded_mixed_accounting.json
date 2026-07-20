@@ -1,0 +1,548 @@
+{
+  "name": "seeded_mixed_wallet_custody_lp_conformance",
+  "generator": {
+    "seed": 227436237555488,
+    "generated_operation_count": 64,
+    "algorithm": "Python random.Random fixed-seed valid-operation sampler"
+  },
+  "initial": {
+    "fixed_supply": 1000000000000000,
+    "fee_bps": 100,
+    "amm_fee_bps": 30
+  },
+  "operations": [
+    {
+      "op": "faucet_grant",
+      "actor": "admin",
+      "recipient": "alice",
+      "amount": 500000
+    },
+    {
+      "op": "faucet_grant",
+      "actor": "admin",
+      "recipient": "bob",
+      "amount": 500000
+    },
+    {
+      "op": "faucet_grant",
+      "actor": "admin",
+      "recipient": "carol",
+      "amount": 500000
+    },
+    {
+      "op": "faucet_grant",
+      "actor": "admin",
+      "recipient": "dave",
+      "amount": 500000
+    },
+    {
+      "op": "mint_quote",
+      "actor": "admin",
+      "recipient": "admin",
+      "amount": 5000000
+    },
+    {
+      "op": "mint_quote",
+      "actor": "admin",
+      "recipient": "alice",
+      "amount": 1000000
+    },
+    {
+      "op": "mint_quote",
+      "actor": "admin",
+      "recipient": "bob",
+      "amount": 1000000
+    },
+    {
+      "op": "mint_quote",
+      "actor": "admin",
+      "recipient": "carol",
+      "amount": 1000000
+    },
+    {
+      "op": "mint_quote",
+      "actor": "admin",
+      "recipient": "dave",
+      "amount": 1000000
+    },
+    {
+      "op": "seed_pool",
+      "actor": "admin",
+      "rfl_amount": 2000000,
+      "usd_amount": 2000000,
+      "beneficiary": "alice",
+      "min_lp_shares": 1
+    },
+    {
+      "op": "sell",
+      "seller": "carol",
+      "gross_rfl": 1801,
+      "min_quote_out": 0
+    },
+    {
+      "op": "sell",
+      "seller": "bob",
+      "gross_rfl": 3887,
+      "min_quote_out": 0
+    },
+    {
+      "op": "transfer",
+      "sender": "alice",
+      "recipient": "dave",
+      "amount": 386
+    },
+    {
+      "op": "transfer",
+      "sender": "dave",
+      "recipient": "alice",
+      "amount": 178
+    },
+    {
+      "op": "sell",
+      "seller": "dave",
+      "gross_rfl": 1942,
+      "min_quote_out": 0
+    },
+    {
+      "op": "transfer",
+      "sender": "bob",
+      "recipient": "alice",
+      "amount": 1503
+    },
+    {
+      "op": "buy",
+      "buyer": "bob",
+      "quote_in": 2198,
+      "min_net_rfl_out": 0
+    },
+    {
+      "op": "transfer",
+      "sender": "carol",
+      "recipient": "alice",
+      "amount": 1149
+    },
+    {
+      "op": "add_liquidity",
+      "provider": "alice",
+      "max_rfl": 1458,
+      "max_usd": 1384,
+      "min_lp_shares": 1
+    },
+    {
+      "op": "sell",
+      "seller": "alice",
+      "gross_rfl": 822,
+      "min_quote_out": 0
+    },
+    {
+      "op": "transfer",
+      "sender": "bob",
+      "recipient": "dave",
+      "amount": 1021
+    },
+    {
+      "op": "claim",
+      "account": "dave",
+      "amount": 1
+    },
+    {
+      "op": "buy",
+      "buyer": "carol",
+      "quote_in": 2775,
+      "min_net_rfl_out": 0
+    },
+    {
+      "op": "claim",
+      "account": "carol",
+      "amount": 6
+    },
+    {
+      "op": "sell",
+      "seller": "carol",
+      "gross_rfl": 3265,
+      "min_quote_out": 0
+    },
+    {
+      "op": "add_liquidity",
+      "provider": "bob",
+      "max_rfl": 984,
+      "max_usd": 1221,
+      "min_lp_shares": 1
+    },
+    {
+      "op": "claim",
+      "account": "bob",
+      "amount": 20
+    },
+    {
+      "op": "buy",
+      "buyer": "alice",
+      "quote_in": 4108,
+      "min_net_rfl_out": 0
+    },
+    {
+      "op": "buy",
+      "buyer": "dave",
+      "quote_in": 1449,
+      "min_net_rfl_out": 0
+    },
+    {
+      "op": "remove_liquidity",
+      "provider": "bob",
+      "shares": 267,
+      "min_rfl_output": 1,
+      "min_usd_output": 1
+    },
+    {
+      "op": "set_fee_bps",
+      "actor": "admin",
+      "fee_bps": 61
+    },
+    {
+      "op": "sell",
+      "seller": "carol",
+      "gross_rfl": 1950,
+      "min_quote_out": 0
+    },
+    {
+      "op": "sell",
+      "seller": "alice",
+      "gross_rfl": 3162,
+      "min_quote_out": 0
+    },
+    {
+      "op": "checkpoint_pool"
+    },
+    {
+      "op": "transfer",
+      "sender": "carol",
+      "recipient": "dave",
+      "amount": 4227
+    },
+    {
+      "op": "sell",
+      "seller": "dave",
+      "gross_rfl": 2238,
+      "min_quote_out": 0
+    },
+    {
+      "op": "checkpoint_pool"
+    },
+    {
+      "op": "checkpoint_pool"
+    },
+    {
+      "op": "checkpoint_pool"
+    },
+    {
+      "op": "buy",
+      "buyer": "dave",
+      "quote_in": 3513,
+      "min_net_rfl_out": 0
+    },
+    {
+      "op": "sell",
+      "seller": "alice",
+      "gross_rfl": 735,
+      "min_quote_out": 0
+    },
+    {
+      "op": "transfer_lp_shares",
+      "sender": "bob",
+      "recipient": "carol",
+      "shares": 161
+    },
+    {
+      "op": "buy",
+      "buyer": "bob",
+      "quote_in": 4181,
+      "min_net_rfl_out": 0
+    },
+    {
+      "op": "buy",
+      "buyer": "bob",
+      "quote_in": 459,
+      "min_net_rfl_out": 0
+    },
+    {
+      "op": "add_liquidity",
+      "provider": "bob",
+      "max_rfl": 1086,
+      "max_usd": 2563,
+      "min_lp_shares": 1
+    },
+    {
+      "op": "sell",
+      "seller": "bob",
+      "gross_rfl": 3379,
+      "min_quote_out": 0
+    },
+    {
+      "op": "transfer",
+      "sender": "dave",
+      "recipient": "bob",
+      "amount": 1646
+    },
+    {
+      "op": "transfer",
+      "sender": "bob",
+      "recipient": "alice",
+      "amount": 2490
+    },
+    {
+      "op": "add_liquidity",
+      "provider": "dave",
+      "max_rfl": 163,
+      "max_usd": 3802,
+      "min_lp_shares": 1
+    },
+    {
+      "op": "set_fee_bps",
+      "actor": "admin",
+      "fee_bps": 53
+    },
+    {
+      "op": "buy",
+      "buyer": "carol",
+      "quote_in": 3986,
+      "min_net_rfl_out": 0
+    },
+    {
+      "op": "buy",
+      "buyer": "dave",
+      "quote_in": 3997,
+      "min_net_rfl_out": 0
+    },
+    {
+      "op": "transfer",
+      "sender": "bob",
+      "recipient": "carol",
+      "amount": 3265
+    },
+    {
+      "op": "claim",
+      "account": "alice",
+      "amount": 31
+    },
+    {
+      "op": "set_fee_bps",
+      "actor": "admin",
+      "fee_bps": 89
+    },
+    {
+      "op": "remove_liquidity",
+      "provider": "carol",
+      "shares": 15,
+      "min_rfl_output": 1,
+      "min_usd_output": 1
+    },
+    {
+      "op": "transfer_lp_shares",
+      "sender": "carol",
+      "recipient": "alice",
+      "shares": 45
+    },
+    {
+      "op": "transfer_lp_shares",
+      "sender": "bob",
+      "recipient": "dave",
+      "shares": 1305
+    },
+    {
+      "op": "remove_liquidity",
+      "provider": "carol",
+      "shares": 29,
+      "min_rfl_output": 1,
+      "min_usd_output": 1
+    },
+    {
+      "op": "claim",
+      "account": "dave",
+      "amount": 40
+    },
+    {
+      "op": "buy",
+      "buyer": "alice",
+      "quote_in": 3102,
+      "min_net_rfl_out": 0
+    },
+    {
+      "op": "buy",
+      "buyer": "alice",
+      "quote_in": 2684,
+      "min_net_rfl_out": 0
+    },
+    {
+      "op": "transfer",
+      "sender": "bob",
+      "recipient": "carol",
+      "amount": 771
+    },
+    {
+      "op": "claim_lp",
+      "owner": "alice",
+      "epoch_id": 1,
+      "amount": 93
+    },
+    {
+      "op": "remove_liquidity",
+      "provider": "alice",
+      "shares": 4358,
+      "min_rfl_output": 1,
+      "min_usd_output": 1
+    },
+    {
+      "op": "sell",
+      "seller": "dave",
+      "gross_rfl": 3681,
+      "min_quote_out": 0
+    },
+    {
+      "op": "transfer",
+      "sender": "dave",
+      "recipient": "bob",
+      "amount": 3319
+    },
+    {
+      "op": "buy",
+      "buyer": "carol",
+      "quote_in": 3463,
+      "min_net_rfl_out": 0
+    },
+    {
+      "op": "add_liquidity",
+      "provider": "dave",
+      "max_rfl": 756,
+      "max_usd": 1205,
+      "min_lp_shares": 1
+    },
+    {
+      "op": "checkpoint_pool"
+    },
+    {
+      "op": "sell",
+      "seller": "bob",
+      "gross_rfl": 1356,
+      "min_quote_out": 0
+    },
+    {
+      "op": "buy",
+      "buyer": "alice",
+      "quote_in": 3438,
+      "min_net_rfl_out": 0
+    },
+    {
+      "op": "sell",
+      "seller": "alice",
+      "gross_rfl": 3667,
+      "min_quote_out": 0
+    },
+    {
+      "op": "sell",
+      "seller": "dave",
+      "gross_rfl": 2297,
+      "min_quote_out": 0
+    }
+  ],
+  "expect": {
+    "fee_bps": 89,
+    "index": 145621074240505212689,
+    "index_remainder": 1699388,
+    "total_shares": 3999609,
+    "aggregate_correction": {
+      "negative": true,
+      "magnitude": 427359121992813219537989
+    },
+    "unallocated_fees": 0,
+    "lifetime_fees": 582,
+    "lifetime_materialized": 98,
+    "lifetime_custody_routed": 244,
+    "rounding_reserve": 1,
+    "custody_shares": 1994424,
+    "custody_correction": {
+      "negative": false,
+      "magnitude": 732304249739815834002303
+    },
+    "custody_settled": 244,
+    "custody_pending": 47,
+    "raw": {
+      "alice": 512732,
+      "bob": 492305,
+      "carol": 501801,
+      "dave": 498347,
+      "pool": 1994424,
+      "reward_vault": 240,
+      "distribution_vault": 999999996000000,
+      "lp_reward_vault:1": 151
+    },
+    "pending": {
+      "alice": 42,
+      "bob": 51,
+      "carol": 66,
+      "dave": 32,
+      "pool": 47
+    },
+    "quote": {
+      "alice": 997968,
+      "bob": 999877,
+      "carol": 996731,
+      "dave": 1000171,
+      "admin": 3000000,
+      "pool": 2005253
+    },
+    "lp_epoch": {
+      "status": "ACTIVE",
+      "index": 121909165358824845043,
+      "index_remainder": 891470,
+      "total_shares": 1999704,
+      "aggregate_correction": {
+        "negative": false,
+        "magnitude": 217754395296522067241258
+      },
+      "unallocated_rewards": 0,
+      "rounding_reserve": 1,
+      "lifetime_received": 244,
+      "lifetime_claimed": 93,
+      "liability": 150,
+      "vault_balance": 151,
+      "positions": {
+        "alice": {
+          "shares": 1997074,
+          "correction": {
+            "negative": false,
+            "magnitude": 426181019977608556576012
+          },
+          "claimed": 93,
+          "pending": 150
+        },
+        "bob": {
+          "shares": 332,
+          "correction": {
+            "negative": false,
+            "magnitude": 23332393997856369869336
+          },
+          "claimed": 0,
+          "pending": 0
+        },
+        "carol": {
+          "shares": 72,
+          "correction": {
+            "negative": true,
+            "magnitude": 3145141162725921819313
+          },
+          "claimed": 0,
+          "pending": 0
+        },
+        "dave": {
+          "shares": 2226,
+          "correction": {
+            "negative": true,
+            "magnitude": 228613877516216937384777
+          },
+          "claimed": 0,
+          "pending": 0
+        }
+      }
+    }
+  }
+}
