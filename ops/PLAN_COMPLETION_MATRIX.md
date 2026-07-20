@@ -4,7 +4,7 @@ Last audited: 2026-07-20
 
 This matrix maps `CEDRA_TESTNET_PLAN.md` to evidence that exists in the current
 workspace. It deliberately distinguishes local source/test proof from finalized
-Devnet or Testnet evidence. A green local gate never authorizes publication,
+Testnet evidence. A green local gate never authorizes publication,
 funding, signing, or submission.
 
 Status meanings:
@@ -20,7 +20,7 @@ Status meanings:
 
 | Plan phase | Status | Current authoritative evidence | Missing evidence or work |
 |---|---|---|---|
-| Phase 0 — network compatibility | PARTIAL | Pinned framework in every `Move.toml`; local `hook-probe` test; `move/docs/HOOK_COMPATIBILITY.md`; `ops/HOOK_PROBE.md` | Finalized Devnet and Testnet H1-H8 records, SDK/wallet display results, gas measurements, and signed automatic-materialisation versus claim-backed decision |
+| Phase 0 — network compatibility | PARTIAL | Pinned framework in every `Move.toml`; local `hook-probe` test; `move/docs/HOOK_COMPATIBILITY.md`; `ops/HOOK_PROBE.md` | Finalized Testnet H1-H8 record, SDK/wallet display results, gas measurements, and signed automatic-materialisation versus claim-backed decision |
 | Phase 1 — specification and model | PASS (local) | `docs/accounting-specification.md`; independent Python model; hand-authored vector; fixed-seed generated Python/Move witness; one-million-operation gate | Re-run from the exact reviewed release commit before publication |
 | Phase 2 — reflection core | PASS (local) | `move/reflection-core`; core and integration tests; exact backing views; raw-store accessor; clean initial schema | Exact-address release compilation, independent review, and finalized chain proof |
 | Phase 3 — AMM and faucet | PASS (local) | `move/test-amm`; `move/test-assets`; 54 integration tests; Python and generated conformance witness | Exact-address release compilation, gas results, and finalized chain reconciliation |
@@ -43,11 +43,11 @@ Status meanings:
 | Both vault layers classify every base unit | PASS (local) | Tiny-fee, terminal-dust, Python property, indexer, and generated conformance tests |
 | Wallet and LP claims preserve effective value | PASS (local) | Partial/full wallet and LP claim tests plus Python invariants |
 | LP mint, burn, transfer, and claim prevent historical capture | PASS (local) | Checkpoint-before-mint/transfer, proportional burn, claim replay, and epoch-isolation tests |
-| Pending rewards are spendable when hooks work | PARTIAL | Local VM hook probe and auto-materialisation integration pass | Finalized Devnet/Testnet and wallet compatibility decision |
+| Pending rewards are spendable when hooks work | PARTIAL | Local VM hook probe and auto-materialisation integration pass | Finalized Testnet and wallet compatibility decision |
 | AMM prices from net input and authoritative raw reserves | PASS (local) | Non-divisible AMM rounding unit, raw reserve/custody assertions, and cross-implementation witness |
 | Buy quote/slippage uses net user receipt | PASS (local) | `buy_slippage_uses_net_user_receipt` and SDK quote assertions |
 | Unclaimed LP rewards never change reserves or invariant | PASS (local) | Custody checkpoint and LP claim tests compare reserves before/after |
-| Direct reserve, LP, custody route, and vault bypasses fail closed | PASS (local) | Direct tRFL/tUSD reserve deposit/withdrawal tests, frozen LP vault tests, private capabilities, and table-based account-bound LP shares |
+| Direct reserve, LP, custody route, and vault bypasses fail closed | PASS (local) | Direct tRFL/tUSD reserve deposit/withdrawal tests, frozen LP vault tests, package-only registry/LP mutators, private capabilities, and table-based account-bound LP shares |
 | Zero LP supply and fresh epochs cannot inherit live custody or liabilities | PASS (local) | Final shutdown, claim-only dust, same-owner fresh-epoch, and reseed tests |
 | Unsupported delegated custody fails closed | PASS (local) | Explicit wallet registration; custodian co-signature; funded, aliased, already-classified, wrong-owner, and pre-liable registration rejection; exact single custody binding; unsupported-store hook aborts; and no public adapter registrar |
 | No speculative legacy-state transition surface | PASS (local) | Source scan plus one direct initial resource schema; no conversion resource or entry function |

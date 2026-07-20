@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "network": "cedra-devnet-or-testnet",
+  "network": "cedra-testnet",
   "rpc_url": "RECORD_EXACT_RPC_URL",
   "run_at": "RFC3339_TIMESTAMP",
   "cli_version": "cedra 1.0.4",

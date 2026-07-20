@@ -1,6 +1,10 @@
 # Cedra production-quality testnet plan
 
-Agreed. As of **July 19, 2026**, Cedra’s public documentation exposes **Testnet and Devnet** for testing and development, rather than a live mainnet endpoint. Cedra also states that faucet CED is for development and has no real-world value. So the correct target is a **public testnet beta built to production engineering standards**, not a production financial launch.
+Agreed. As of **July 19, 2026**, Cedra’s public documentation exposes a public
+**Testnet** endpoint rather than a live mainnet endpoint. Cedra also states that
+faucet CED is for development and has no real-world value. The target here is
+therefore a **public Testnet beta built to production engineering standards**,
+not a production financial launch. This plan has no Devnet execution stage.
 
 The goal becomes:
 
@@ -38,7 +42,7 @@ That generated witness exposed and corrected a non-divisible AMM-fee rounding
 mismatch across Move, the SDK mock, and the indexer. Focused adversarial Move
 proofs now also reject a fake core admin, a second canonical-custody binding,
 funded or already-classified custody stores, a non-owner custody registration,
-pre-existing LP liabilities, bootstrap shares below the provider's minimum,
+duplicate initialization, bootstrap shares below the provider's minimum,
 and a second LP claim after the entitlement is exhausted. Swap guard proofs cover zero amounts, expired
 deadlines, gross and reserve-percentage caps, net-receipt buy slippage, and the
 independent pool pause; both raw reserves reject direct deposits and
@@ -46,13 +50,13 @@ withdrawals. An evented publisher-authorized handoff now separates the cold
 core, asset, and AMM publishers from the operational key used for routine fee,
 pause, faucet, shutdown, and limit actions. The contract is one clean initial schema with no
 legacy-state conversion surface. This is local source and deterministic test
-evidence only. It is not Devnet/Testnet deployment, wallet, participant, gas,
+evidence only. It is not Testnet deployment, wallet, participant, gas,
 publication, or public-pilot evidence; those gates remain open until performed
 and preserved separately.
 
 **Local contract gate — passed July 20, 2026:** `make verify` passes all Move
 packages including **54/54 integration tests** and the AMM rounding unit test,
-the independent Python model and evidence-template checks pass **31/31 tests**, and the TypeScript
+the independent Python model, evidence-template, and Move-surface checks pass **33/33 tests**, and the TypeScript
 contract-support witness passes **23/23 deterministic tests**. The generated
 Python/Move witness drift check also passes. The expanded reference-model gate
 passes **1,000,000 operations across 1,024 holders**. `make release-artifacts` also
@@ -550,9 +554,9 @@ This is not an area to simplify merely because the tokens are valueless. The ari
 
 # 6. Dispatchable-hook feasibility gate
 
-Before building the entire protocol, run a small compatibility probe on both Cedra Devnet and Testnet.
-
-Cedra distinguishes Devnet as the more disposable development environment and Testnet as the more stable pre-production environment. The implementation should therefore progress from local tests, to Devnet integration, to the public Testnet pilot.
+Before publishing the protocol, run a small compatibility probe on Cedra
+Testnet. Local deterministic tests precede this probe; Devnet is not part of
+the execution path for this pilot.
 
 ## Probe package
 
@@ -1165,10 +1169,11 @@ Local runtime tests cover the attacks that can be expressed without weakening
 the package: authority rejection, immutable one-time custody registration,
 direct reserve and reward-vault bypasses, bootstrap minimum-share enforcement,
 historical-capture attempts, claim replay, pause boundaries, epoch isolation,
-and exact vault backing. Forging the custody capability and constructing an LP
-secondary store are prevented structurally by private Move resource types and
-the absence of a fungible LP asset; the test package must not expose a forge or
-escape hatch merely to simulate those impossible calls. Network interruption,
+and exact vault backing. Pre-initializing or directly mutating the LP ledger,
+forging the custody capability, and constructing an LP secondary store are
+prevented structurally by package-only functions, private Move resource types,
+and the absence of a fungible LP asset; the test package must not expose a forge
+or escape hatch merely to simulate those impossible calls. Network interruption,
 wallet behaviour, and RPC recovery remain live-environment gates rather than
 local Move claims.
 

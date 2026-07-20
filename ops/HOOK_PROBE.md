@@ -4,9 +4,9 @@ This probe is the required feasibility gate before an automatic-materialisation
 release. It is intentionally a small, isolated package; it must not be inferred
 from a successful compile of the reflection protocol.
 
-> **No-value Testnet procedure.** Run first on Devnet, then independently on
-> Testnet. Publishing and transactions are operator-authorized mutations and
-> are not performed by this repository's CI.
+> **No-value Testnet procedure.** This pilot has no Devnet execution stage.
+> Publishing and transactions are operator-authorized mutations and are not
+> performed by this repository's CI.
 
 ## Preconditions
 
@@ -15,9 +15,8 @@ from a successful compile of the reflection protocol.
   production-like publisher or operational keys.
 - Build the package locally, preserve its digest, and simulate each transaction
   before authorizing it.
-- Configure a Testnet-only profile with `cedra init --network testnet` or a
-  Devnet-only profile with `cedra init --profile devnet`; never record private
-  keys or mnemonic material in the report.
+- Configure a Testnet-only profile with `cedra init --network testnet`; never
+  record private keys or mnemonic material in the report.
 
 ## Required experiment matrix
 
@@ -42,6 +41,7 @@ mode is valid; silence about an inconclusive result is not.
 
 ## Evidence record
 
-Copy `ops/evidence/hook-probe.template.json` to a network-labelled evidence
-file. Fill every result from finalized transactions, checked SDK output and a
-wallet screenshot/reference. A release manifest must link both records.
+Copy `ops/evidence/hook-probe.template.json` to
+`ops/evidence/hook-probe-testnet.json`. Fill every result from finalized
+transactions, checked SDK output and a wallet screenshot/reference. The
+release manifest must link this record.

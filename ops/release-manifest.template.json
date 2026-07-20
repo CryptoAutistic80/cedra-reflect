@@ -63,7 +63,6 @@
     "zero_discrepancy_snapshot": "RECORD_INITIAL_RECONCILIATION_SNAPSHOT_PATH"
   },
   "hook_probe": {
-    "devnet_report": "ops/evidence/hook-probe-devnet.json",
     "testnet_report": "ops/evidence/hook-probe-testnet.json",
     "mode": "automatic-materialisation-or-claim-backed"
   },

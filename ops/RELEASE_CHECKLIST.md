@@ -9,7 +9,7 @@ CI must build and verify the package but never publish it automatically.
 
 - [ ] Pin and record the Cedra Framework revision and CLI version.
 - [ ] Run the complete local verification suite from a clean checkout.
-- [ ] Run the dispatchable-hook probe on Devnet and Testnet; attach both reports.
+- [ ] Run the dispatchable-hook probe on Testnet; attach the finalized report.
 - [ ] Record which mode is supported: automatic materialisation or claim-backed.
 - [ ] Review the compiled package digest and initial package publication policy.
 - [ ] Confirm the release contains no post-seal `tRFL` mint, vault sweep, forced

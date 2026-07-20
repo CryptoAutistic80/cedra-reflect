@@ -483,28 +483,15 @@ module integration_tests::protocol_integration_tests {
         custody_registry::destroy_capability_for_test(unexpected_cap);
     }
 
-    #[test(
-        core = @0xcafe,
-        assets = @0xbabe,
-        amm = @0xdead,
-        alice = @0xa11ce,
-    )]
-    #[expected_failure(abort_code = 1, location = test_amm::lp_rewards)]
-    fun preexisting_lp_liability_blocks_pool_initialization(
+    #[test(core = @0xcafe, assets = @0xbabe, amm = @0xdead, framework = @0x1)]
+    #[expected_failure(abort_code = 1, location = test_amm::pool)]
+    fun pool_initialization_is_one_shot(
         core: &signer,
         assets: &signer,
         amm: &signer,
-        alice: &signer,
+        framework: &signer,
     ) {
-        reflection_token::initialize_for_test(core);
-        mock_usd::initialize_for_test(assets);
-        let vault_constructor = object::create_object(signer::address_of(amm));
-        let vault = fungible_asset::create_store(
-            &vault_constructor, reflection_token::metadata(),
-        );
-        let lp_cap = lp_rewards::initialize(amm, vault);
-        lp_rewards::mint_active(&lp_cap, signer::address_of(alice), 1);
-        lp_rewards::destroy_capability_for_test(lp_cap);
+        setup(core, assets, amm, framework);
         pool::initialize(core, assets, amm);
     }
 

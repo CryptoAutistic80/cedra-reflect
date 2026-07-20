@@ -31,7 +31,7 @@ module reflection_core::custody_registry {
         approved_lp_vaults: Table<address, u64>,
     }
 
-    public fun register(
+    public(package) fun register(
         admin: &signer,
         reserve: Object<FungibleStore>,
         lp_vault: Object<FungibleStore>,
@@ -54,7 +54,7 @@ module reflection_core::custody_registry {
 
     /// Activates a fresh immutable epoch-to-vault binding. The token module
     /// validates the zero-reserve/zero-pending boundary before calling this.
-    public fun open_epoch(
+    public(package) fun open_epoch(
         admin: &signer,
         cap: &CustodySettlementCapability,
         epoch: u64,
@@ -71,7 +71,7 @@ module reflection_core::custody_registry {
         registry.active_lp_vault = vault_address;
     }
 
-    public fun assert_active_route(
+    public(package) fun assert_active_route(
         cap: &CustodySettlementCapability,
         reserve: Object<FungibleStore>,
         epoch: u64,
@@ -84,7 +84,7 @@ module reflection_core::custody_registry {
         assert!(object::object_address(&lp_vault) == registry.active_lp_vault, E_INVALID_ACTIVE_VAULT);
     }
 
-    public fun assert_claim_vault(
+    public(package) fun assert_claim_vault(
         cap: &CustodySettlementCapability,
         epoch: u64,
         lp_vault: Object<FungibleStore>,
@@ -96,7 +96,7 @@ module reflection_core::custody_registry {
         assert!(*table::borrow(&registry.approved_lp_vaults, vault_address) == epoch, E_UNAPPROVED_VAULT);
     }
 
-    public fun assert_reserve(cap: &CustodySettlementCapability, reserve: Object<FungibleStore>) acquires CustodyRegistry {
+    public(package) fun assert_reserve(cap: &CustodySettlementCapability, reserve: Object<FungibleStore>) acquires CustodyRegistry {
         assert_capability(cap);
         assert!(object::object_address(&reserve) == borrow_global<CustodyRegistry>(@reflection_core).reserve_store, E_INVALID_RESERVE);
     }

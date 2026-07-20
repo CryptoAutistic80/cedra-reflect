@@ -22,6 +22,6 @@ The Testnet publish sequence is deliberately multi-authority:
 4. Publish `test-amm`, then call `pool::initialize(core_admin, asset_admin, amm_admin)` once.
 5. Give only the AMM admin tUSD, then call `seed_liquidity(core_admin, amm_admin, ...)`.
 
-The public pilot must first publish and exercise `hook-probe` separately on
-Devnet and Testnet. See [the hook gate](docs/HOOK_COMPATIBILITY.md) and
+The public pilot must first publish and exercise `hook-probe` on Testnet. See
+[the hook gate](docs/HOOK_COMPATIBILITY.md) and
 [the accounting specification](docs/REFLECTION_ACCOUNTING.md).

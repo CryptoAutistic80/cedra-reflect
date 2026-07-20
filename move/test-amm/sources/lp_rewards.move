@@ -109,7 +109,7 @@ module test_amm::lp_rewards {
         reward_vault: address,
     }
 
-    public fun initialize(amm_admin: &signer, first_reward_vault: Object<FungibleStore>): LpAccountingCapability {
+    public(package) fun initialize(amm_admin: &signer, first_reward_vault: Object<FungibleStore>): LpAccountingCapability {
         assert!(signer::address_of(amm_admin) == @test_amm, E_WRONG_AMM_ADDRESS);
         assert!(!exists<LpEpochRegistry>(@test_amm), E_ALREADY_INITIALIZED);
         let epochs = table::new<u64, LpEpoch>();
@@ -125,7 +125,7 @@ module test_amm::lp_rewards {
         LpAccountingCapability { nonce: 1 }
     }
 
-    public fun open_epoch(
+    public(package) fun open_epoch(
         cap: &LpAccountingCapability,
         amm_admin: &signer,
         reward_vault: Object<FungibleStore>,
@@ -149,7 +149,7 @@ module test_amm::lp_rewards {
     }
 
     /// Accounts for tRFL already moved into the active epoch's frozen vault.
-    public fun receive_routed_reward(cap: &LpAccountingCapability, amount: u64) acquires LpEpochRegistry {
+    public(package) fun receive_routed_reward(cap: &LpAccountingCapability, amount: u64) acquires LpEpochRegistry {
         assert_cap(cap);
         assert!(amount > 0, E_ZERO_AMOUNT);
         let registry = borrow_global_mut<LpEpochRegistry>(@test_amm);
@@ -190,7 +190,7 @@ module test_amm::lp_rewards {
         });
     }
 
-    public fun mint_active(cap: &LpAccountingCapability, owner: address, amount: u128) acquires LpEpochRegistry {
+    public(package) fun mint_active(cap: &LpAccountingCapability, owner: address, amount: u128) acquires LpEpochRegistry {
         assert_cap(cap);
         assert!(amount > 0, E_ZERO_AMOUNT);
         let registry = borrow_global_mut<LpEpochRegistry>(@test_amm);
@@ -215,7 +215,7 @@ module test_amm::lp_rewards {
         });
     }
 
-    public fun burn_active(cap: &LpAccountingCapability, owner: address, amount: u128) acquires LpEpochRegistry {
+    public(package) fun burn_active(cap: &LpAccountingCapability, owner: address, amount: u128) acquires LpEpochRegistry {
         assert_cap(cap);
         assert!(amount > 0, E_ZERO_AMOUNT);
         let registry = borrow_global_mut<LpEpochRegistry>(@test_amm);
@@ -239,7 +239,7 @@ module test_amm::lp_rewards {
         });
     }
 
-    public fun transfer_active(
+    public(package) fun transfer_active(
         cap: &LpAccountingCapability,
         sender: address,
         recipient: address,
@@ -271,7 +271,7 @@ module test_amm::lp_rewards {
 
     /// Mutates only LP accounting. The caller must complete the corresponding
     /// core-vault payout in the same transaction; an abort rolls this back.
-    public fun prepare_claim(
+    public(package) fun prepare_claim(
         cap: &LpAccountingCapability,
         epoch_id: u64,
         owner: address,
@@ -295,7 +295,7 @@ module test_amm::lp_rewards {
         amount
     }
 
-    public fun mark_active_claim_only(cap: &LpAccountingCapability) acquires LpEpochRegistry {
+    public(package) fun mark_active_claim_only(cap: &LpAccountingCapability) acquires LpEpochRegistry {
         assert_cap(cap);
         let registry = borrow_global_mut<LpEpochRegistry>(@test_amm);
         let epoch_id = registry.active_epoch;
@@ -311,7 +311,7 @@ module test_amm::lp_rewards {
     /// Capability-gated liveness guard for every active-epoch operation that
     /// can move custody rewards or mutate LP weights. A claim-only epoch is a
     /// terminal historical ledger and is intentionally excluded.
-    public fun assert_active_epoch_healthy(
+    public(package) fun assert_active_epoch_healthy(
         cap: &LpAccountingCapability,
     ) acquires LpEpochRegistry {
         assert_cap(cap);
@@ -413,7 +413,7 @@ module test_amm::lp_rewards {
     /// Transaction-boundary invariant used by the pool after every LP state or
     /// vault mutation. The second identity independently proves that only
     /// routed receipts and claims can change the epoch's physical balance.
-    public fun assert_epoch_backing(
+    public(package) fun assert_epoch_backing(
         cap: &LpAccountingCapability,
         epoch_id: u64,
     ) acquires LpEpochRegistry {
@@ -508,8 +508,4 @@ module test_amm::lp_rewards {
         assert!(cap.nonce == 1, E_INVALID_CAPABILITY);
     }
 
-    #[test_only]
-    public fun destroy_capability_for_test(cap: LpAccountingCapability) {
-        let LpAccountingCapability { nonce: _ } = cap;
-    }
 }

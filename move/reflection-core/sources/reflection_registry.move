@@ -11,7 +11,7 @@ module reflection_core::reflection_registry {
         network_label: vector<u8>,
     }
 
-    public fun initialize(admin: &signer, state_object: address, deployment_id: vector<u8>, network_label: vector<u8>) {
+    public(package) fun initialize(admin: &signer, state_object: address, deployment_id: vector<u8>, network_label: vector<u8>) {
         assert!(!exists<ProtocolRegistry>(@reflection_core), E_ALREADY_INITIALIZED);
         move_to(admin, ProtocolRegistry {
             admin: signer::address_of(admin),

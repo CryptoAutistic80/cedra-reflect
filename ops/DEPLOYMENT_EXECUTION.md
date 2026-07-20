@@ -1,10 +1,10 @@
-# Operator-run Devnet/Testnet execution
+# Operator-run Testnet execution
 
 > **TESTNET ASSET — NO MONETARY VALUE — STATE AND ADDRESSES MAY CHANGE**
 
-This is a runbook, not an automation. It must be run first on Devnet and then
-on Testnet by the named release operators after two people approve the release
-manifest. The repository deliberately has no Cedra CLI profile or key material.
+This is a runbook, not an automation. It is Testnet-only and must be run by the
+named release operators after two people approve the release manifest. The
+repository deliberately has no Cedra CLI profile or key material.
 
 ## Required operator roles
 
@@ -106,7 +106,7 @@ reserve, custody, LP-share, and vault state before enabling swaps.
 
 ## 6. Evidence that must exist before public beta
 
-Attach the Devnet and Testnet hook records, package and initialization hashes,
+Attach the Testnet hook record, package and initialization hashes,
 gas results, wallet/SDK display evidence, indexer zero-discrepancy snapshots,
 fresh-deployment recovery records and independent review to the signed manifest.
 `ops/PILOT_GATES.md` remains the authoritative quantitative exit checklist.

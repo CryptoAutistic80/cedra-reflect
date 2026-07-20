@@ -57,6 +57,10 @@ class EvidenceTemplateTests(unittest.TestCase):
             }.issubset(manifest["objects"])
         )
         self.assertEqual(manifest["objects"]["lp_share_representation"], "account-bound-table")
+        self.assertEqual(
+            set(manifest["hook_probe"]),
+            {"testnet_report", "mode"},
+        )
         self.assertEqual(len(manifest["approvals"]), 2)
         self.assertEqual(len({entry["role"] for entry in manifest["approvals"]}), 2)
         self.assertEqual(manifest["review"]["unresolved_critical_findings"], 0)
@@ -65,6 +69,7 @@ class EvidenceTemplateTests(unittest.TestCase):
     def test_hook_probe_template_has_one_complete_slot_for_h1_through_h8(self) -> None:
         report = self.load_json("ops/evidence/hook-probe.template.json")
         self.assertEqual(report["schema_version"], 1)
+        self.assertEqual(report["network"], "cedra-testnet")
         experiments = report["experiments"]
         self.assertEqual(len(experiments), 8)
         self.assertEqual(

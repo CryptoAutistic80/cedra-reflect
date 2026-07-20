@@ -45,7 +45,9 @@ and previously unclassified. Registration rejects a funded store, an existing
 wallet position, a pre-existing LP liability, one object supplied for both
 roles, or a store not owned by the signing custodian. Pool initialization and
 LP-ledger initialization are one atomic transaction, so a downstream failure
-rolls the custody binding back.
+rolls the custody binding back. LP-ledger initialization and mutation functions
+are package-only; external callers can use the pool's checkpointed entries and
+read-only LP views, but cannot create a competing ledger state.
 
 Wallet eligibility is explicit. A wallet registers its primary store before a
 standard receipt, or is registered by a signer-authenticated faucet, buy, LP

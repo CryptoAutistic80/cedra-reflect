@@ -19,7 +19,7 @@ export interface ProtocolAddresses {
 }
 
 export interface ProtocolConfiguration {
-  readonly networkLabel: "cedra-testnet" | "cedra-devnet" | "local";
+  readonly networkLabel: "cedra-testnet" | "local";
   readonly deploymentId: string;
   readonly addresses: ProtocolAddresses;
   readonly feeBps: bigint;

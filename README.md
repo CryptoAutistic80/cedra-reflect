@@ -56,8 +56,8 @@ or contact a wallet.
 
 The codebase can prove local arithmetic and implementation requirements. The
 following gates require a live, operator-controlled Testnet deployment and are
-therefore tracked as evidence records rather than faked in CI: the Devnet and
-Testnet dispatchable-hook probe, 50,000 on-chain synthetic transactions,
+therefore tracked as evidence records rather than faked in CI: the Testnet
+dispatchable-hook probe, 50,000 on-chain synthetic transactions,
 10,000 completed swaps, 1,000 distinct on-chain holders, one clean
 redeployment/restoration, wallet-display verification, and independent
 review. See `ops/` for the required records and stop conditions.
