@@ -12,6 +12,8 @@ CI must build and verify the package but never publish it automatically.
 - [ ] Run the dispatchable-hook probe on Testnet; attach the finalized report.
 - [ ] Record which mode is supported: automatic materialisation or claim-backed.
 - [ ] Review the compiled package digest and initial package publication policy.
+- [ ] Record each sparse-metadata publish payload size and require it to remain
+  within the normal 65,536-byte boundary; do not guess a large-package route.
 - [ ] Confirm the release contains no post-seal `tRFL` mint, vault sweep, forced
   balance, user-store transfer, or fee-over-100-bps entry point.
 - [ ] Prepare the release manifest from `release-manifest.template.json`.

@@ -60,7 +60,9 @@ the independent Python model, evidence-template, and Move-surface checks pass **
 contract-support witness passes **23/23 deterministic tests**. The generated
 Python/Move witness drift check also passes. The expanded reference-model gate
 passes **1,000,000 operations across 1,024 holders**. `make release-artifacts` also
-compiles every package with Cedra CLI 1.0.4 and records local source digests.
+compiles every package with Cedra CLI 1.0.4, records local source digests, and
+fails closed if any publishable package's module bytecode plus sparse metadata
+exceeds the normal 65,536-byte publication boundary.
 These results authorize no publication or live transaction.
 
 ---

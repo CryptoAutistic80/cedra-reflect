@@ -10,9 +10,11 @@ deposit<T: key>(Object<T>, FungibleAsset, &TransferRef)
 derived_balance<T: key>(Object<T>): u64
 ```
 
-`hook-probe` proves those signatures locally with a real dispatchable FA. The
-successful test invokes `primary_fungible_store::transfer` from a second module,
-and verifies both the raw balance and the framework's derived-balance query.
+`hook-probe` proves those signatures locally with a real dispatchable FA. Its
+tests invoke `primary_fungible_store::transfer` from a second module, verify
+capability-backed raw and framework-derived balances separately, materialise an
+exact amount from a frozen vault with `TransferRef`, and create/fund a secondary
+store through the dispatch surface.
 
 ## Confirmed local VM constraint
 
@@ -25,6 +27,9 @@ same module. `reflection_router` is intentionally separate, and the hooks use
 The mutating hooks use `fungible_asset::withdraw_with_ref` and
 `deposit_with_ref`; the integration test proves this does not recursively invoke
 the hook when the original transfer entered through the framework/router path.
+The ordinary `fungible_asset::balance` intentionally rejects a dispatchable FA;
+raw accounting therefore uses the capability-backed accessor while user-facing
+effective reads use the dispatchable/primary-store path from another module.
 
 ## Required Testnet evidence before enabling auto-materialisation
 

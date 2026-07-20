@@ -13,6 +13,7 @@
       "publisher": "RECORD_CORE_PUBLISHER_ADDRESS",
       "source_digest": "RECORD_CORE_SOURCE_DIGEST",
       "compiled_package_digest": "RECORD_CORE_COMPILED_DIGEST",
+      "publish_payload_bytes": "RECORD_CORE_PUBLISH_PAYLOAD_BYTES",
       "publish_transaction": "RECORD_CORE_PUBLISH_TRANSACTION",
       "gas_used": "RECORD_CORE_PUBLISH_GAS",
       "finalized_ledger_version": "RECORD_CORE_PUBLISH_LEDGER_VERSION"
@@ -21,6 +22,7 @@
       "publisher": "RECORD_ASSET_PUBLISHER_ADDRESS",
       "source_digest": "RECORD_ASSET_SOURCE_DIGEST",
       "compiled_package_digest": "RECORD_ASSET_COMPILED_DIGEST",
+      "publish_payload_bytes": "RECORD_ASSET_PUBLISH_PAYLOAD_BYTES",
       "publish_transaction": "RECORD_ASSET_PUBLISH_TRANSACTION",
       "gas_used": "RECORD_ASSET_PUBLISH_GAS",
       "finalized_ledger_version": "RECORD_ASSET_PUBLISH_LEDGER_VERSION"
@@ -29,6 +31,7 @@
       "publisher": "RECORD_AMM_PUBLISHER_ADDRESS",
       "source_digest": "RECORD_AMM_SOURCE_DIGEST",
       "compiled_package_digest": "RECORD_AMM_COMPILED_DIGEST",
+      "publish_payload_bytes": "RECORD_AMM_PUBLISH_PAYLOAD_BYTES",
       "publish_transaction": "RECORD_AMM_PUBLISH_TRANSACTION",
       "gas_used": "RECORD_AMM_PUBLISH_GAS",
       "finalized_ledger_version": "RECORD_AMM_PUBLISH_LEDGER_VERSION"

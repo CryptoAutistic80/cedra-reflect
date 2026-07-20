@@ -33,8 +33,9 @@ key on a command line or put it in this repository.
 2. Record their public addresses in the unsigned release manifest.
 3. Run `make verify` and `make pilot-gate` from the reviewed commit.
 4. Run `bash scripts/verify_release_artifacts.sh` and copy its source digests
-   into the release record. The final package digest is captured only after
-   the operator compiles with the approved named addresses.
+   and sparse publish-payload component sizes into the release record. The
+   final package digest and size are captured again only after the operator
+   compiles with the approved named addresses.
 5. Obtain two independent human approvals and store their external signatures
    in the release manifest.
 

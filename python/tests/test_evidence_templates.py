@@ -25,6 +25,7 @@ class EvidenceTemplateTests(unittest.TestCase):
                     "publisher",
                     "source_digest",
                     "compiled_package_digest",
+                    "publish_payload_bytes",
                     "publish_transaction",
                     "gas_used",
                     "finalized_ledger_version",
