@@ -10,6 +10,7 @@ module reflection_core::reflection_events {
         metadata: address,
         reward_vault: address,
         distribution_vault: address,
+        automatic_materialization: bool,
     }
 
     #[event]
@@ -127,8 +128,22 @@ module reflection_core::reflection_events {
         new_operational_admin: address,
     }
 
-    public fun protocol_initialized(version: u64, deployment_id: vector<u8>, metadata: address, reward_vault: address, distribution_vault: address) {
-        event::emit(ProtocolInitialized { version, deployment_id, metadata, reward_vault, distribution_vault });
+    public fun protocol_initialized(
+        version: u64,
+        deployment_id: vector<u8>,
+        metadata: address,
+        reward_vault: address,
+        distribution_vault: address,
+        automatic_materialization: bool,
+    ) {
+        event::emit(ProtocolInitialized {
+            version,
+            deployment_id,
+            metadata,
+            reward_vault,
+            distribution_vault,
+            automatic_materialization,
+        });
     }
     public fun faucet_grant(recipient: address, amount: u64, operator: address) { event::emit(FaucetGrant { recipient, amount, operator }); }
     public fun wallet_transfer(from: address, to: address, amount: u64) { event::emit(WalletTransfer { from, to, amount }); }

@@ -13,7 +13,8 @@ CI must build and verify the package but never publish it automatically.
   `ops/evidence/hook-probe-testnet.json`.
 - [x] Record the supported mode: **claim-backed**. Automatic materialisation is
   not authorized by the current wallet evidence.
-- [ ] Review the compiled package digest and initial package publication policy.
+- [ ] Review the compiled package digest and initial package publication policy;
+  explicitly approve or reject retaining `compatible` upgrade authority.
 - [ ] Record each sparse-metadata publish payload size and require it to remain
   within the normal 65,536-byte boundary; do not guess a large-package route.
 - [ ] Confirm the release contains no post-seal `tRFL` mint, vault sweep, forced
@@ -31,6 +32,9 @@ CI must build and verify the package but never publish it automatically.
 - [ ] Simulate the package publish first; capture the simulation and gas result.
 - [ ] Publish only after both approvals and record the transaction hash, package
   address, metadata objects, vaults, pool and finalized ledger version.
+- [ ] After core publication finalizes, simulate and submit the one-time
+  `reflection_token::initialize(..., false)` call; record its event and require
+  `automatic_materialization_enabled()` to return `false`.
 - [ ] Confirm initialization minted the exact fixed `tRFL` supply into the
   frozen distribution vault and retained no mint capability.
 - [ ] Finalize all three publisher-authorized operational-admin handoffs,

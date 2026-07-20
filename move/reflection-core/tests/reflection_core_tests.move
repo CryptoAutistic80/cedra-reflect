@@ -26,4 +26,23 @@ module reflection_core::reflection_core_tests {
         assert!(reflection_token::reflection_fee_for(99) == 0, 20);
         assert!(reflection_token::reflection_fee_for(18_446_744_073_709_551_615) == 184_467_440_737_095_516, 21);
     }
+
+    #[test(admin = @0xcafe)]
+    fun claim_backed_mode_is_recorded_on_chain(admin: &signer) {
+        reflection_token::initialize_claim_backed_for_test(admin);
+        assert!(!reflection_token::automatic_materialization_enabled(), 30);
+    }
+
+    #[test(admin = @0xcafe)]
+    #[expected_failure(abort_code = 1, location = reflection_core::reflection_token)]
+    fun initialization_is_one_shot(admin: &signer) {
+        reflection_token::initialize_for_test(admin);
+        reflection_token::initialize(admin, false);
+    }
+
+    #[test(alice = @0xa11ce)]
+    #[expected_failure(abort_code = 2, location = reflection_core::reflection_token)]
+    fun initialization_requires_package_publisher(alice: &signer) {
+        reflection_token::initialize(alice, false);
+    }
 }

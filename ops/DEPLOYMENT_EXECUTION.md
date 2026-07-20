@@ -12,7 +12,7 @@ Use three dedicated, funded Testnet accounts:
 
 | Role | Owns | Signs |
 |---|---|---|
-| Core publisher | `reflection-core` | core publish, `test_faucet::initialize`, pool initialization/seeding |
+| Core publisher | `reflection-core` | core publish, immutable-mode core initialization, `test_faucet::initialize`, pool initialization/seeding |
 | Asset publisher | `test-assets` | asset publish, `test_faucet::initialize`, pool initialization |
 | AMM publisher | `test-amm` | AMM publish, pool initialization/seeding |
 
@@ -49,6 +49,12 @@ an approved publish and record the transaction hash and gas measurement.
 cd move/reflection-core
 cedra move publish --named-addresses reflection_core=<CORE_ADDRESS>
 
+# After the publication is finalized, select the immutable claim-backed mode.
+# Simulate first and record both the initialization event and mode view.
+cedra move run \
+  --function-id <CORE_ADDRESS>::reflection_token::initialize \
+  --args bool:false
+
 # Asset publisher, after core publication
 cd ../test-assets
 cedra move publish --named-addresses test_assets=<ASSETS_ADDRESS>,reflection_core=<CORE_ADDRESS>
@@ -59,15 +65,20 @@ cedra move publish --named-addresses test_amm=<AMM_ADDRESS>,reflection_core=<COR
 ```
 
 Never add `--assume-yes` until the simulated package digest, gas result,
-network and two approvals are attached to the manifest.
+network and two approvals are attached to the manifest. Core initialization
+must finalize before faucet or pool initialization. Confirm
+`automatic_materialization_enabled()` returns `false`; there is no mode setter
+or migration path in this package version after initialization. Treat the
+compatible package-upgrade authority as a separate release-policy control.
 
-## 3. Initialize using multi-agent transactions
+## 3. Initialize dependent packages using multi-agent transactions
 
 The order of each Move entry's signer parameters defines SDK sender and
 secondary signer order:
 
 | Function | Sender | Secondary signers |
 |---|---|---|
+| `reflection_core::reflection_token::initialize(core_admin, false)` | core | none; single-signer call immediately after core publication |
 | `test_assets::test_faucet::initialize(core_admin, faucet_admin)` | core | assets |
 | `test_amm::pool::initialize(core_admin, assets_admin, amm_admin)` | core | assets, AMM |
 

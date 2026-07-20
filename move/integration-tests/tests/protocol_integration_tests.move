@@ -16,12 +16,30 @@ module integration_tests::protocol_integration_tests {
 
     const ONE: u64 = 1_000_000;
 
-    fun setup(core: &signer, assets: &signer, amm: &signer, framework: &signer) {
+    fun setup_with_materialization_mode(
+        core: &signer,
+        assets: &signer,
+        amm: &signer,
+        framework: &signer,
+        automatic_materialization: bool,
+    ) {
         timestamp::set_time_has_started_for_testing(framework);
-        reflection_token::initialize_for_test(core);
+        if (automatic_materialization) {
+            reflection_token::initialize_for_test(core);
+        } else {
+            reflection_token::initialize_claim_backed_for_test(core);
+        };
         mock_usd::initialize_for_test(assets);
         test_faucet::initialize(core, assets);
         pool::initialize(core, assets, amm);
+    }
+
+    fun setup(core: &signer, assets: &signer, amm: &signer, framework: &signer) {
+        setup_with_materialization_mode(core, assets, amm, framework, true);
+    }
+
+    fun setup_claim_backed(core: &signer, assets: &signer, amm: &signer, framework: &signer) {
+        setup_with_materialization_mode(core, assets, amm, framework, false);
     }
 
     #[test(core = @0xcafe, assets = @0xbabe, amm = @0xdead, framework = @0x1, alice = @0xa11ce, bob = @0xb0b)]
@@ -88,6 +106,75 @@ module integration_tests::protocol_integration_tests {
         let (_, zero_reflection_fee, _) = pool::quote_sell(ONE);
         assert!(zero_reflection_fee == 0, 20);
         pool::sell_trfl(alice, ONE, 0, 1_000);
+    }
+
+    #[test(core = @0xcafe, assets = @0xbabe, amm = @0xdead, framework = @0x1, alice = @0xa11ce, bob = @0xb0b)]
+    fun claim_backed_mode_requires_explicit_wallet_claim_and_preserves_lp_rewards(
+        core: &signer,
+        assets: &signer,
+        amm: &signer,
+        framework: &signer,
+        alice: &signer,
+        bob: &signer,
+    ) {
+        setup_claim_backed(core, assets, amm, framework);
+        assert!(!reflection_token::automatic_materialization_enabled(), 210);
+        test_faucet::claim_trfl(alice);
+        test_faucet::claim_tusd(amm);
+        reflection_token::register_wallet(bob);
+        pool::seed_liquidity(
+            core, amm, signer::address_of(alice), 100 * ONE, 100 * ONE, 1,
+        );
+        let (sell_quote, _, _) = pool::quote_sell(ONE);
+        pool::sell_trfl(alice, ONE, sell_quote, 1_000);
+
+        let raw_before_claim = reflection_token::raw_balance(signer::address_of(alice));
+        let pending_before_claim = reflection_token::pending_rewards(signer::address_of(alice));
+        assert!(pending_before_claim > 0, 211);
+        assert!(primary_fungible_store::balance(
+            signer::address_of(alice), reflection_token::metadata(),
+        ) == raw_before_claim, 212);
+        let effective_before_claim = reflection_token::effective_balance(signer::address_of(alice));
+        assert!(effective_before_claim == raw_before_claim + pending_before_claim, 213);
+
+        reflection_token::claim_all(alice);
+        assert!(reflection_token::pending_rewards(signer::address_of(alice)) == 0, 214);
+        assert!(reflection_token::raw_balance(signer::address_of(alice)) == effective_before_claim, 215);
+        assert!(primary_fungible_store::balance(
+            signer::address_of(alice), reflection_token::metadata(),
+        ) == effective_before_claim, 216);
+
+        pool::checkpoint_lp_rewards(bob);
+        let lp_pending = pool::pending_lp_rewards(1, signer::address_of(alice));
+        assert!(lp_pending > 0, 217);
+        let wallet_before_lp_claim = reflection_token::raw_balance(signer::address_of(alice));
+        pool::claim_lp_rewards(alice, 1, lp_pending);
+        assert!(pool::pending_lp_rewards(1, signer::address_of(alice)) == 0, 218);
+        assert!(reflection_token::raw_balance(signer::address_of(alice)) == wallet_before_lp_claim + lp_pending, 219);
+    }
+
+    #[test(core = @0xcafe, assets = @0xbabe, amm = @0xdead, framework = @0x1, alice = @0xa11ce, bob = @0xb0b)]
+    #[expected_failure(abort_code = 32, location = reflection_core::reflection_token)]
+    fun claim_backed_mode_rejects_spending_pending_before_claim(
+        core: &signer,
+        assets: &signer,
+        amm: &signer,
+        framework: &signer,
+        alice: &signer,
+        bob: &signer,
+    ) {
+        setup_claim_backed(core, assets, amm, framework);
+        test_faucet::claim_trfl(alice);
+        test_faucet::claim_tusd(amm);
+        reflection_token::register_wallet(bob);
+        pool::seed_liquidity(
+            core, amm, signer::address_of(alice), 100 * ONE, 100 * ONE, 1,
+        );
+        let (sell_quote, _, _) = pool::quote_sell(ONE);
+        pool::sell_trfl(alice, ONE, sell_quote, 1_000);
+        let raw = reflection_token::raw_balance(signer::address_of(alice));
+        assert!(reflection_token::pending_rewards(signer::address_of(alice)) > 0, 220);
+        reflection_router::transfer(alice, signer::address_of(bob), raw + 1);
     }
 
     #[test(core = @0xcafe, assets = @0xbabe, amm = @0xdead, framework = @0x1, alice = @0xa11ce)]

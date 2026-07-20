@@ -45,6 +45,7 @@ module reflection_core::reflection_token {
     const E_NOT_OPERATIONAL_ADMIN: u64 = 29;
     const E_STORE_ALREADY_CLASSIFIED: u64 = 30;
     const E_NOT_CUSTODY_STORE_OWNER: u64 = 31;
+    const E_AUTOMATIC_MATERIALIZATION_DISABLED: u64 = 32;
 
     const MAX_FEE_BPS: u64 = 100;
     const BPS_DENOMINATOR: u64 = 10_000;
@@ -82,6 +83,7 @@ module reflection_core::reflection_token {
         fee_bps: u64,
         swaps_paused: bool,
         claims_paused: bool,
+        automatic_materialization: bool,
         positions: Table<address, Position>,
         exclusions: Table<address, bool>,
 
@@ -114,7 +116,12 @@ module reflection_core::reflection_token {
     /// deployment's pre-minted distribution reserve.
     struct FaucetCapability has store { nonce: u64 }
 
-    fun init_module(admin: &signer) {
+    /// One-time fresh-deployment initialization. Hook functions are resolved
+    /// from finalized module storage, so registration must occur after package
+    /// publication rather than from `init_module`. The selected materialization
+    /// mode is immutable for this deployment.
+    public entry fun initialize(admin: &signer, automatic_materialization: bool) {
+        assert!(signer::address_of(admin) == @reflection_core, E_NOT_ADMIN);
         assert!(!exists<ReflectionState>(@reflection_core), E_ALREADY_INITIALIZED);
         let constructor_ref = object::create_named_object(admin, ASSET_SEED);
         primary_fungible_store::create_primary_store_enabled_fungible_asset(
@@ -183,6 +190,7 @@ module reflection_core::reflection_token {
             fee_bps: INITIAL_FEE_BPS,
             swaps_paused: false,
             claims_paused: false,
+            automatic_materialization,
             positions: table::new<address, Position>(),
             exclusions,
             reward_vault,
@@ -207,6 +215,7 @@ module reflection_core::reflection_token {
             metadata_address,
             reward_vault_address,
             distribution_vault_address,
+            automatic_materialization,
         );
     }
 
@@ -223,6 +232,7 @@ module reflection_core::reflection_token {
             let account = object::owner(store);
             let raw = fungible_asset::balance_with_ref(&state.raw_balance_ref, store);
             if (raw < amount) {
+                assert!(state.automatic_materialization, E_AUTOMATIC_MATERIALIZATION_DISABLED);
                 assert!(!state.claims_paused, E_CLAIMS_PAUSED);
                 materialize_to_store(state, account, store, amount - raw, false);
             };
@@ -256,6 +266,7 @@ module reflection_core::reflection_token {
         let custody = borrow_global<CustodyAccounting>(@reflection_core);
         let raw = fungible_asset::balance_with_ref(&state.raw_balance_ref, store);
         if (!is_eligible_wallet_store(state, custody, store)) return raw;
+        if (!state.automatic_materialization) return raw;
         raw + claimable_for_store(state, object::owner(store), store)
     }
 
@@ -524,6 +535,7 @@ module reflection_core::reflection_token {
         assert_eligible_primary_store(state, custody, seller_store);
         let raw = fungible_asset::balance_with_ref(&state.raw_balance_ref, seller_store);
         if (raw < gross_input) {
+            assert!(state.automatic_materialization, E_AUTOMATIC_MATERIALIZATION_DISABLED);
             assert!(!state.claims_paused, E_CLAIMS_PAUSED);
             materialize_to_store(state, seller_address, seller_store, gross_input - raw, false);
         };
@@ -597,6 +609,7 @@ module reflection_core::reflection_token {
         let provider_store = primary_fungible_store::ensure_primary_store_exists(provider_address, state.metadata);
         let raw = fungible_asset::balance_with_ref(&state.raw_balance_ref, provider_store);
         if (raw < amount) {
+            assert!(state.automatic_materialization, E_AUTOMATIC_MATERIALIZATION_DISABLED);
             assert!(!state.claims_paused, E_CLAIMS_PAUSED);
             materialize_to_store(state, provider_address, provider_store, amount - raw, false);
         };
@@ -704,6 +717,10 @@ module reflection_core::reflection_token {
     #[view]
     public fun operational_admin(): address acquires ReflectionState {
         borrow_global<ReflectionState>(@reflection_core).operational_admin
+    }
+    #[view]
+    public fun automatic_materialization_enabled(): bool acquires ReflectionState {
+        borrow_global<ReflectionState>(@reflection_core).automatic_materialization
     }
     #[view]
     public fun primary_store_is_excluded(account: address): bool acquires ReflectionState {
@@ -1092,7 +1109,10 @@ module reflection_core::reflection_token {
     }
 
     #[test_only]
-    public fun initialize_for_test(admin: &signer) { init_module(admin); }
+    public fun initialize_for_test(admin: &signer) { initialize(admin, true); }
+
+    #[test_only]
+    public fun initialize_claim_backed_for_test(admin: &signer) { initialize(admin, false); }
 
     #[test_only]
     public fun destroy_faucet_capability_for_test(cap: FaucetCapability) {

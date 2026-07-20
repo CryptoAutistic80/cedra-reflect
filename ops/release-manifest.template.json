@@ -59,6 +59,8 @@
     "mock_usd_metadata": "RECORD_TUSD_METADATA_ADDRESS"
   },
   "initialization": {
+    "core_transaction": "RECORD_CLAIM_BACKED_CORE_INITIALIZATION_TRANSACTION",
+    "automatic_materialization": false,
     "faucet_transaction": "RECORD_FAUCET_INITIALIZATION_TRANSACTION",
     "pool_transaction": "RECORD_POOL_INITIALIZATION_TRANSACTION",
     "seed_transaction": "RECORD_POOL_SEED_TRANSACTION",

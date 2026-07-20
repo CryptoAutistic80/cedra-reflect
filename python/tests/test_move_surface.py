@@ -50,6 +50,16 @@ class MoveVisibilitySurfaceTests(unittest.TestCase):
             ),
         )
 
+    def test_core_uses_one_time_post_publish_mode_initialization(self) -> None:
+        source = (ROOT / "move/reflection-core/sources/reflection_token.move").read_text()
+        self.assertNotRegex(source, r"\bfun\s+init_module\s*\(")
+        self.assertRegex(
+            source,
+            r"public\s+entry\s+fun\s+initialize\s*\(\s*admin:\s*&signer,\s*automatic_materialization:\s*bool",
+        )
+        self.assertIn("automatic_materialization_enabled", source)
+        self.assertNotRegex(source, r"fun\s+set_automatic_materialization\s*\(")
+
 
 if __name__ == "__main__":
     unittest.main()

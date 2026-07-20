@@ -51,6 +51,7 @@ export interface PoolSnapshot {
 }
 
 export interface ProtocolSnapshot {
+  readonly automaticMaterialization: boolean;
   readonly eligibleHolders: bigint;
   readonly eligibleSupply: bigint;
   readonly rewardVaultBalance: bigint;

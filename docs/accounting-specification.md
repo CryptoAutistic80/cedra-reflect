@@ -204,12 +204,17 @@ materialized[a] += x
 
 The correction prevents the newly raw `x` from claiming historic index
 rewards. Before and after the claim, `effective[a]` is identical. If the
-dispatchable-hook feasibility gate succeeds, an attempted spend that exceeds
-raw balance automatically materialises exactly the shortfall first, unless
-claims are paused. A claims pause blocks both explicit claims and this
-automatic materialisation path; a transfer or sell backed entirely by raw
-balance remains possible. If the gate fails, the same model is used in
-explicit-claim mode and a spend requires enough raw balance.
+deployment's immutable `automatic_materialization` mode is `true`, an attempted
+spend that exceeds raw balance automatically materialises exactly the shortfall
+first, unless claims are paused. A claims pause blocks both explicit claims and
+this automatic materialisation path; a transfer or sell backed entirely by raw
+balance remains possible. In claim-backed mode, withdrawal and deposit hooks
+still maintain corrections for standard transfers, the derived hook returns raw
+balance, and a spend requires enough raw balance until an explicit on-chain
+claim materialises pending rewards. The mode is selected by the one-time
+post-publication initializer and has no setter, conversion resource, or
+migration path in this package version. The package's separately controlled
+compatible-upgrade authority remains an explicit release-policy trust boundary.
 
 ### Custody reward routing
 
@@ -463,18 +468,13 @@ log for each run. The bounded cross-implementation witness separately samples
 64 valid mixed operations from a fixed seed after setup and proves the complete
 Move and Python final snapshots are identical.
 
-## Open protocol decisions requiring the hook probe
+## Finalized hook decision
 
-The accounting model is complete enough to test the claim-backed fallback, but
-three Cedra-specific decisions remain deliberately unresolved until Phase 0:
-
-1. whether a derived balance hook can expose `effective` balance through all
-   required primary and secondary stores;
-2. whether internal reward-vault materialisation can avoid recursive dispatch
-   hook invocation; and
-3. whether the selected wallet displays derived balance correctly or must use
-   an explicit pending/claim interface.
-
-Those are integration facts, not accounting shortcuts.  Failure of the hook
-probe selects explicit-claim mode; it must not change the fee, vault, index,
-correction, AMM, or invariant rules above.
+The 2026-07-20 Cedra Testnet record in
+`ops/evidence/hook-probe-testnet.json` proves post-publication registration,
+standard transfer dispatch, non-recursive reference materialisation, secondary
+stores, and CLI/REST/SDK reads. It does not prove a real wallet's distinct
+derived-balance display and transfer path. The initial release therefore uses
+immutable claim-backed mode. This decision changes only display/spend
+materialisation: the fee, vault, index, correction, canonical custody, AMM, and
+LP beneficial-owner rules remain identical.

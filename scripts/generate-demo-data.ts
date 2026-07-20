@@ -13,6 +13,7 @@ const event: ProtocolEvent = {
   timestampUnixMilliseconds: 1_700_000_000_000n,
   source: "fixture",
   type: "ProtocolInitialized",
+  automaticMaterialization: false,
   feeBps: 100n,
   initialIndex: 0n,
   packageVersion: "testnet-v0.1.0",

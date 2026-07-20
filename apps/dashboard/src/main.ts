@@ -36,6 +36,7 @@ const demoState: MockReadState = {
     ledgerVersion: 42_018n,
   },
   protocol: {
+    automaticMaterialization: false,
     eligibleHolders: 1_042n,
     eligibleSupply: 99_000_000n,
     rewardVaultBalance: 2_180_000n,

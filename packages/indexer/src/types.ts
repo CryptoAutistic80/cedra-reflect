@@ -21,6 +21,7 @@ export interface EventBase {
 
 export interface ProtocolInitializedEvent extends EventBase {
   readonly type: "ProtocolInitialized";
+  readonly automaticMaterialization: boolean;
   readonly feeBps: bigint;
   readonly initialIndex: bigint;
   readonly packageVersion: string;
@@ -373,6 +374,7 @@ export interface IndexedPool {
 
 /** Event-replayed values. They are an independent witness, not a chain response. */
 export interface ProtocolProjection {
+  readonly automaticMaterialization: boolean;
   readonly feeBps: bigint;
   readonly currentIndex: bigint;
   readonly indexRemainder: bigint;
@@ -442,6 +444,7 @@ export interface ObservedLpEpoch {
 /** Values fetched from on-chain views at one finalized ledger version. */
 export interface ObservedAccountingSnapshot {
   readonly ledgerVersion: bigint;
+  readonly automaticMaterialization: boolean;
   readonly rewardVault: Address;
   readonly rewardVaultBalance: bigint;
   readonly reflectionLiability: bigint;

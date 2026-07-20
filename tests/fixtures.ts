@@ -41,6 +41,7 @@ export function portfolioFixture(): PortfolioSnapshot {
 
 export function protocolFixture(): ProtocolSnapshot {
   return {
+    automaticMaterialization: false,
     eligibleHolders: 1n,
     eligibleSupply: 1_000_000n,
     rewardVaultBalance: 10n,
@@ -88,6 +89,7 @@ export function mockReadState(): MockReadState {
 export function observationFixture(): ObservedAccountingSnapshot {
   return {
     ledgerVersion: 2n,
+    automaticMaterialization: false,
     rewardVault: CORE_REWARD_VAULT,
     rewardVaultBalance: 0n,
     reflectionLiability: 0n,

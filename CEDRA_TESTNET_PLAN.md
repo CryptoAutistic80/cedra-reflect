@@ -48,16 +48,23 @@ deadlines, gross and reserve-percentage caps, net-receipt buy slippage, and the
 independent pool pause; both raw reserves reject direct deposits and
 withdrawals. An evented publisher-authorized handoff now separates the cold
 core, asset, and AMM publishers from the operational key used for routine fee,
-pause, faucet, shutdown, and limit actions. The contract is one clean initial schema with no
-legacy-state conversion surface. This is local source and deterministic test
-evidence only. It is not Testnet deployment, wallet, participant, gas,
-publication, or public-pilot evidence; those gates remain open until performed
-and preserved separately.
+pause, faucet, shutdown, and limit actions. The contract is one clean initial
+schema with no legacy-state conversion surface. Its one-time post-publication
+initializer now records one-time automatic-versus-claim-backed behavior; the
+selected initial mode is claim-backed, so pending wallet rewards require an
+explicit on-chain claim while canonical LP rewards remain separately claimable
+by beneficial owners. There is no mode setter or state-conversion path in this
+package; compatible package-upgrade authority remains a separate release-policy
+trust boundary. This paragraph is local source and deterministic test
+evidence only. The isolated hook-probe publication is separately preserved in
+`ops/evidence/hook-probe-testnet.json`; it is not a deployment of the core,
+test-assets, or AMM packages and is not participant or public-pilot evidence.
 
 **Local contract gate — passed July 20, 2026:** `make verify` passes all Move
-packages including **54/54 integration tests** and the AMM rounding unit test,
-the independent Python model, evidence-template, and Move-surface checks pass **33/33 tests**, and the TypeScript
-contract-support witness passes **23/23 deterministic tests**. The generated
+packages including **56/56 integration tests**, **6/6 core tests**, and the AMM
+rounding unit test, the independent Python model, evidence-template, and
+Move-surface checks pass **35/35 tests**, and the TypeScript
+contract-support witness passes **24/24 deterministic tests**. The generated
 Python/Move witness drift check also passes. The expanded reference-model gate
 passes **1,000,000 operations across 1,024 holders**. `make release-artifacts` also
 compiles every package with Cedra CLI 1.0.4, records local source digests, and

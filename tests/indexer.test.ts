@@ -50,6 +50,7 @@ function bootstrapEvents(): readonly ProtocolEvent[] {
     {
       ...at("0xinit", 1n, 0, "init"),
       type: "ProtocolInitialized",
+      automaticMaterialization: false,
       feeBps: 100n,
       initialIndex: 0n,
       packageVersion: "testnet-v1",
@@ -175,6 +176,7 @@ function observedFromProjection(
   }));
   return {
     ledgerVersion,
+    automaticMaterialization: projection.automaticMaterialization,
     rewardVault: projection.rewardVault ?? CORE_REWARD_VAULT,
     rewardVaultBalance: expectedCoreVaultBalance(projection),
     reflectionLiability: coreIndexedLiability(projection),
@@ -398,6 +400,40 @@ test("liquidity-limit events normalize, replay, and reconcile every field exactl
   }]);
   ok(rejected.alerts.some((entry) => entry.code === "EVENT_DATA"), "Invalid liquidity limits must be rejected by replay");
   equal(indexer.getCursor()?.ledgerVersion, 6n, "Rejected limit evidence cannot advance the checkpoint");
+});
+
+test("immutable materialization mode normalizes and reconciles against the on-chain view", async () => {
+  const normalizer = new CedraEventNormalizer();
+  const normalized = normalizer.normalize({
+    typeTag: "0xcafe::reflection_events::ProtocolInitialized",
+    data: {
+      version: "1",
+      reward_vault: CORE_REWARD_VAULT,
+      distribution_vault: DISTRIBUTION_VAULT,
+      automatic_materialization: false,
+    },
+    txHash: "0xmode-init",
+    ledgerVersion: 1n,
+    eventIndex: 0,
+    timestampUnixMilliseconds: 1_000n,
+  });
+  if (normalized === null || normalized.type !== "ProtocolInitialized") {
+    throw new Error("Protocol initialization must normalize");
+  }
+  equal(normalized.automaticMaterialization, false, "Claim-backed mode must survive normalization");
+
+  const indexer = await bootstrappedIndexer();
+  const projection = indexer.getProjection();
+  const report = await indexer.reconcile({
+    listEvents: async () => ({ events: [], nextCursor: null }),
+    getAccountingSnapshot: async () => observedFromProjection(projection, 6n, {
+      automaticMaterialization: true,
+    }),
+  });
+  ok(
+    report.alerts.some((alert) => alert.code === "CORE_ACCOUNTING" && alert.id.includes("materialization-mode")),
+    "A mutable or mismatched mode view must fail reconciliation",
+  );
 });
 
 test("routes to an old claim-only LP epoch are rejected", async () => {

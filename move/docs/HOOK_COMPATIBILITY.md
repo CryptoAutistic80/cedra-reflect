@@ -44,7 +44,11 @@ effective reads use the dispatchable/primary-store path from another module.
 5. Repeat for a primary store and a secondary store.
 6. Repeat through the selected TypeScript SDK and wallet.
 
-If any result differs, retain the same vault/index accounting but use a fresh
-claim-only deployment: Cedra dispatch functions are registered at asset creation
-and are not treated as removable configuration. The test assets and AMM do not
-rely on a wallet rendering a derived balance.
+The finalized 2026-07-20 result selects a fresh claim-backed deployment. The
+one-time post-publication initializer still registers withdrawal and deposit
+hooks so standard transfers maintain exact corrections, while immutable mode
+state makes the derived hook return raw balance and rejects spending pending
+rewards before an explicit claim. Dispatch registration and materialization mode
+have no removal or mutation API in this package version. Compatible package
+upgrade authority is a separate release-policy trust boundary. The test assets
+and AMM do not rely on a wallet rendering a derived balance.

@@ -379,6 +379,16 @@ export function reconcile(
   if (observed.packageVersion !== projection.packageVersion) {
     alerts.push(alert("PACKAGE_VERSION", "On-chain package version disagrees with event history.", cursor, projection.packageVersion, observed.packageVersion));
   }
+  if (observed.automaticMaterialization !== projection.automaticMaterialization) {
+    alerts.push(alert(
+      "CORE_ACCOUNTING",
+      "On-chain materialization mode disagrees with the immutable initialization event.",
+      cursor,
+      projection.automaticMaterialization,
+      observed.automaticMaterialization,
+      "materialization-mode",
+    ));
+  }
   if (
     observed.swapsPaused !== projection.swapsPaused
     || observed.claimsPaused !== projection.claimsPaused

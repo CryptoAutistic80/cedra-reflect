@@ -43,6 +43,7 @@ function integerSqrt(value: bigint): bigint {
 
 export function createEmptyProjection(): ProtocolProjection {
   return {
+    automaticMaterialization: false,
     feeBps: 100n,
     currentIndex: 0n,
     indexRemainder: 0n,
@@ -486,6 +487,7 @@ export function reduceEventGroup(
           }
           context.next = {
             ...context.next,
+            automaticMaterialization: event.automaticMaterialization,
             feeBps: event.feeBps,
             currentIndex: event.initialIndex,
             packageVersion: event.packageVersion,

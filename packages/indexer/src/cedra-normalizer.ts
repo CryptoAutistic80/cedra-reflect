@@ -92,6 +92,7 @@ export class CedraEventNormalizer {
       return {
         ...eventBase,
         type: "ProtocolInitialized",
+        automaticMaterialization: requiredBoolean(data, "automatic_materialization"),
         feeBps: this.currentFeeBps,
         initialIndex: 0n,
         packageVersion: `testnet-v${version.toString()}`,

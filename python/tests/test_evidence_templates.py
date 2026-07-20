@@ -58,6 +58,8 @@ class EvidenceTemplateTests(unittest.TestCase):
             }.issubset(manifest["objects"])
         )
         self.assertEqual(manifest["objects"]["lp_share_representation"], "account-bound-table")
+        self.assertFalse(manifest["initialization"]["automatic_materialization"])
+        self.assertIn("core_transaction", manifest["initialization"])
         self.assertEqual(
             set(manifest["hook_probe"]),
             {"testnet_report", "mode"},
