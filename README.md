@@ -34,10 +34,21 @@ ops/        Release, incident, and redeployment controls
   recorded in a signed release manifest.
 - Package publishers hand routine fee, pause, faucet, shutdown, and limit
   controls to a distinct operational key through three evented transactions.
+- The three release packages are immutable after publication. A code fix uses
+  a new deployment and manifest, never an in-place upgrade or migration.
 - Do not add a `force_set_balance`, arbitrary vault sweep, post-seal `tRFL`
   mint, user-store transfer, or fee-above-100-bps capability.
 - Live Testnet activity is evidence gathered after deployment, not proof that
   unreviewed source code is ready to publish.
+
+## Factory boundary
+
+This repository deploys one tRFL instance; it is the secure single-token
+reference, not yet a reflection-token factory. A later factory must give every
+created token its own object-scoped accounting state, vault capabilities,
+custody bindings, instance-qualified events, and indexer keys. The current
+canonical LP design can be reused only for adapters that prove beneficial
+ownership and checkpoint before every share mutation.
 
 ## Local verification
 

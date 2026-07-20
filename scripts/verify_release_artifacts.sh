@@ -17,6 +17,12 @@ printf 'cedra_cli_version=%s\n' "$("$cedra_bin" --version)"
 for package in "${packages[@]}"; do
   (
     cd "$package"
+    if [[ "$package" == "move/reflection-core" || "$package" == "move/test-assets" || "$package" == "move/test-amm" ]]; then
+      grep -Fq 'upgrade_policy = "immutable"' Move.toml || {
+        printf 'release package is not immutable: %s\n' "$package" >&2
+        exit 1
+      }
+    fi
     # Concrete publisher addresses are intentionally unavailable before a
     # release is approved. Dev compilation validates the package graph; the
     # source digest below is address-independent and the operator records the

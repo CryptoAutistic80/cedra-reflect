@@ -7,12 +7,12 @@ import type {
 } from "../packages/protocol-sdk/src/index.js";
 import type { EventBase, ObservedAccountingSnapshot } from "../packages/indexer/src/index.js";
 
-export const TEST_ACCOUNT = "0xalice" as Address;
-export const TEST_BOB = "0xbob" as Address;
-export const CORE_REWARD_VAULT = "0xreward" as Address;
-export const DISTRIBUTION_VAULT = "0xdistribution" as Address;
-export const CUSTODY_RESERVE = "0xreserve" as Address;
-export const LP_REWARD_VAULT = "0xlpvault1" as Address;
+export const TEST_ACCOUNT = "0xa11ce" as Address;
+export const TEST_BOB = "0xb0b" as Address;
+export const CORE_REWARD_VAULT = "0x1001" as Address;
+export const DISTRIBUTION_VAULT = "0x1002" as Address;
+export const CUSTODY_RESERVE = "0x2001" as Address;
+export const LP_REWARD_VAULT = "0x3001" as Address;
 
 export function baseEvent(overrides: Partial<EventBase> = {}): EventBase {
   return {
@@ -62,7 +62,8 @@ export function protocolFixture(): ProtocolSnapshot {
       ledgerVersion: 10n,
     },
     claimsPaused: false,
-    packageVersion: "testnet-v1",
+    faucetPaused: false,
+    packageVersion: "testnet-v0.1.0",
     ledgerVersion: 10n,
   };
 }
@@ -113,15 +114,22 @@ export function observationFixture(): ObservedAccountingSnapshot {
     custodyActiveLpRewardVault: LP_REWARD_VAULT,
     trflReserve: 0n,
     tusdReserve: 0n,
+    ammFeeBps: 30n,
+    maximumGrossSwap: 0n,
+    maximumReserveBps: 0n,
     maximumRflContribution: 100_000_000_000n,
     maximumTusdContribution: 100_000_000_000n,
     maximumNonFinalWithdrawalShareBps: 10_000n,
     activeLpEpoch: null,
     lpEpochs: [],
     positions: [],
-    packageVersion: "testnet-v1",
+    packageVersion: "testnet-v0.1.0",
     swapsPaused: false,
     claimsPaused: false,
+    faucetPaused: false,
+    faucetTrflGrant: 1_000_000_000n,
+    faucetTusdGrant: 1_000_000_000n,
+    faucetCooldownSeconds: 3_600n,
     poolPaused: false,
     liquidityPaused: false,
     lpClaimsPaused: false,

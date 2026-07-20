@@ -1,4 +1,4 @@
-.PHONY: verify conformance-check move-test python-test ts-test pilot-gate release-artifacts
+.PHONY: verify conformance-check move-test python-test ts-test pilot-gate release-artifacts exact-address-artifacts
 
 # The system Cedra CLI is the reviewed v1.0.4 binary. Node's bin directory can
 # contain an unrelated `cedra` executable, so do not resolve this through PATH.
@@ -27,3 +27,9 @@ pilot-gate:
 
 release-artifacts:
 	CEDRA_BIN=$(CEDRA) bash scripts/verify_release_artifacts.sh
+
+exact-address-artifacts:
+	@test -n "$(CORE_ADDRESS)" -a -n "$(ASSETS_ADDRESS)" -a -n "$(AMM_ADDRESS)" -a -n "$(OUTPUT_DIRECTORY)" || \
+		{ echo "set CORE_ADDRESS, ASSETS_ADDRESS, AMM_ADDRESS, and OUTPUT_DIRECTORY" >&2; exit 64; }
+	CEDRA_BIN=$(CEDRA) bash scripts/prepare_exact_address_release.sh \
+		"$(CORE_ADDRESS)" "$(ASSETS_ADDRESS)" "$(AMM_ADDRESS)" "$(OUTPUT_DIRECTORY)"

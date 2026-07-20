@@ -62,13 +62,16 @@ LP epoch/owner using:
 - `reflection_token::custody_position_accounting`;
 - `custody_registry::adapter_id`;
 - `custody_registry::active_route`;
+- `pool::limits`;
 - `pool::liquidity_limits`;
 - `lp_rewards::epoch_accounting`;
 - `lp_rewards::epoch_identity`;
 - `lp_rewards::epoch_aggregate_correction`;
 - `lp_rewards::position_accounting`.
 - `reflection_token::operational_admin`;
-- `test_faucet::operational_admin`; and
+- `test_faucet::configuration`;
+- `test_faucet::operational_admin`;
+- `test_faucet::paused`; and
 - `pool::operational_admin`.
 
 Convert Move's `(negative, magnitude)` correction pair to a TypeScript signed
@@ -93,3 +96,8 @@ Every mismatch is critical. A divergent transaction is rejected without
 advancing the cursor. Preserve the first alert and snapshot, then follow
 `ops/INCIDENT_RESPONSE.md`; this witness records evidence but never performs an
 emergency mutation.
+
+Construct `CedraEventNormalizer` only from the exact core, asset, and AMM
+addresses in the approved release manifest. It rejects same-named events from
+any other address and rejects initialization schemas other than version `1`.
+Never infer provenance from a module/event suffix.

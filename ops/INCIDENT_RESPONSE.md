@@ -7,7 +7,8 @@ transfers or claims unless the specific accounting defect requires it.
 2. Record the finalized ledger version and package version.
 3. Snapshot global state, position/correction state, vault stores, pool reserves
    and the indexer cursor.
-4. Stop faucet grants.
+4. Stop faucet grants on chain with `test_faucet::set_paused(..., true)` and
+   reconcile the finalized `FaucetPauseChanged` event/view.
 5. Reconcile events from the last trusted snapshot through that ledger version.
 6. Identify and preserve the first divergent transaction; do not repair state
    with a privileged balance-edit function.

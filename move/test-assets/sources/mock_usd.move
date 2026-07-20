@@ -43,8 +43,8 @@ module test_assets::mock_usd {
             string::utf8(b"Reflection Pilot Test USD"),
             string::utf8(b"tUSD"),
             6,
-            string::utf8(b"https://example.invalid/reflection-pilot/tusd"),
-            string::utf8(b"https://example.invalid"),
+            string::utf8(b"https://raw.githubusercontent.com/CryptoAutistic80/cedra-reflect/main/assets/tusd-testnet.svg"),
+            string::utf8(b"https://github.com/CryptoAutistic80/cedra-reflect"),
         );
         let mint_ref = fungible_asset::generate_mint_ref(&constructor_ref);
         let transfer_ref = fungible_asset::generate_transfer_ref(&constructor_ref);

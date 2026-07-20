@@ -31,9 +31,29 @@ import {
 } from "./fixtures.js";
 import { equal, ok, test } from "./harness.js";
 
-const SECOND_LP_VAULT = "0xlpvault2" as Address;
-const LP_STATE_1 = "0xlpstate1" as Address;
-const LP_STATE_2 = "0xlpstate2" as Address;
+const SECOND_LP_VAULT = "0x3002" as Address;
+const LP_STATE_1 = "0x4001" as Address;
+const LP_STATE_2 = "0x4002" as Address;
+const NORMALIZER_OPTIONS = {
+  packageAddresses: {
+    reflectionCore: "0xcafe" as Address,
+    testAssets: "0xbabe" as Address,
+    testAmm: "0xdead" as Address,
+  },
+} as const;
+
+function eventNormalizer(): CedraEventNormalizer {
+  return new CedraEventNormalizer(NORMALIZER_OPTIONS);
+}
+
+function thrownBy(execute: () => unknown): unknown {
+  try {
+    execute();
+  } catch (error) {
+    return error;
+  }
+  return null;
+}
 
 function at(txHash: string, ledgerVersion: bigint, eventIndex: number, id?: string): EventBase {
   return baseEvent({
@@ -53,7 +73,7 @@ function bootstrapEvents(): readonly ProtocolEvent[] {
       automaticMaterialization: false,
       feeBps: 100n,
       initialIndex: 0n,
-      packageVersion: "testnet-v1",
+      packageVersion: "testnet-v0.1.0",
       rewardVault: CORE_REWARD_VAULT,
       distributionVault: DISTRIBUTION_VAULT,
     },
@@ -200,6 +220,9 @@ function observedFromProjection(
     custodyActiveLpRewardVault: projection.custody.activeLpRewardVault ?? LP_REWARD_VAULT,
     trflReserve: projection.pool.trflReserve,
     tusdReserve: projection.pool.tusdReserve,
+    ammFeeBps: projection.pool.ammFeeBps,
+    maximumGrossSwap: projection.pool.maximumGrossSwap,
+    maximumReserveBps: projection.pool.maximumReserveBps,
     maximumRflContribution: projection.pool.maximumRflContribution,
     maximumTusdContribution: projection.pool.maximumTusdContribution,
     maximumNonFinalWithdrawalShareBps: projection.pool.maximumNonFinalWithdrawalShareBps,
@@ -214,6 +237,10 @@ function observedFromProjection(
     packageVersion: projection.packageVersion,
     swapsPaused: projection.swapsPaused,
     claimsPaused: projection.claimsPaused,
+    faucetPaused: projection.faucetPaused,
+    faucetTrflGrant: projection.faucetTrflGrant,
+    faucetTusdGrant: projection.faucetTusdGrant,
+    faucetCooldownSeconds: projection.faucetCooldownSeconds,
     poolPaused: projection.pool.poolPaused,
     liquidityPaused: projection.pool.liquidityPaused,
     lpClaimsPaused: projection.pool.lpClaimsPaused,
@@ -349,9 +376,9 @@ test("reserve receipt mutation and observed reserve-custody mismatch both fail c
 });
 
 test("liquidity-limit events normalize, replay, and reconcile every field exactly", async () => {
-  const normalizer = new CedraEventNormalizer();
+  const normalizer = eventNormalizer();
   const normalized = normalizer.normalize({
-    typeTag: "0xcafe::pool::LiquidityLimitsChanged",
+    typeTag: "0xdead::pool::LiquidityLimitsChanged",
     data: {
       max_rfl_contribution: "5000000",
       max_usd_contribution: "7000000",
@@ -403,24 +430,39 @@ test("liquidity-limit events normalize, replay, and reconcile every field exactl
 });
 
 test("immutable materialization mode normalizes and reconciles against the on-chain view", async () => {
-  const normalizer = new CedraEventNormalizer();
-  const normalized = normalizer.normalize({
+  const normalizer = eventNormalizer();
+  const envelope = {
     typeTag: "0xcafe::reflection_events::ProtocolInitialized",
     data: {
       version: "1",
+      release_major: "0",
+      release_minor: "1",
+      release_patch: "0",
       reward_vault: CORE_REWARD_VAULT,
       distribution_vault: DISTRIBUTION_VAULT,
       automatic_materialization: false,
+      initial_fee_bps: "100",
     },
     txHash: "0xmode-init",
     ledgerVersion: 1n,
     eventIndex: 0,
     timestampUnixMilliseconds: 1_000n,
-  });
+  } as const;
+  const normalized = normalizer.normalize(envelope);
   if (normalized === null || normalized.type !== "ProtocolInitialized") {
     throw new Error("Protocol initialization must normalize");
   }
   equal(normalized.automaticMaterialization, false, "Claim-backed mode must survive normalization");
+  equal(normalized.packageVersion, "testnet-v0.1.0", "Semantic release identity is distinct from state schema version");
+
+  equal(
+    thrownBy(() => eventNormalizer().normalize({
+      ...envelope,
+      data: { ...(envelope.data as Record<string, unknown>), version: "2" },
+    })) instanceof TypeError,
+    true,
+    "Unknown event schemas fail closed instead of being replayed as version 1",
+  );
 
   const indexer = await bootstrappedIndexer();
   const projection = indexer.getProjection();
@@ -434,6 +476,50 @@ test("immutable materialization mode normalizes and reconciles against the on-ch
     report.alerts.some((alert) => alert.code === "CORE_ACCOUNTING" && alert.id.includes("materialization-mode")),
     "A mutable or mismatched mode view must fail reconciliation",
   );
+});
+
+test("faucet emergency pause normalizes, replays, and reconciles", async () => {
+  const normalizer = eventNormalizer();
+  const configured = normalizer.normalize({
+    typeTag: "0xbabe::test_faucet::FaucetConfigured",
+    data: { trfl_grant: "200", tusd_grant: "300", cooldown_seconds: "120" },
+    txHash: "0xfaucet-controls",
+    ledgerVersion: 6n,
+    eventIndex: 0,
+    timestampUnixMilliseconds: 6_000n,
+  });
+  const normalized = normalizer.normalize({
+    typeTag: "0xbabe::test_faucet::FaucetPauseChanged",
+    data: { paused: true },
+    txHash: "0xfaucet-controls",
+    ledgerVersion: 6n,
+    eventIndex: 1,
+    timestampUnixMilliseconds: 6_000n,
+  });
+  if (
+    configured === null
+    || configured.type !== "FaucetConfigured"
+    || normalized === null
+    || normalized.type !== "FaucetPauseChanged"
+  ) {
+    throw new Error("Faucet configuration and pause must normalize from the exact asset package");
+  }
+  const indexer = await bootstrappedIndexer();
+  const replay = await indexer.process([configured, normalized]);
+  equal(replay.alerts.length, 0, "Valid faucet configuration and pause events must commit atomically");
+  equal(indexer.getProjection().faucetPaused, true, "Replay retains the emergency faucet state");
+  equal(indexer.getProjection().faucetTrflGrant, 200n, "Replay retains the evented tRFL grant");
+
+  const projection = indexer.getProjection();
+  const mismatch = await indexer.reconcile({
+    listEvents: async () => ({ events: [], nextCursor: null }),
+    getAccountingSnapshot: async () => observedFromProjection(projection, 6n, {
+      faucetPaused: false,
+      faucetCooldownSeconds: 121n,
+    }),
+  });
+  ok(mismatch.alerts.some((entry) => entry.code === "PAUSE_STATE"), "A faucet pause/view mismatch must be critical");
+  ok(mismatch.alerts.some((entry) => entry.code === "FAUCET_CONFIG"), "A faucet configuration/view mismatch must be critical");
 });
 
 test("routes to an old claim-only LP epoch are rejected", async () => {
@@ -586,32 +672,75 @@ test("native transfer endpoints take precedence over a redundant historical rout
   equal(indexer.getProjection().positions.get(TEST_BOB)?.rawTrfl, 40n, "Native credit applies once");
 });
 
+test("router receipts reconcile one-sided eligible transfers to and from excluded stores", async () => {
+  const outgoing = await bootstrappedIndexer(false);
+  const sentToExcluded = await outgoing.process([
+    { ...at("0xexcluded-in", 5n, 0, "eligible-debit"), type: "EligibleBalanceDebited", account: TEST_ACCOUNT, amount: 40n },
+    { ...at("0xexcluded-in", 5n, 1, "router-to-excluded"), type: "WalletTransfer", from: TEST_ACCOUNT, to: "0xcafe", asset: "tRFL", amount: 40n },
+  ]);
+  equal(sentToExcluded.alerts.length, 0, "An excluded recipient correctly has no eligible credit event");
+  equal(outgoing.getProjection().positions.get(TEST_ACCOUNT)?.rawTrfl, 1_999_960n, "Only the eligible sender loses shares");
+
+  const incoming = await bootstrappedIndexer(false);
+  const receivedFromExcluded = await incoming.process([
+    { ...at("0xexcluded-out", 5n, 0, "bob-position-excluded"), type: "PositionCreated", account: TEST_BOB },
+    { ...at("0xexcluded-out", 5n, 1, "eligible-credit"), type: "EligibleBalanceCredited", account: TEST_BOB, amount: 40n },
+    { ...at("0xexcluded-out", 5n, 2, "router-from-excluded"), type: "WalletTransfer", from: "0xcafe", to: TEST_BOB, asset: "tRFL", amount: 40n },
+  ]);
+  equal(receivedFromExcluded.alerts.length, 0, "An excluded sender correctly has no eligible debit event");
+  equal(incoming.getProjection().positions.get(TEST_BOB)?.rawTrfl, 40n, "Only the eligible recipient gains shares");
+});
+
 test("operational-admin handoffs normalize, replay, reconcile, and reject broken authority chains", async () => {
-  const normalizer = new CedraEventNormalizer();
+  const normalizer = eventNormalizer();
   const envelopes = [
     {
       typeTag: "0xcafe::reflection_events::OperationalAdminChanged",
-      data: { old_operational_admin: "0xcafe", new_operational_admin: "0x0bed" },
-      txHash: "0xcore-operator",
+      data: { old_operational_admin: "0x0", new_operational_admin: "0xcafe" },
+      txHash: "0xcore-operator-init",
       ledgerVersion: 6n,
       eventIndex: 0,
       timestampUnixMilliseconds: 6_000n,
     },
     {
       typeTag: "0xbabe::test_faucet::OperationalAdminChanged",
-      data: { old_operational_admin: "0xbabe", new_operational_admin: "0x0bed" },
-      txHash: "0xfaucet-operator",
+      data: { old_operational_admin: "0x0", new_operational_admin: "0xbabe" },
+      txHash: "0xfaucet-operator-init",
       ledgerVersion: 7n,
       eventIndex: 0,
       timestampUnixMilliseconds: 7_000n,
     },
     {
       typeTag: "0xdead::pool::OperationalAdminChanged",
-      data: { old_operational_admin: "0xdead", new_operational_admin: "0x0bed" },
-      txHash: "0xamm-operator",
+      data: { old_operational_admin: "0x0", new_operational_admin: "0xdead" },
+      txHash: "0xamm-operator-init",
       ledgerVersion: 8n,
       eventIndex: 0,
       timestampUnixMilliseconds: 8_000n,
+    },
+    {
+      typeTag: "0xcafe::reflection_events::OperationalAdminChanged",
+      data: { old_operational_admin: "0xcafe", new_operational_admin: "0x0bed" },
+      txHash: "0xcore-operator",
+      ledgerVersion: 9n,
+      eventIndex: 0,
+      timestampUnixMilliseconds: 9_000n,
+    },
+    {
+      typeTag: "0xbabe::test_faucet::OperationalAdminChanged",
+      data: { old_operational_admin: "0xbabe", new_operational_admin: "0x0bed" },
+      txHash: "0xfaucet-operator",
+      ledgerVersion: 10n,
+      eventIndex: 0,
+      timestampUnixMilliseconds: 10_000n,
+    },
+    {
+      typeTag: "0xdead::pool::OperationalAdminChanged",
+      data: { old_operational_admin: "0xdead", new_operational_admin: "0x0bed" },
+      txHash: "0xamm-operator",
+      ledgerVersion: 11n,
+      eventIndex: 0,
+      timestampUnixMilliseconds: 11_000n,
     },
   ] as const;
   const normalized = envelopes.map((envelope) => normalizer.normalize(envelope));
@@ -619,9 +748,10 @@ test("operational-admin handoffs normalize, replay, reconcile, and reject broken
     throw new Error("Every operational-admin event must normalize");
   }
   const handoffs = normalized as readonly Extract<ProtocolEvent, { readonly type: "OperationalAdminChanged" }>[];
-  equal(handoffs[0]?.scope, "reflection-core", "Core handoff retains its authority scope");
-  equal(handoffs[1]?.scope, "test-assets", "Faucet handoff retains its authority scope");
-  equal(handoffs[2]?.scope, "test-amm", "AMM handoff retains its authority scope");
+  equal(handoffs[0]?.oldOperationalAdmin, "0x0", "Initialization starts the explicit authority chain at zero");
+  equal(handoffs[3]?.scope, "reflection-core", "Core handoff retains its authority scope");
+  equal(handoffs[4]?.scope, "test-assets", "Faucet handoff retains its authority scope");
+  equal(handoffs[5]?.scope, "test-amm", "AMM handoff retains its authority scope");
 
   const indexer = await bootstrappedIndexer();
   for (const handoff of handoffs) {
@@ -629,25 +759,25 @@ test("operational-admin handoffs normalize, replay, reconcile, and reject broken
     equal(result.alerts.length, 0, "A valid publisher handoff must commit");
   }
   const projection = indexer.getProjection();
-  equal(projection.operationalAdmins.reflectionCore, "0x0bed", "Core operational authority is replayed");
-  equal(projection.operationalAdmins.testAssets, "0x0bed", "Faucet operational authority is replayed");
-  equal(projection.operationalAdmins.testAmm, "0x0bed", "AMM operational authority is replayed");
+  equal(projection.operationalAdmins.reflectionCore, "0xbed", "Core operational authority is replayed");
+  equal(projection.operationalAdmins.testAssets, "0xbed", "Faucet operational authority is replayed");
+  equal(projection.operationalAdmins.testAmm, "0xbed", "AMM operational authority is replayed");
 
   const clean = await indexer.reconcile({
     listEvents: async () => ({ events: [], nextCursor: null }),
-    getAccountingSnapshot: async () => observedFromProjection(projection, 8n),
+    getAccountingSnapshot: async () => observedFromProjection(projection, 11n),
   });
   equal(clean.reconciled, true, "Matching operational-admin views must reconcile");
   const mismatch = await indexer.reconcile({
     listEvents: async () => ({ events: [], nextCursor: null }),
-    getAccountingSnapshot: async () => observedFromProjection(projection, 8n, {
+    getAccountingSnapshot: async () => observedFromProjection(projection, 11n, {
       ammOperationalAdmin: "0xbad",
     }),
   });
   ok(mismatch.alerts.some((entry) => entry.code === "OPERATIONAL_ADMIN"), "Authority-view mismatch must be critical");
 
   const broken: ProtocolEvent = {
-    ...at("0xbroken-core-operator", 9n, 0),
+    ...at("0xbroken-core-operator", 12n, 0),
     type: "OperationalAdminChanged",
     scope: "reflection-core",
     oldOperationalAdmin: "0xcafe",
@@ -655,11 +785,11 @@ test("operational-admin handoffs normalize, replay, reconcile, and reject broken
   };
   const rejected = await indexer.process([broken]);
   ok(rejected.alerts.some((entry) => entry.code === "OPERATIONAL_ADMIN"), "Broken authority continuity must reject the transaction");
-  equal(indexer.getProjection().operationalAdmins.reflectionCore, "0x0bed", "Rejected authority mutation cannot commit");
+  equal(indexer.getProjection().operationalAdmins.reflectionCore, "0xbed", "Rejected authority mutation cannot commit");
 });
 
 test("Cedra normalizer maps custody and LP payloads and fails closed on missing arithmetic fields", () => {
-  const normalizer = new CedraEventNormalizer();
+  const normalizer = eventNormalizer();
   const normalized = normalizer.normalize({
     typeTag: "0xcafe::reflection_events::ReflectionIndexAdvanced",
     data: { old_index: "0", new_index: "10", remainder: "0", eligible_supply: "1000", fee_amount: "10" },
@@ -694,7 +824,7 @@ test("Cedra normalizer maps custody and LP payloads and fails closed on missing 
   let threw = false;
   try {
     normalizer.normalize({
-      typeTag: "reflection_core::reflection_events::ReflectionIndexAdvanced",
+      typeTag: "0xcafe::reflection_events::ReflectionIndexAdvanced",
       data: { old_index: "0", new_index: "10", remainder: "0", fee_amount: "10" },
       txHash: "0xbroken",
       ledgerVersion: 7n,
@@ -720,4 +850,27 @@ test("Cedra normalizer maps custody and LP payloads and fails closed on missing 
     unsupportedStatusThrew = error instanceof TypeError;
   }
   equal(unsupportedStatusThrew, true, "Only active and terminal claim-only status values may normalize");
+});
+
+test("Cedra normalizer rejects authentic-looking events from unapproved package addresses", () => {
+  const normalizer = eventNormalizer();
+  const counterfeit = normalizer.normalize({
+    typeTag: "0xbeef::reflection_events::ReflectionFeeCollected",
+    data: { account: TEST_ACCOUNT, gross_amount: "100", fee_amount: "1", fee_bps: "100", kind: "1" },
+    txHash: "0xcounterfeit",
+    ledgerVersion: 9n,
+    eventIndex: 0,
+    timestampUnixMilliseconds: 9_000n,
+  });
+  equal(counterfeit, null, "A matching module/event suffix at another address is not protocol evidence");
+
+  const canonical = normalizer.normalize({
+    typeTag: "0x0000CAFE::reflection_events::ReflectionFeeCollected",
+    data: { account: TEST_ACCOUNT, gross_amount: "100", fee_amount: "1", fee_bps: "100", kind: "1" },
+    txHash: "0xcanonical",
+    ledgerVersion: 10n,
+    eventIndex: 0,
+    timestampUnixMilliseconds: 10_000n,
+  });
+  equal(canonical?.type, "ReflectionFeeCollected", "Equivalent zero-padded package addresses normalize canonically");
 });

@@ -30,6 +30,7 @@ builders:
 | `createLpRewardClaimDraft` | `epoch`, `amount` (`0` means claim all) |
 | `createCheckpointLpRewardsDraft` | none |
 | `createConfigureLiquidityLimitsDraft` | `max_rfl_contribution`, `max_usd_contribution`, `max_withdrawal_share_bps` |
+| `createSetFaucetPausedDraft` | `paused` |
 | `createOperationalAdminHandoffDraft` | non-zero operational account address |
 
 Builders validate Move integer bounds, positive contribution maxima and LP

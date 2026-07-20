@@ -19,5 +19,16 @@ whether the release manifest and on-chain addresses match the source reviewed
 
 The review must explicitly attempt direct pool calls, unauthorized admin calls,
 reward-vault withdrawal/sweep, duplicate claim, zero-value/integer-boundary
-operations, fresh-deployment snapshot restoration and indexer old-cursor
-recovery. It is not satisfied by a superficial code style review.
+operations, clean fresh-deployment reconciliation, and indexer old-cursor
+recovery. If a separate snapshot claim distributor is ever proposed, review it
+as an independent package. This gate is not satisfied by a superficial code
+style review.
+
+The reviewer must also confirm that all three release packages are immutable,
+the tRFL mint reference is absent from stored bytecode state, core event
+constructors are not externally callable, the indexer rejects same-named events
+from unapproved package addresses and unknown schema versions, and initialization
+events reconstruct every operational authority, fee/limit, and pause default.
+Review `docs/CONTRACT_SECURITY_AUDIT.md` as author-supplied input, independently
+reproduce its findings, and record any disagreement rather than treating it as
+external assurance.

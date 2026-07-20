@@ -41,7 +41,14 @@ export interface FaucetGrantEvent extends EventBase {
   readonly amount: bigint;
 }
 
-/** Historical router evidence. Native hook endpoints take precedence if both exist. */
+export interface FaucetConfiguredEvent extends EventBase {
+  readonly type: "FaucetConfigured";
+  readonly trflGrant: bigint;
+  readonly tusdGrant: bigint;
+  readonly cooldownSeconds: bigint;
+}
+
+/** Informational router receipt. Native hook endpoints are the accounting authority. */
 export interface WalletTransferEvent extends EventBase {
   readonly type: "WalletTransfer";
   readonly from: Address;
@@ -166,6 +173,11 @@ export interface PauseStateChangedEvent extends EventBase {
   readonly claimsPaused: boolean;
 }
 
+export interface FaucetPauseChangedEvent extends EventBase {
+  readonly type: "FaucetPauseChanged";
+  readonly paused: boolean;
+}
+
 export interface PoolPauseChangedEvent extends EventBase {
   readonly type: "PoolPauseChanged";
   readonly poolPaused: boolean;
@@ -280,6 +292,7 @@ export type ProtocolEvent =
   | ProtocolInitializedEvent
   | PositionCreatedEvent
   | FaucetGrantEvent
+  | FaucetConfiguredEvent
   | WalletTransferEvent
   | EligibleBalanceDebitedEvent
   | EligibleBalanceCreditedEvent
@@ -296,6 +309,7 @@ export type ProtocolEvent =
   | SwapLimitsChangedEvent
   | LiquidityLimitsChangedEvent
   | PauseStateChangedEvent
+  | FaucetPauseChangedEvent
   | PoolPauseChangedEvent
   | OperationalAdminChangedEvent
   | LiquiditySeededEvent
@@ -392,6 +406,10 @@ export interface ProtocolProjection {
   readonly packageVersion: string;
   readonly swapsPaused: boolean;
   readonly claimsPaused: boolean;
+  readonly faucetPaused: boolean;
+  readonly faucetTrflGrant: bigint;
+  readonly faucetTusdGrant: bigint;
+  readonly faucetCooldownSeconds: bigint;
   readonly operationalAdmins: {
     readonly reflectionCore: Address | null;
     readonly testAssets: Address | null;
@@ -468,6 +486,9 @@ export interface ObservedAccountingSnapshot {
   readonly custodyActiveLpRewardVault: Address;
   readonly trflReserve: bigint;
   readonly tusdReserve: bigint;
+  readonly ammFeeBps: bigint;
+  readonly maximumGrossSwap: bigint;
+  readonly maximumReserveBps: bigint;
   readonly maximumRflContribution: bigint;
   readonly maximumTusdContribution: bigint;
   readonly maximumNonFinalWithdrawalShareBps: bigint;
@@ -477,6 +498,10 @@ export interface ObservedAccountingSnapshot {
   readonly packageVersion: string;
   readonly swapsPaused: boolean;
   readonly claimsPaused: boolean;
+  readonly faucetPaused: boolean;
+  readonly faucetTrflGrant: bigint;
+  readonly faucetTusdGrant: bigint;
+  readonly faucetCooldownSeconds: bigint;
   readonly poolPaused: boolean;
   readonly liquidityPaused: boolean;
   readonly lpClaimsPaused: boolean;
@@ -505,6 +530,7 @@ export interface CriticalAlert {
     | "LIFETIME_TOTAL"
     | "POOL_RESERVES"
     | "POOL_LIMITS"
+    | "FAUCET_CONFIG"
     | "RESERVE_CUSTODY"
     | "CUSTODY_ACCOUNTING"
     | "ROUTE_PAIR"

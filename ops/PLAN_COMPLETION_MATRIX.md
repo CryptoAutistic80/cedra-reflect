@@ -23,8 +23,8 @@ Status meanings:
 |---|---|---|---|
 | Phase 0 — network compatibility | PASS (Testnet, claim-backed) | `ops/evidence/hook-probe-testnet.json`: H1-H7 finalized; publish/init/transfer/materialisation/secondary-store gas recorded; CLI/REST/SDK agree; H8 explicitly failed/inconclusive; claim-backed mode selected | A later native-wallet distinct-derived-balance run is required only before any fresh automatic-materialisation deployment |
 | Phase 1 — specification and model | PASS (local) | `docs/accounting-specification.md`; independent Python model; hand-authored vector; fixed-seed generated Python/Move witness; one-million-operation gate | Re-run from the exact reviewed release commit before publication |
-| Phase 2 — reflection core | PASS (local) | `move/reflection-core`; immutable post-publication mode initialization; claim-backed raw display/spend enforcement; explicit wallet claims; exact backing views; raw-store accessor; clean initial schema; 36,967-byte dev-address sparse publish payload components | Exact-address release compilation, independent review, and finalized chain proof |
-| Phase 3 — AMM and faucet | PASS (local) | `move/test-amm`; `move/test-assets`; 56 integration tests including claim-backed wallet plus LP-owner payout; Python and generated conformance witness; 30,326-byte AMM and 7,712-byte asset dev-address sparse publish payload components | Exact-address release compilation, gas results, and finalized chain reconciliation |
+| Phase 2 — reflection core | PASS (local) | `move/reflection-core`; immutable publication policy and one-time claim-backed mode initialization; fixed supply with no retained mint authority; exact backing views; package-only events; clean initial schema; source digest `038b55aa...c1e5c87`; 37,887-byte dev-address sparse publish payload components; internal audit findings remediated | Exact-address release compilation, independent review, and finalized chain proof |
+| Phase 3 — AMM and faucet | PASS (local) | `move/test-amm`; `move/test-assets`; 59 integration tests including claim-backed wallets, LP-owner payout, faucet pause, and non-operator bootstrap; Python and generated conformance witness; AMM digest `4674f3e5...2532f26` / 30,581 bytes; asset digest `7606d6ec...77522e` / 8,266 bytes | Exact-address release compilation, gas results, and finalized chain reconciliation |
 | Phase 4 — client and indexer | PARTIAL | Offline-first SDK drafts; Cedra normalizer; event reducer; reconciler; snapshots; five-screen static dashboard; deterministic TypeScript tests | Finalized Cedra read adapter, wallet integration, persistent production store/worker, alert delivery, and new-user live journey |
 | Phase 5 — closed Testnet pilot | OPEN (live) | Runbooks and gate definitions only | Approved deployment, participants, load sequence, pause/recovery exercises, and zero-discrepancy evidence |
 | Phase 6 — open Testnet beta | OPEN (live) | Static dashboard and incident/release procedures only | Public deployment, faucet, synthetic generator, bug channel, changelogs, drills, and closed-pilot exit |
@@ -45,7 +45,7 @@ Status meanings:
 | Wallet and LP claims preserve effective value | PASS (local) | Partial/full wallet and LP claim tests plus Python invariants |
 | LP mint, burn, transfer, and claim prevent historical capture | PASS (local) | Checkpoint-before-mint/transfer, proportional burn, claim replay, and epoch-isolation tests |
 | Pending rewards are spendable when hooks work | PASS (Testnet, claim-backed decision) | H1-H7 finalized in `ops/evidence/hook-probe-testnet.json`; exact explicit claims remain on chain | Automatic spending is deliberately disabled for the initial release because H8 is inconclusive; a later fresh deployment requires wallet evidence |
-| Initial materialization mode is one-time and on chain | PASS (local) | One-time publisher-only post-publication initializer, `ProtocolInitialized.automatic_materialization`, mode view, no setter/conversion resource, claim-backed positive and negative integration tests | Finalized core initialization event/view on the exact approved release artifact; compatible package-upgrade authority is a separate trust boundary |
+| Initial materialization mode is one-time and on chain | PASS (local) | One-time publisher-only post-publication initializer, `ProtocolInitialized.automatic_materialization`, mode view, no setter/conversion resource, immutable package policy, claim-backed positive and negative integration tests | Finalized core initialization event/view on the exact approved release artifact |
 | AMM prices from net input and authoritative raw reserves | PASS (local) | Non-divisible AMM rounding unit, raw reserve/custody assertions, and cross-implementation witness |
 | Buy quote/slippage uses net user receipt | PASS (local) | `buy_slippage_uses_net_user_receipt` and SDK quote assertions |
 | Unclaimed LP rewards never change reserves or invariant | PASS (local) | Custody checkpoint and LP claim tests compare reserves before/after |
@@ -53,7 +53,8 @@ Status meanings:
 | Zero LP supply and fresh epochs cannot inherit live custody or liabilities | PASS (local) | Final shutdown, claim-only dust, same-owner fresh-epoch, and reseed tests |
 | Unsupported delegated custody fails closed | PASS (local) | Explicit wallet registration; custodian co-signature; funded, aliased, already-classified, wrong-owner, and pre-liable registration rejection; exact single custody binding; unsupported-store hook aborts; and no public adapter registrar |
 | No speculative legacy-state transition surface | PASS (local) | Source scan plus one direct initial resource schema; no conversion resource or entry function |
-| Economic events support independent replay | PASS (local) | Move event surfaces, normalizer/reducer tests, atomic transaction grouping, and snapshot reconciliation |
+| Economic events support independent replay | PASS (local) | Package-only Move event constructors; schema/release separation; exact package-address normalization; stateless fee receipts; evented initial authority/configuration; atomic transaction grouping; and snapshot reconciliation |
+| Published logic cannot change after review | PASS (local) | `reflection-core`, `test-assets`, and `test-amm` all declare `upgrade_policy = "immutable"`; structural evidence test enforces it | Exact-address compiled manifest and finalized publication policy remain live evidence |
 | Independent implementations converge | PASS (local) | Hand-authored vector and fixed-seed 64-operation witness executed by Python and Move |
 | Structurally suitable for mainnet hardening | OPEN (human) | Internal local evidence only | Independent source/bytecode review and disposition of all high/critical findings |
 
@@ -77,7 +78,9 @@ Status meanings:
 
 ## Known plan gaps to close before publication
 
-1. The committed metadata URIs are `example.invalid` placeholders and cannot
-   be used for an approved public pilot artifact.
-2. Phase 4 remains deliberately deferred while contract work is the active
+1. Exact-address package builds, simulations, gas measurements, manifests,
+   two human approvals, and finalized deployment evidence do not yet exist.
+2. `docs/CONTRACT_SECURITY_AUDIT.md` is an internal author review; the required
+   independent source/bytecode reviewer has not signed off.
+3. Phase 4 remains deliberately deferred while contract work is the active
    priority; the static mock dashboard is not evidence of a live wallet journey.

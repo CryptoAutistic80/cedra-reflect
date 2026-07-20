@@ -6,11 +6,15 @@ module reflection_core::reflection_events {
     #[event]
     struct ProtocolInitialized has drop, store {
         version: u64,
+        release_major: u64,
+        release_minor: u64,
+        release_patch: u64,
         deployment_id: vector<u8>,
         metadata: address,
         reward_vault: address,
         distribution_vault: address,
         automatic_materialization: bool,
+        initial_fee_bps: u64,
     }
 
     #[event]
@@ -47,6 +51,7 @@ module reflection_core::reflection_events {
         account: address,
         gross_amount: u64,
         fee_amount: u64,
+        fee_bps: u64,
         kind: u8,
     }
 
@@ -128,33 +133,52 @@ module reflection_core::reflection_events {
         new_operational_admin: address,
     }
 
-    public fun protocol_initialized(
+    // Event constructors are package-only. Exposing them publicly would let an
+    // unrelated module emit authentic-looking protocol events without making
+    // the corresponding state transition.
+    public(package) fun protocol_initialized(
         version: u64,
+        release_major: u64,
+        release_minor: u64,
+        release_patch: u64,
         deployment_id: vector<u8>,
         metadata: address,
         reward_vault: address,
         distribution_vault: address,
         automatic_materialization: bool,
+        initial_fee_bps: u64,
     ) {
         event::emit(ProtocolInitialized {
             version,
+            release_major,
+            release_minor,
+            release_patch,
             deployment_id,
             metadata,
             reward_vault,
             distribution_vault,
             automatic_materialization,
+            initial_fee_bps,
         });
     }
-    public fun faucet_grant(recipient: address, amount: u64, operator: address) { event::emit(FaucetGrant { recipient, amount, operator }); }
-    public fun wallet_transfer(from: address, to: address, amount: u64) { event::emit(WalletTransfer { from, to, amount }); }
-    public fun eligible_balance_debited(account: address, amount: u64) { event::emit(EligibleBalanceDebited { account, amount }); }
-    public fun eligible_balance_credited(account: address, amount: u64) { event::emit(EligibleBalanceCredited { account, amount }); }
-    public fun fee_collected(account: address, gross_amount: u64, fee_amount: u64, kind: u8) { event::emit(ReflectionFeeCollected { account, gross_amount, fee_amount, kind }); }
-    public fun index_advanced(old_index: u256, new_index: u256, remainder: u256, fee_amount: u64, eligible_supply: u128) { event::emit(ReflectionIndexAdvanced { old_index, new_index, remainder, fee_amount, eligible_supply }); }
-    public fun rewards_materialized(account: address, amount: u64, total_claimed: u256) { event::emit(RewardsMaterialized { account, amount, total_claimed }); }
-    public fun rewards_claimed(account: address, amount: u64, total_claimed: u256) { event::emit(RewardsClaimed { account, amount, total_claimed }); }
-    public fun position_created(account: address) { event::emit(PositionCreated { account }); }
-    public fun custody_adapter_registered(
+    public(package) fun faucet_grant(recipient: address, amount: u64, operator: address) { event::emit(FaucetGrant { recipient, amount, operator }); }
+    public(package) fun wallet_transfer(from: address, to: address, amount: u64) { event::emit(WalletTransfer { from, to, amount }); }
+    public(package) fun eligible_balance_debited(account: address, amount: u64) { event::emit(EligibleBalanceDebited { account, amount }); }
+    public(package) fun eligible_balance_credited(account: address, amount: u64) { event::emit(EligibleBalanceCredited { account, amount }); }
+    public(package) fun fee_collected(
+        account: address,
+        gross_amount: u64,
+        fee_amount: u64,
+        fee_bps: u64,
+        kind: u8,
+    ) {
+        event::emit(ReflectionFeeCollected { account, gross_amount, fee_amount, fee_bps, kind });
+    }
+    public(package) fun index_advanced(old_index: u256, new_index: u256, remainder: u256, fee_amount: u64, eligible_supply: u128) { event::emit(ReflectionIndexAdvanced { old_index, new_index, remainder, fee_amount, eligible_supply }); }
+    public(package) fun rewards_materialized(account: address, amount: u64, total_claimed: u256) { event::emit(RewardsMaterialized { account, amount, total_claimed }); }
+    public(package) fun rewards_claimed(account: address, amount: u64, total_claimed: u256) { event::emit(RewardsClaimed { account, amount, total_claimed }); }
+    public(package) fun position_created(account: address) { event::emit(PositionCreated { account }); }
+    public(package) fun custody_adapter_registered(
         reserve_store: address,
         lp_reward_vault: address,
     ) {
@@ -165,7 +189,7 @@ module reflection_core::reflection_events {
             lp_reward_vault,
         });
     }
-    public fun custody_epoch_route_opened(
+    public(package) fun custody_epoch_route_opened(
         epoch: u64,
         reserve_store: address,
         lp_reward_vault: address,
@@ -179,10 +203,10 @@ module reflection_core::reflection_events {
             retired_residue_magnified,
         });
     }
-    public fun custody_shares_changed(added: bool, amount: u64, custody_shares: u128, global_shares: u128) {
+    public(package) fun custody_shares_changed(added: bool, amount: u64, custody_shares: u128, global_shares: u128) {
         event::emit(CustodySharesChanged { added, amount, custody_shares, global_shares });
     }
-    public fun custody_rewards_routed(
+    public(package) fun custody_rewards_routed(
         reserve_store: address,
         lp_reward_vault: address,
         epoch: u64,
@@ -191,9 +215,9 @@ module reflection_core::reflection_events {
     ) {
         event::emit(CustodyRewardsRouted { reserve_store, lp_reward_vault, epoch, amount, total_routed });
     }
-    public fun fee_changed(old_fee_bps: u64, new_fee_bps: u64) { event::emit(FeeConfigurationChanged { old_fee_bps, new_fee_bps }); }
-    public fun pause_changed(swaps_paused: bool, claims_paused: bool) { event::emit(PauseStateChanged { swaps_paused, claims_paused }); }
-    public fun operational_admin_changed(old_operational_admin: address, new_operational_admin: address) {
+    public(package) fun fee_changed(old_fee_bps: u64, new_fee_bps: u64) { event::emit(FeeConfigurationChanged { old_fee_bps, new_fee_bps }); }
+    public(package) fun pause_changed(swaps_paused: bool, claims_paused: bool) { event::emit(PauseStateChanged { swaps_paused, claims_paused }); }
+    public(package) fun operational_admin_changed(old_operational_admin: address, new_operational_admin: address) {
         event::emit(OperationalAdminChanged { old_operational_admin, new_operational_admin });
     }
 }

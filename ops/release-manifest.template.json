@@ -3,14 +3,17 @@
   "network": "cedra-testnet",
   "deployment_id": "reflection-pilot-001",
   "release": "testnet-v0.1.0",
+  "event_schema_version": 1,
   "no_value_notice": "TESTNET ASSET — NO MONETARY VALUE — STATE AND ADDRESSES MAY CHANGE",
-  "framework_commit": "RECORD_EXACT_PINNED_FRAMEWORK_COMMIT",
+  "framework_commit": "01e6ceafae19b900772b343a5af8ae236401e0a8",
   "application_commit": "RECORD_GIT_COMMIT_AFTER_REVIEW",
   "cedra_cli_version": "cedra 1.0.4",
   "cedra_sdk_version": "2.2.8",
   "packages": {
     "reflection_core": {
       "publisher": "RECORD_CORE_PUBLISHER_ADDRESS",
+      "event_source_address": "RECORD_CORE_PUBLISHER_ADDRESS",
+      "upgrade_policy": "immutable",
       "source_digest": "RECORD_CORE_SOURCE_DIGEST",
       "compiled_package_digest": "RECORD_CORE_COMPILED_DIGEST",
       "publish_payload_bytes": "RECORD_CORE_PUBLISH_PAYLOAD_BYTES",
@@ -20,6 +23,8 @@
     },
     "test_assets": {
       "publisher": "RECORD_ASSET_PUBLISHER_ADDRESS",
+      "event_source_address": "RECORD_ASSET_PUBLISHER_ADDRESS",
+      "upgrade_policy": "immutable",
       "source_digest": "RECORD_ASSET_SOURCE_DIGEST",
       "compiled_package_digest": "RECORD_ASSET_COMPILED_DIGEST",
       "publish_payload_bytes": "RECORD_ASSET_PUBLISH_PAYLOAD_BYTES",
@@ -29,6 +34,8 @@
     },
     "test_amm": {
       "publisher": "RECORD_AMM_PUBLISHER_ADDRESS",
+      "event_source_address": "RECORD_AMM_PUBLISHER_ADDRESS",
+      "upgrade_policy": "immutable",
       "source_digest": "RECORD_AMM_SOURCE_DIGEST",
       "compiled_package_digest": "RECORD_AMM_COMPILED_DIGEST",
       "publish_payload_bytes": "RECORD_AMM_PUBLISH_PAYLOAD_BYTES",
@@ -36,6 +43,22 @@
       "gas_used": "RECORD_AMM_PUBLISH_GAS",
       "finalized_ledger_version": "RECORD_AMM_PUBLISH_LEDGER_VERSION"
     }
+  },
+  "contract_configuration": {
+    "trfl_decimals": 6,
+    "trfl_fixed_supply_base_units": "1000000000000000",
+    "initial_reflection_fee_bps": 100,
+    "maximum_reflection_fee_bps": 100,
+    "automatic_materialization": false,
+    "supported_custody_adapters": 1,
+    "arbitrary_external_vaults_supported": false
+  },
+  "metadata": {
+    "trfl_icon_url": "https://raw.githubusercontent.com/CryptoAutistic80/cedra-reflect/main/assets/trfl-testnet.svg",
+    "trfl_icon_sha256": "367fb3b1fca3ff39379c1377b985cbcda744cf1f88cc7bbac153d76a5b53c16c",
+    "tusd_icon_url": "https://raw.githubusercontent.com/CryptoAutistic80/cedra-reflect/main/assets/tusd-testnet.svg",
+    "tusd_icon_sha256": "9686d23f60b3c6616ff43ad305d57b050b1bb31dd92a4ce48f26f2c9e13daa90",
+    "project_url": "https://github.com/CryptoAutistic80/cedra-reflect"
   },
   "operational_authority": {
     "address": "RECORD_DISTINCT_OPERATIONAL_ADDRESS",

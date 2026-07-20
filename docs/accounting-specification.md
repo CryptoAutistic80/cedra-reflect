@@ -213,8 +213,9 @@ still maintain corrections for standard transfers, the derived hook returns raw
 balance, and a spend requires enough raw balance until an explicit on-chain
 claim materialises pending rewards. The mode is selected by the one-time
 post-publication initializer and has no setter, conversion resource, or
-migration path in this package version. The package's separately controlled
-compatible-upgrade authority remains an explicit release-policy trust boundary.
+migration path in this package version. The published core, asset, and AMM
+packages use immutable upgrade policy; changing this logic requires a visibly
+fresh deployment and a new release manifest.
 
 ### Custody reward routing
 
@@ -427,9 +428,12 @@ entry point, approver, event, model operation, or rehearsal.
 
 Recovery from a disposable Testnet instance uses a signed off-chain snapshot
 containing all state above, every raw/quote balance, corrections, materialised
-amounts, exclusions, and pause/configuration values. A fresh deployment may be
-rehydrated only from that trusted evidence and must reproduce the recorded
-allocations and pass every invariant before use.
+amounts, exclusions, and pause/configuration values. The initial rehearsal is
+a clean deployment whose fresh zero-history state is reconciled against its own
+manifest. The snapshot is comparison evidence, not authority for manual state
+mutation. If a later pilot explicitly requires allocation restoration, it must
+use a separate finite, independently reviewed claim distributor; the token
+contract retains no migration or privileged balance-edit surface.
 
 ## Test evidence and commands
 

@@ -15,6 +15,7 @@ module test_assets::test_faucet {
     const E_WRONG_FAUCET_ADDRESS: u64 = 5;
     const E_NOT_OPERATIONAL_ADMIN: u64 = 6;
     const E_INVALID_OPERATIONAL_ADMIN: u64 = 7;
+    const E_FAUCET_PAUSED: u64 = 8;
     const DEFAULT_COOLDOWN_SECONDS: u64 = 3_600;
     const DEFAULT_TRFL_GRANT: u64 = 1_000_000_000;
     const DEFAULT_TUSD_GRANT: u64 = 1_000_000_000;
@@ -27,6 +28,7 @@ module test_assets::test_faucet {
         trfl_grant: u64,
         tusd_grant: u64,
         cooldown_seconds: u64,
+        paused: bool,
         last_trfl_claim: Table<address, u64>,
         last_tusd_claim: Table<address, u64>,
     }
@@ -43,6 +45,9 @@ module test_assets::test_faucet {
         old_operational_admin: address,
         new_operational_admin: address,
     }
+
+    #[event]
+    struct FaucetPauseChanged has drop, store { paused: bool }
 
     /// Initialisation intentionally requires the core admin and the independent
     /// faucet publisher. This hands over only narrow capabilities and works
@@ -61,19 +66,32 @@ module test_assets::test_faucet {
             trfl_grant: DEFAULT_TRFL_GRANT,
             tusd_grant: DEFAULT_TUSD_GRANT,
             cooldown_seconds: DEFAULT_COOLDOWN_SECONDS,
+            paused: false,
             last_trfl_claim: table::new<address, u64>(),
             last_tusd_claim: table::new<address, u64>(),
         });
+        event::emit(OperationalAdminChanged {
+            old_operational_admin: @0x0,
+            new_operational_admin: signer::address_of(faucet_admin),
+        });
+        event::emit(FaucetConfigured {
+            trfl_grant: DEFAULT_TRFL_GRANT,
+            tusd_grant: DEFAULT_TUSD_GRANT,
+            cooldown_seconds: DEFAULT_COOLDOWN_SECONDS,
+        });
+        event::emit(FaucetPauseChanged { paused: false });
     }
 
     public entry fun claim_trfl(claimant: &signer) acquires FaucetState {
         let state = borrow_global_mut<FaucetState>(@test_assets);
+        assert!(!state.paused, E_FAUCET_PAUSED);
         assert_available(&mut state.last_trfl_claim, signer::address_of(claimant), state.cooldown_seconds);
         reflection_token::faucet_grant(&state.rfl_cap, signer::address_of(claimant), state.trfl_grant, @test_assets);
     }
 
     public entry fun claim_tusd(claimant: &signer) acquires FaucetState {
         let state = borrow_global_mut<FaucetState>(@test_assets);
+        assert!(!state.paused, E_FAUCET_PAUSED);
         assert_available(&mut state.last_tusd_claim, signer::address_of(claimant), state.cooldown_seconds);
         mock_usd::mint_from_faucet(&state.usd_cap, signer::address_of(claimant), state.tusd_grant, @test_assets);
     }
@@ -103,6 +121,13 @@ module test_assets::test_faucet {
         });
     }
 
+    public entry fun set_paused(admin: &signer, paused: bool) acquires FaucetState {
+        let state = borrow_global_mut<FaucetState>(@test_assets);
+        assert!(signer::address_of(admin) == state.operational_admin, E_NOT_OPERATIONAL_ADMIN);
+        state.paused = paused;
+        event::emit(FaucetPauseChanged { paused });
+    }
+
     #[view]
     public fun configuration(): (u64, u64, u64) acquires FaucetState {
         let state = borrow_global<FaucetState>(@test_assets);
@@ -114,11 +139,16 @@ module test_assets::test_faucet {
         borrow_global<FaucetState>(@test_assets).operational_admin
     }
 
+    #[view]
+    public fun paused(): bool acquires FaucetState {
+        borrow_global<FaucetState>(@test_assets).paused
+    }
+
     fun assert_available(last_claims: &mut Table<address, u64>, account: address, cooldown: u64) {
         let now = timestamp::now_seconds();
         if (table::contains(last_claims, account)) {
             let previous = *table::borrow(last_claims, account);
-            assert!(now >= previous + cooldown, E_COOLDOWN);
+            assert!(now >= previous && now - previous >= cooldown, E_COOLDOWN);
             *table::borrow_mut(last_claims, account) = now;
         } else {
             table::add(last_claims, account, now);

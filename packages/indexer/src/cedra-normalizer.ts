@@ -15,7 +15,11 @@ export interface CedraChainEventEnvelope {
 }
 
 export interface CedraEventNormalizerOptions {
-  readonly initialFeeBps?: bigint;
+  readonly packageAddresses: {
+    readonly reflectionCore: Address;
+    readonly testAssets: Address;
+    readonly testAmm: Address;
+  };
 }
 
 type DataRecord = Readonly<Record<string, unknown>>;
@@ -34,9 +38,11 @@ function requiredString(data: DataRecord, key: string): string {
 }
 
 function requiredAddress(data: DataRecord, key: string): Address {
-  const value = requiredString(data, key);
-  if (!value.startsWith("0x")) throw new TypeError(`Cedra event field ${key} must be an address`);
-  return value as Address;
+  try {
+    return canonicalAddress(requiredString(data, key));
+  } catch {
+    throw new TypeError(`Cedra event field ${key} must be a hexadecimal address`);
+  }
 }
 
 function requiredBigint(data: DataRecord, key: string): bigint {
@@ -70,65 +76,105 @@ function base(envelope: CedraChainEventEnvelope): EventBase {
   };
 }
 
-function isType(typeTag: string, moduleName: string, eventName: string): boolean {
-  return typeTag.endsWith(`::${moduleName}::${eventName}`);
+function canonicalAddress(address: string): Address {
+  if (!/^0x[0-9a-f]+$/i.test(address)) {
+    throw new TypeError(`Invalid Cedra package address: ${address}`);
+  }
+  const digits = address.slice(2).replace(/^0+/, "").toLowerCase() || "0";
+  return `0x${digits}` as Address;
+}
+
+function isType(typeTag: string, packageAddress: Address, moduleName: string, eventName: string): boolean {
+  const parts = typeTag.split("::");
+  return parts.length === 3
+    && canonicalAddress(parts[0]!) === packageAddress
+    && parts[1] === moduleName
+    && parts[2] === eventName;
 }
 
 /** Strict conversion from concrete Move events to the SDK-neutral witness schema. */
 export class CedraEventNormalizer {
-  private currentFeeBps: bigint;
+  private readonly packageAddresses: CedraEventNormalizerOptions["packageAddresses"];
 
-  public constructor(options: CedraEventNormalizerOptions = {}) {
-    this.currentFeeBps = options.initialFeeBps ?? 100n;
+  public constructor(options: CedraEventNormalizerOptions) {
+    this.packageAddresses = {
+      reflectionCore: canonicalAddress(options.packageAddresses.reflectionCore),
+      testAssets: canonicalAddress(options.packageAddresses.testAssets),
+      testAmm: canonicalAddress(options.packageAddresses.testAmm),
+    };
   }
 
   public normalize(envelope: CedraChainEventEnvelope): ProtocolEvent | null {
     const data = asRecord(envelope.data);
     const eventBase = base(envelope);
     const type = envelope.typeTag;
+    const coreType = (moduleName: string, eventName: string): boolean => isType(
+      type, this.packageAddresses.reflectionCore, moduleName, eventName,
+    );
+    const assetsType = (moduleName: string, eventName: string): boolean => isType(
+      type, this.packageAddresses.testAssets, moduleName, eventName,
+    );
+    const ammType = (moduleName: string, eventName: string): boolean => isType(
+      type, this.packageAddresses.testAmm, moduleName, eventName,
+    );
 
-    if (isType(type, "reflection_events", "ProtocolInitialized")) {
-      const version = requiredBigint(data, "version");
+    if (coreType("reflection_events", "ProtocolInitialized")) {
+      const schemaVersion = requiredBigint(data, "version");
+      if (schemaVersion !== 1n) {
+        throw new TypeError(`Unsupported reflection event schema version: ${schemaVersion.toString()}`);
+      }
+      const releaseMajor = requiredBigint(data, "release_major");
+      const releaseMinor = requiredBigint(data, "release_minor");
+      const releasePatch = requiredBigint(data, "release_patch");
       return {
         ...eventBase,
         type: "ProtocolInitialized",
         automaticMaterialization: requiredBoolean(data, "automatic_materialization"),
-        feeBps: this.currentFeeBps,
+        feeBps: requiredBigint(data, "initial_fee_bps"),
         initialIndex: 0n,
-        packageVersion: `testnet-v${version.toString()}`,
+        packageVersion: `testnet-v${releaseMajor.toString()}.${releaseMinor.toString()}.${releasePatch.toString()}`,
         rewardVault: requiredAddress(data, "reward_vault"),
         distributionVault: requiredAddress(data, "distribution_vault"),
       };
     }
-    if (isType(type, "reflection_events", "PositionCreated")) {
+    if (coreType("reflection_events", "PositionCreated")) {
       return { ...eventBase, type: "PositionCreated", account: requiredAddress(data, "account") };
     }
-    if (isType(type, "reflection_events", "FaucetGrant")) {
+    if (coreType("reflection_events", "FaucetGrant")) {
       return { ...eventBase, type: "FaucetGrant", account: requiredAddress(data, "recipient"), asset: "tRFL", amount: requiredBigint(data, "amount") };
     }
-    if (isType(type, "mock_usd", "MockUsdMinted")) {
+    if (assetsType("mock_usd", "MockUsdMinted")) {
       return { ...eventBase, type: "FaucetGrant", account: requiredAddress(data, "recipient"), asset: "tUSD", amount: requiredBigint(data, "amount") };
     }
-    if (isType(type, "reflection_events", "WalletTransfer")) {
+    if (assetsType("test_faucet", "FaucetConfigured")) {
+      return {
+        ...eventBase,
+        type: "FaucetConfigured",
+        trflGrant: requiredBigint(data, "trfl_grant"),
+        tusdGrant: requiredBigint(data, "tusd_grant"),
+        cooldownSeconds: requiredBigint(data, "cooldown_seconds"),
+      };
+    }
+    if (coreType("reflection_events", "WalletTransfer")) {
       return { ...eventBase, type: "WalletTransfer", from: requiredAddress(data, "from"), to: requiredAddress(data, "to"), asset: "tRFL", amount: requiredBigint(data, "amount") };
     }
-    if (isType(type, "reflection_events", "EligibleBalanceDebited")) {
+    if (coreType("reflection_events", "EligibleBalanceDebited")) {
       return { ...eventBase, type: "EligibleBalanceDebited", account: requiredAddress(data, "account"), amount: requiredBigint(data, "amount") };
     }
-    if (isType(type, "reflection_events", "EligibleBalanceCredited")) {
+    if (coreType("reflection_events", "EligibleBalanceCredited")) {
       return { ...eventBase, type: "EligibleBalanceCredited", account: requiredAddress(data, "account"), amount: requiredBigint(data, "amount") };
     }
-    if (isType(type, "reflection_events", "ReflectionFeeCollected")) {
+    if (coreType("reflection_events", "ReflectionFeeCollected")) {
       return {
         ...eventBase,
         type: "ReflectionFeeCollected",
         swapTxHash: envelope.txHash,
         grossAmount: requiredBigint(data, "gross_amount"),
         feeAmount: requiredBigint(data, "fee_amount"),
-        feeBps: this.currentFeeBps,
+        feeBps: requiredBigint(data, "fee_bps"),
       };
     }
-    if (isType(type, "reflection_events", "ReflectionIndexAdvanced")) {
+    if (coreType("reflection_events", "ReflectionIndexAdvanced")) {
       return {
         ...eventBase,
         type: "ReflectionIndexAdvanced",
@@ -139,13 +185,13 @@ export class CedraEventNormalizer {
         eligibleSupply: requiredBigint(data, "eligible_supply"),
       };
     }
-    if (isType(type, "reflection_events", "RewardsMaterialized")) {
+    if (coreType("reflection_events", "RewardsMaterialized")) {
       return { ...eventBase, type: "RewardsMaterialized", account: requiredAddress(data, "account"), amount: requiredBigint(data, "amount"), totalClaimed: requiredBigint(data, "total_claimed") };
     }
-    if (isType(type, "reflection_events", "RewardsClaimed")) {
+    if (coreType("reflection_events", "RewardsClaimed")) {
       return { ...eventBase, type: "RewardsClaimed", account: requiredAddress(data, "account"), amount: requiredBigint(data, "amount"), totalClaimed: requiredBigint(data, "total_claimed") };
     }
-    if (isType(type, "reflection_events", "CustodyAdapterRegistered")) {
+    if (coreType("reflection_events", "CustodyAdapterRegistered")) {
       return {
         ...eventBase,
         type: "CustodyAdapterRegistered",
@@ -155,7 +201,7 @@ export class CedraEventNormalizer {
         lpRewardVault: requiredAddress(data, "lp_reward_vault"),
       };
     }
-    if (isType(type, "reflection_events", "CustodyEpochRouteOpened")) {
+    if (coreType("reflection_events", "CustodyEpochRouteOpened")) {
       return {
         ...eventBase,
         type: "CustodyEpochRouteOpened",
@@ -165,7 +211,7 @@ export class CedraEventNormalizer {
         lpRewardVault: requiredAddress(data, "lp_reward_vault"),
       };
     }
-    if (isType(type, "reflection_events", "CustodySharesChanged")) {
+    if (coreType("reflection_events", "CustodySharesChanged")) {
       return {
         ...eventBase,
         type: "CustodySharesChanged",
@@ -175,7 +221,7 @@ export class CedraEventNormalizer {
         globalShares: requiredBigint(data, "global_shares"),
       };
     }
-    if (isType(type, "reflection_events", "CustodyRewardsRouted")) {
+    if (coreType("reflection_events", "CustodyRewardsRouted")) {
       return {
         ...eventBase,
         type: "CustodyRewardsRouted",
@@ -186,28 +232,29 @@ export class CedraEventNormalizer {
         totalRouted: requiredBigint(data, "total_routed"),
       };
     }
-    if (isType(type, "reflection_events", "FeeConfigurationChanged")) {
+    if (coreType("reflection_events", "FeeConfigurationChanged")) {
       const newFeeBps = requiredBigint(data, "new_fee_bps");
-      const normalized: ProtocolEvent = {
+      return {
         ...eventBase,
         type: "FeeConfigurationChanged",
         oldFeeBps: requiredBigint(data, "old_fee_bps"),
         newFeeBps,
       };
-      this.currentFeeBps = newFeeBps;
-      return normalized;
     }
-    if (isType(type, "reflection_events", "PauseStateChanged")) {
+    if (coreType("reflection_events", "PauseStateChanged")) {
       return { ...eventBase, type: "PauseStateChanged", swapsPaused: requiredBoolean(data, "swaps_paused"), claimsPaused: requiredBoolean(data, "claims_paused") };
     }
+    if (assetsType("test_faucet", "FaucetPauseChanged")) {
+      return { ...eventBase, type: "FaucetPauseChanged", paused: requiredBoolean(data, "paused") };
+    }
     if (
-      isType(type, "reflection_events", "OperationalAdminChanged")
-      || isType(type, "test_faucet", "OperationalAdminChanged")
-      || isType(type, "pool", "OperationalAdminChanged")
+      coreType("reflection_events", "OperationalAdminChanged")
+      || assetsType("test_faucet", "OperationalAdminChanged")
+      || ammType("pool", "OperationalAdminChanged")
     ) {
-      const scope = isType(type, "reflection_events", "OperationalAdminChanged")
+      const scope = coreType("reflection_events", "OperationalAdminChanged")
         ? "reflection-core"
-        : isType(type, "test_faucet", "OperationalAdminChanged")
+        : assetsType("test_faucet", "OperationalAdminChanged")
           ? "test-assets"
           : "test-amm";
       return {
@@ -218,8 +265,8 @@ export class CedraEventNormalizer {
         newOperationalAdmin: requiredAddress(data, "new_operational_admin"),
       };
     }
-    if (isType(type, "pool", "LiquiditySeeded") || isType(type, "pool", "LiquidityAdded")) {
-      const eventType = isType(type, "pool", "LiquiditySeeded") ? "LiquiditySeeded" : "LiquidityAdded";
+    if (ammType("pool", "LiquiditySeeded") || ammType("pool", "LiquidityAdded")) {
+      const eventType = ammType("pool", "LiquiditySeeded") ? "LiquiditySeeded" : "LiquidityAdded";
       return {
         ...eventBase,
         type: eventType,
@@ -232,7 +279,7 @@ export class CedraEventNormalizer {
         tusdReserveAfter: requiredBigint(data, "reserve_usd"),
       };
     }
-    if (isType(type, "pool", "LiquidityRemoved")) {
+    if (ammType("pool", "LiquidityRemoved")) {
       return {
         ...eventBase,
         type: "LiquidityRemoved",
@@ -246,7 +293,7 @@ export class CedraEventNormalizer {
         tusdReserveAfter: requiredBigint(data, "reserve_usd"),
       };
     }
-    if (isType(type, "pool", "SwapExecuted")) {
+    if (ammType("pool", "SwapExecuted")) {
       const grossAmount = requiredBigint(data, "gross_input");
       const reflectionFee = requiredBigint(data, "reflection_fee");
       const direction = requiredBoolean(data, "is_sell") ? "sell" : "buy";
@@ -266,7 +313,7 @@ export class CedraEventNormalizer {
         tusdReserveAfter: requiredBigint(data, "reserve_usd"),
       };
     }
-    if (isType(type, "pool", "SwapLimitsChanged")) {
+    if (ammType("pool", "SwapLimitsChanged")) {
       return {
         ...eventBase,
         type: "SwapLimitsChanged",
@@ -275,7 +322,7 @@ export class CedraEventNormalizer {
         maximumGrossSwap: requiredBigint(data, "max_gross_swap"),
       };
     }
-    if (isType(type, "pool", "LiquidityLimitsChanged")) {
+    if (ammType("pool", "LiquidityLimitsChanged")) {
       return {
         ...eventBase,
         type: "LiquidityLimitsChanged",
@@ -284,7 +331,7 @@ export class CedraEventNormalizer {
         maximumNonFinalWithdrawalShareBps: requiredBigint(data, "max_withdrawal_share_bps"),
       };
     }
-    if (isType(type, "pool", "PoolPauseChanged")) {
+    if (ammType("pool", "PoolPauseChanged")) {
       return {
         ...eventBase,
         type: "PoolPauseChanged",
@@ -295,10 +342,10 @@ export class CedraEventNormalizer {
       };
     }
 
-    if (isType(type, "lp_rewards", "LpEpochOpened")) {
+    if (ammType("lp_rewards", "LpEpochOpened")) {
       return { ...eventBase, type: "LpEpochOpened", epoch: requiredBigint(data, "epoch"), stateId: requiredAddress(data, "state_id"), rewardVault: requiredAddress(data, "reward_vault") };
     }
-    if (isType(type, "lp_rewards", "LpEpochStatusChanged")) {
+    if (ammType("lp_rewards", "LpEpochStatusChanged")) {
       return {
         ...eventBase,
         type: "LpEpochStatusChanged",
@@ -307,7 +354,7 @@ export class CedraEventNormalizer {
         newStatus: lpStatus(requiredBigint(data, "new_status"), "new_status"),
       };
     }
-    if (isType(type, "lp_rewards", "LpSharesChanged")) {
+    if (ammType("lp_rewards", "LpSharesChanged")) {
       return {
         ...eventBase,
         type: "LpSharesChanged",
@@ -319,7 +366,7 @@ export class CedraEventNormalizer {
         totalShares: requiredBigint(data, "total_shares"),
       };
     }
-    if (isType(type, "lp_rewards", "LpSharesTransferred")) {
+    if (ammType("lp_rewards", "LpSharesTransferred")) {
       return {
         ...eventBase,
         type: "LpSharesTransferred",
@@ -329,7 +376,7 @@ export class CedraEventNormalizer {
         amount: requiredBigint(data, "amount"),
       };
     }
-    if (isType(type, "lp_rewards", "LpRewardIndexAdvanced")) {
+    if (ammType("lp_rewards", "LpRewardIndexAdvanced")) {
       return {
         ...eventBase,
         type: "LpRewardIndexAdvanced",
@@ -342,7 +389,7 @@ export class CedraEventNormalizer {
         roundingReserve: requiredBigint(data, "rounding_reserve"),
       };
     }
-    if (isType(type, "lp_rewards", "LpRewardsClaimed")) {
+    if (ammType("lp_rewards", "LpRewardsClaimed")) {
       return {
         ...eventBase,
         type: "LpRewardsClaimed",
@@ -352,7 +399,7 @@ export class CedraEventNormalizer {
         totalClaimed: requiredBigint(data, "total_claimed"),
       };
     }
-    if (isType(type, "lp_rewards", "LpRewardQuarantined")) {
+    if (ammType("lp_rewards", "LpRewardQuarantined")) {
       return {
         ...eventBase,
         type: "LpRewardQuarantined",

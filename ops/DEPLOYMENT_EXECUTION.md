@@ -36,7 +36,21 @@ key on a command line or put it in this repository.
    and sparse publish-payload component sizes into the release record. The
    final package digest and size are captured again only after the operator
    compiles with the approved named addresses.
-5. Obtain two independent human approvals and store their external signatures
+5. After the three publisher addresses are selected, create a keyless,
+   exact-address artifact bundle without contacting Testnet:
+
+   ```bash
+   make exact-address-artifacts \
+     CORE_ADDRESS=<CORE_ADDRESS> \
+     ASSETS_ADDRESS=<ASSETS_ADDRESS> \
+     AMM_ADDRESS=<AMM_ADDRESS> \
+     OUTPUT_DIRECTORY=ops/local/exact-address-candidate
+   ```
+
+   The output records content hashes and size evidence, not an on-chain package
+   hash or simulation. Run it only from the reviewed clean commit and copy the
+   resulting values into the unsigned manifest.
+6. Obtain two independent human approvals and store their external signatures
    in the release manifest.
 
 ## 2. Publish the three initial packages
@@ -68,8 +82,10 @@ Never add `--assume-yes` until the simulated package digest, gas result,
 network and two approvals are attached to the manifest. Core initialization
 must finalize before faucet or pool initialization. Confirm
 `automatic_materialization_enabled()` returns `false`; there is no mode setter
-or migration path in this package version after initialization. Treat the
-compatible package-upgrade authority as a separate release-policy control.
+or migration path in this package version after initialization. All three
+packages must compile with the committed `immutable` publication policy. A
+digest or policy mismatch invalidates the approval; later code changes require
+a fresh deployment and manifest.
 
 ## 3. Initialize dependent packages using multi-agent transactions
 

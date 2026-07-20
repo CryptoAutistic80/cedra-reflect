@@ -50,6 +50,10 @@ module reflection_core::reflection_token {
     const MAX_FEE_BPS: u64 = 100;
     const BPS_DENOMINATOR: u64 = 10_000;
     const INITIAL_FEE_BPS: u64 = 100;
+    const SCHEMA_VERSION: u64 = 1;
+    const RELEASE_MAJOR: u64 = 0;
+    const RELEASE_MINOR: u64 = 1;
+    const RELEASE_PATCH: u64 = 0;
     const TOTAL_SUPPLY: u64 = 1_000_000_000_000_000;
     const ASSET_SEED: vector<u8> = b"reflection-pilot-trfl-v1";
     const REWARD_VAULT_SEED: vector<u8> = b"reflection-reward-vault-v1";
@@ -130,8 +134,8 @@ module reflection_core::reflection_token {
             string::utf8(b"Reflection Pilot Test Token"),
             string::utf8(b"tRFL"),
             6,
-            string::utf8(b"https://example.invalid/reflection-pilot/trfl"),
-            string::utf8(b"https://example.invalid"),
+            string::utf8(b"https://raw.githubusercontent.com/CryptoAutistic80/cedra-reflect/main/assets/trfl-testnet.svg"),
+            string::utf8(b"https://github.com/CryptoAutistic80/cedra-reflect"),
         );
         dispatchable_fungible_asset::register_dispatch_functions(
             &constructor_ref,
@@ -208,14 +212,30 @@ module reflection_core::reflection_token {
             registered_wallets: table::new<address, bool>(),
             registered: false,
         });
-        reflection_registry::initialize(admin, @reflection_core, DEPLOYMENT_ID, NETWORK_LABEL);
+        reflection_registry::initialize(
+            admin,
+            @reflection_core,
+            DEPLOYMENT_ID,
+            NETWORK_LABEL,
+            RELEASE_MAJOR,
+            RELEASE_MINOR,
+            RELEASE_PATCH,
+        );
         reflection_events::protocol_initialized(
-            1,
+            SCHEMA_VERSION,
+            RELEASE_MAJOR,
+            RELEASE_MINOR,
+            RELEASE_PATCH,
             DEPLOYMENT_ID,
             metadata_address,
             reward_vault_address,
             distribution_vault_address,
             automatic_materialization,
+            INITIAL_FEE_BPS,
+        );
+        reflection_events::operational_admin_changed(
+            @0x0,
+            signer::address_of(admin),
         );
     }
 
@@ -1093,7 +1113,7 @@ module reflection_core::reflection_token {
         kind: u8,
     ) {
         state.lifetime_fees = state.lifetime_fees + (fee as u256);
-        reflection_events::fee_collected(account, gross, fee, kind);
+        reflection_events::fee_collected(account, gross, fee, state.fee_bps, kind);
         if (state.total_shares == 0) {
             state.unallocated_fees = state.unallocated_fees + (fee as u128);
             recompute_rounding_reserve(state, custody);

@@ -1,5 +1,6 @@
 #[test_only]
 module reflection_core::reflection_core_tests {
+    use reflection_core::reflection_registry;
     use reflection_core::reflection_token;
     use cedra_framework::primary_fungible_store;
     use std::signer;
@@ -31,6 +32,8 @@ module reflection_core::reflection_core_tests {
     fun claim_backed_mode_is_recorded_on_chain(admin: &signer) {
         reflection_token::initialize_claim_backed_for_test(admin);
         assert!(!reflection_token::automatic_materialization_enabled(), 30);
+        let (major, minor, patch) = reflection_registry::release_version();
+        assert!(major == 0 && minor == 1 && patch == 0, 31);
     }
 
     #[test(admin = @0xcafe)]

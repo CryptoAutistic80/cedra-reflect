@@ -13,6 +13,7 @@ module test_amm::pool {
     use test_amm::lp_rewards::{Self, LpAccountingCapability};
     use test_amm::reflection_settlement;
     use test_assets::mock_usd::{Self, PoolSettlementCapability};
+    use test_assets::test_faucet;
 
     const E_ALREADY_INITIALIZED: u64 = 1;
     const E_NOT_AMM_ADMIN: u64 = 2;
@@ -187,6 +188,26 @@ module test_amm::pool {
             shutdown_mode: false,
             seeded: false,
         });
+        event::emit(OperationalAdminChanged {
+            old_operational_admin: @0x0,
+            new_operational_admin: signer::address_of(amm_admin),
+        });
+        event::emit(SwapLimitsChanged {
+            amm_fee_bps: DEFAULT_AMM_FEE_BPS,
+            max_reserve_bps: DEFAULT_MAX_RESERVE_BPS,
+            max_gross_swap: DEFAULT_MAX_GROSS_SWAP,
+        });
+        event::emit(LiquidityLimitsChanged {
+            max_rfl_contribution: DEFAULT_MAX_LIQUIDITY_RFL,
+            max_usd_contribution: DEFAULT_MAX_LIQUIDITY_USD,
+            max_withdrawal_share_bps: DEFAULT_MAX_WITHDRAWAL_SHARE_BPS,
+        });
+        event::emit(PoolPauseChanged {
+            pool_paused: false,
+            liquidity_paused: false,
+            lp_claims_paused: false,
+            shutdown_mode: false,
+        });
     }
 
     /// Controlled first bootstrap. Distribution-vault tRFL becomes custody
@@ -203,7 +224,7 @@ module test_amm::pool {
         let state = borrow_global<PoolState>(@test_amm);
         assert_amm_admin(state, amm_admin);
         assert!(!state.seeded, E_ALREADY_SEEDED);
-        assert!(beneficiary != state.admin && reflection_token::wallet_is_registered(beneficiary), E_INVALID_BENEFICIARY);
+        assert_valid_beneficiary(state, beneficiary);
         assert!(lp_rewards::active_epoch() == 1 && lp_rewards::total_active_shares() == 0, E_ACTIVE_EPOCH_EXISTS);
         let (before_rfl, before_usd) = reserves(state);
         assert!(before_rfl == 0 && before_usd == 0, E_ALREADY_SEEDED);
@@ -240,7 +261,7 @@ module test_amm::pool {
         assert_amm_admin(state, amm_admin);
         assert!(!state.seeded && !state.shutdown_mode, E_ALREADY_SEEDED);
         assert!(lp_rewards::active_epoch() == 0, E_ACTIVE_EPOCH_EXISTS);
-        assert!(beneficiary != state.admin && reflection_token::wallet_is_registered(beneficiary), E_INVALID_BENEFICIARY);
+        assert_valid_beneficiary(state, beneficiary);
         let (before_rfl, before_usd) = reserves(state);
         assert!(before_rfl == 0 && before_usd == 0, E_ALREADY_SEEDED);
         let lp_vault_constructor = object::create_object(@test_amm);
@@ -680,6 +701,17 @@ module test_amm::pool {
         assert!(
             signer::address_of(admin) == state.operational_admin,
             E_NOT_OPERATIONAL_ADMIN,
+        );
+    }
+
+    fun assert_valid_beneficiary(state: &PoolState, beneficiary: address) {
+        assert!(
+            beneficiary != state.admin
+                && beneficiary != state.operational_admin
+                && beneficiary != reflection_token::operational_admin()
+                && beneficiary != test_faucet::operational_admin()
+                && reflection_token::wallet_is_registered(beneficiary),
+            E_INVALID_BENEFICIARY,
         );
     }
 

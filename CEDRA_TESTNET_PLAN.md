@@ -54,17 +54,18 @@ initializer now records one-time automatic-versus-claim-backed behavior; the
 selected initial mode is claim-backed, so pending wallet rewards require an
 explicit on-chain claim while canonical LP rewards remain separately claimable
 by beneficial owners. There is no mode setter or state-conversion path in this
-package; compatible package-upgrade authority remains a separate release-policy
-trust boundary. This paragraph is local source and deterministic test
+package, and all three release packages now use immutable publication policy.
+Any later contract change requires a fresh deployment and manifest. This
+paragraph is local source and deterministic test
 evidence only. The isolated hook-probe publication is separately preserved in
 `ops/evidence/hook-probe-testnet.json`; it is not a deployment of the core,
 test-assets, or AMM packages and is not participant or public-pilot evidence.
 
 **Local contract gate — passed July 20, 2026:** `make verify` passes all Move
-packages including **56/56 integration tests**, **6/6 core tests**, and the AMM
+packages including **59/59 integration tests**, **6/6 core tests**, and the AMM
 rounding unit test, the independent Python model, evidence-template, and
-Move-surface checks pass **35/35 tests**, and the TypeScript
-contract-support witness passes **24/24 deterministic tests**. The generated
+Move-surface checks pass **39/39 tests**, and the TypeScript
+contract-support witness passes **27/27 deterministic tests**. The generated
 Python/Move witness drift check also passes. The expanded reference-model gate
 passes **1,000,000 operations across 1,024 holders**. `make release-artifacts` also
 compiles every package with Cedra CLI 1.0.4, records local source digests, and
@@ -995,6 +996,7 @@ Emit:
 ```text
 ProtocolInitialized
 FaucetGrant
+FaucetConfigured
 WalletTransfer
 EligibleBalanceDebited
 EligibleBalanceCredited
@@ -1016,6 +1018,7 @@ LpRewardQuarantined
 LpEpochOpened
 LpEpochStatusChanged
 FeeConfigurationChanged
+FaucetPauseChanged
 SwapLimitsChanged
 LiquidityLimitsChanged
 PauseStateChanged
@@ -1043,7 +1046,12 @@ After each indexed transaction:
 9. Verify raw-store accessor, cached reserve, and custody units are identical.
 10. Verify pool reserve and custody-share changes match swap or liquidity direction.
 11. Verify each custody checkpoint is an equal accounted-funds transfer into the LP vault.
-12. Record any discrepancy as a critical alert.
+12. Accept project events only from the three exact package addresses recorded
+    in the approved release manifest; module/event-name suffixes are not
+    sufficient provenance.
+13. Reject an unknown event schema version instead of attempting best-effort
+    replay.
+14. Record any discrepancy as a critical alert.
 ```
 
 ## Snapshots
@@ -1340,14 +1348,20 @@ Run:
 
 ## Phase 7: fresh-deployment recovery rehearsal
 
-Deploy a completely new Testnet instance and optionally rehydrate holder allocations from the last trusted snapshot.
+Deploy a completely new Testnet instance. The initial schema has no migration,
+arbitrary restoration grant, or privileged balance-edit surface. Use the last
+trusted snapshot as comparison evidence, not as authority for manual state
+mutation. Any later requirement to restore allocations must use a separate,
+finite, independently reviewed claim distributor rather than changing the token
+contract.
 
 The trusted snapshot must include wallet positions, custody registrations, pool
 custody corrections and claims, LP shares and corrections, both indexes, and
 both reward-vault liabilities.
 
 **Exit condition:** The project can recover from a disposable-network event
-without inventing balances manually.
+with a clean deployment, zero-history invariant proof, and an independently
+reviewed allocation mechanism if allocation restoration is explicitly required.
 
 ---
 

@@ -62,6 +62,7 @@ export interface ProtocolSnapshot {
   readonly indexRemainder: bigint;
   readonly pool: PoolSnapshot;
   readonly claimsPaused: boolean;
+  readonly faucetPaused: boolean;
   readonly packageVersion: string;
   readonly ledgerVersion: bigint;
 }
@@ -101,6 +102,7 @@ export interface TransactionDraft {
     | "claim_lp_rewards"
     | "checkpoint_lp_rewards"
     | "configure_liquidity_limits"
+    | "set_faucet_paused"
     | "set_operational_admin";
   readonly functionId: string;
   readonly arguments: readonly EntryArgument[];

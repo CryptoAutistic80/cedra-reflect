@@ -1,3 +1,4 @@
+import hashlib
 import json
 import unittest
 from pathlib import Path
@@ -14,7 +15,9 @@ class EvidenceTemplateTests(unittest.TestCase):
     def test_release_manifest_covers_every_package_authority_and_state_identity(self) -> None:
         manifest = self.load_json("ops/release-manifest.template.json")
         self.assertEqual(manifest["schema_version"], 1)
+        self.assertEqual(manifest["event_schema_version"], 1)
         self.assertEqual(manifest["network"], "cedra-testnet")
+        self.assertEqual(manifest["release"], "testnet-v0.1.0")
         self.assertEqual(
             set(manifest["packages"]),
             {"reflection_core", "test_assets", "test_amm"},
@@ -23,6 +26,8 @@ class EvidenceTemplateTests(unittest.TestCase):
             self.assertTrue(
                 {
                     "publisher",
+                    "event_source_address",
+                    "upgrade_policy",
                     "source_digest",
                     "compiled_package_digest",
                     "publish_payload_bytes",
@@ -31,6 +36,18 @@ class EvidenceTemplateTests(unittest.TestCase):
                     "finalized_ledger_version",
                 }.issubset(package)
             )
+            self.assertEqual(package["upgrade_policy"], "immutable")
+            self.assertEqual(package["event_source_address"], package["publisher"])
+
+        configuration = manifest["contract_configuration"]
+        self.assertEqual(configuration["trfl_fixed_supply_base_units"], "1000000000000000")
+        self.assertEqual(configuration["maximum_reflection_fee_bps"], 100)
+        self.assertFalse(configuration["automatic_materialization"])
+        self.assertFalse(configuration["arbitrary_external_vaults_supported"])
+        for symbol in ("trfl", "tusd"):
+            asset = ROOT / "assets" / f"{symbol}-testnet.svg"
+            digest = hashlib.sha256(asset.read_bytes()).hexdigest()
+            self.assertEqual(manifest["metadata"][f"{symbol}_icon_sha256"], digest)
 
         self.assertTrue(
             {

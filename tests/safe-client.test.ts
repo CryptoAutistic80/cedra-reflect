@@ -121,6 +121,10 @@ test("liquidity and LP drafts match the finalized Move entries and ABI argument 
   equal(limits.functionId, "test_amm::pool::configure_liquidity_limits", "Liquidity limits target the admin pool entry");
   equal(JSON.stringify(limits.arguments, (_, value) => typeof value === "bigint" ? value.toString() : value), '["808","909","2500"]', "Liquidity limit arguments preserve the Move ABI order");
 
+  const faucetPause = client.createSetFaucetPausedDraft(true);
+  equal(faucetPause.kind, "set_faucet_paused", "Faucet emergency control has a distinct transaction kind");
+  equal(faucetPause.functionId, "test_assets::test_faucet::set_paused", "Faucet pause targets the on-chain operational control");
+
   const coreOperator = client.createOperationalAdminHandoffDraft("reflection-core", "0x0bed");
   const faucetOperator = client.createOperationalAdminHandoffDraft("test-assets", "0x0bed");
   const ammOperator = client.createOperationalAdminHandoffDraft("test-amm", "0x0bed");
@@ -141,6 +145,7 @@ test("liquidity and LP drafts match the finalized Move entries and ABI argument 
     [claimAll, "0xdead::pool::claim_lp_rewards", '["8","0"]'],
     [checkpoint, "0xdead::pool::checkpoint_lp_rewards", "[]"],
     [limits, "0xdead::pool::configure_liquidity_limits", '["808","909","2500"]'],
+    [faucetPause, "0xbabe::test_faucet::set_paused", "[true]"],
     [coreOperator, "0xcafe::reflection_token::set_operational_admin", '["0x0bed"]'],
     [faucetOperator, "0xbabe::test_faucet::set_operational_admin", '["0x0bed"]'],
     [ammOperator, "0xdead::pool::set_operational_admin", '["0x0bed"]'],

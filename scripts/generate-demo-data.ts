@@ -17,8 +17,8 @@ const event: ProtocolEvent = {
   feeBps: 100n,
   initialIndex: 0n,
   packageVersion: "testnet-v0.1.0",
-  rewardVault: "0xreward",
-  distributionVault: "0xdistribution",
+  rewardVault: "0x1001",
+  distributionVault: "0x1002",
 };
 
 const store = new InMemoryIndexerStore();

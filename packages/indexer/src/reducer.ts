@@ -61,6 +61,10 @@ export function createEmptyProjection(): ProtocolProjection {
     packageVersion: "uninitialized",
     swapsPaused: false,
     claimsPaused: false,
+    faucetPaused: false,
+    faucetTrflGrant: 1_000_000_000n,
+    faucetTusdGrant: 1_000_000_000n,
+    faucetCooldownSeconds: 3_600n,
     operationalAdmins: {
       reflectionCore: null,
       testAssets: null,
@@ -505,20 +509,31 @@ export function reduceEventGroup(
           adjustWalletAsset(context, event.account, event.asset, event.amount, event);
           break;
 
+        case "FaucetConfigured":
+          if (event.trflGrant <= 0n || event.tusdGrant <= 0n) {
+            context.alerts.push(problem(event, "EVENT_DATA", "Faucet grants must both be positive."));
+          }
+          context.next = {
+            ...context.next,
+            faucetTrflGrant: event.trflGrant,
+            faucetTusdGrant: event.tusdGrant,
+            faucetCooldownSeconds: event.cooldownSeconds,
+          };
+          break;
+
         case "WalletTransfer": {
           if (event.amount <= 0n) throw new RangeError("wallet transfer must be positive");
           const matchingDebit = nativeDebits.filter((entry) => entry.account === event.from && entry.amount === event.amount);
           const matchingCredit = nativeCredits.filter((entry) => entry.account === event.to && entry.amount === event.amount);
-          if (matchingDebit.length === 1 && matchingCredit.length === 1) {
-            // Historical router receipt is redundant when native hook facts are present.
-            break;
+          if (nativeDebits.length > 0 && matchingDebit.length !== 1) {
+            context.alerts.push(problem(event, "DOUBLE_COUNTING", "Router sender receipt disagrees with the native eligible-store debit."));
           }
-          if (matchingDebit.length + matchingCredit.length > 0) {
-            context.alerts.push(problem(event, "DOUBLE_COUNTING", "Router transfer only partially overlaps native hook evidence."));
-            break;
+          if (nativeCredits.length > 0 && matchingCredit.length !== 1) {
+            context.alerts.push(problem(event, "DOUBLE_COUNTING", "Router recipient receipt disagrees with the native eligible-store credit."));
           }
-          adjustWalletAsset(context, event.from, event.asset, -event.amount, event);
-          adjustWalletAsset(context, event.to, event.asset, event.amount, event);
+          // Excluded endpoints intentionally emit no eligible-balance hook
+          // event. The receipt is therefore informational and never mutates
+          // the replayed eligible ledger by itself.
           break;
         }
 
@@ -1019,6 +1034,10 @@ export function reduceEventGroup(
             context.alerts.push(problem(event, "EVENT_DATA", "Fee configuration does not continue replayed state or exceeds 100 bps."));
           }
           context.next = { ...context.next, feeBps: event.newFeeBps };
+          break;
+
+        case "FaucetPauseChanged":
+          context.next = { ...context.next, faucetPaused: event.paused };
           break;
 
         case "SwapLimitsChanged":

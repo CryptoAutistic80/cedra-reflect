@@ -193,6 +193,34 @@ module integration_tests::protocol_integration_tests {
     }
 
     #[test(core = @0xcafe, assets = @0xbabe, amm = @0xdead, framework = @0x1, alice = @0xa11ce)]
+    #[expected_failure(abort_code = 8, location = test_assets::test_faucet)]
+    fun faucet_pause_blocks_distribution(
+        core: &signer,
+        assets: &signer,
+        amm: &signer,
+        framework: &signer,
+        alice: &signer,
+    ) {
+        setup(core, assets, amm, framework);
+        test_faucet::set_paused(assets, true);
+        assert!(test_faucet::paused(), 230);
+        test_faucet::claim_trfl(alice);
+    }
+
+    #[test(core = @0xcafe, assets = @0xbabe, amm = @0xdead, framework = @0x1, alice = @0xa11ce)]
+    #[expected_failure(abort_code = 6, location = test_assets::test_faucet)]
+    fun faucet_pause_is_operational_admin_only(
+        core: &signer,
+        assets: &signer,
+        amm: &signer,
+        framework: &signer,
+        alice: &signer,
+    ) {
+        setup(core, assets, amm, framework);
+        test_faucet::set_paused(alice, true);
+    }
+
+    #[test(core = @0xcafe, assets = @0xbabe, amm = @0xdead, framework = @0x1, alice = @0xa11ce)]
     fun canonical_pool_is_an_exact_once_reward_position(core: &signer, assets: &signer, amm: &signer, framework: &signer, alice: &signer) {
         setup(core, assets, amm, framework);
         test_faucet::configure(assets, 10 * ONE, 1_000 * ONE, 0);
@@ -213,6 +241,24 @@ module integration_tests::protocol_integration_tests {
         assert!(reflection_token::pending_rewards(signer::address_of(alice)) == 0, 324);
         assert!(reflection_token::pool_pending_rewards() == ONE / 10, 325);
         assert!(routed == 0, 326);
+    }
+
+    #[test(core = @0xcafe, assets = @0xbabe, amm = @0xdead, framework = @0x1, alice = @0xa11ce)]
+    #[expected_failure(abort_code = 19, location = test_amm::pool)]
+    fun operational_admin_cannot_be_bootstrap_lp_beneficiary(
+        core: &signer,
+        assets: &signer,
+        amm: &signer,
+        framework: &signer,
+        alice: &signer,
+    ) {
+        setup(core, assets, amm, framework);
+        test_faucet::claim_trfl(alice);
+        test_faucet::claim_tusd(amm);
+        pool::set_operational_admin(amm, signer::address_of(alice));
+        pool::seed_liquidity(
+            core, amm, signer::address_of(alice), 100 * ONE, 100 * ONE, 1,
+        );
     }
 
     #[test(core = @0xcafe, assets = @0xbabe, amm = @0xdead, framework = @0x1, alice = @0xa11ce, bob = @0xb0b)]

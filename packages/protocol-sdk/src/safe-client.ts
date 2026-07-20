@@ -242,6 +242,14 @@ export class ReflectionPilotClient {
     );
   }
 
+  public createSetFaucetPausedDraft(paused: boolean): TransactionDraft {
+    return this.createDraft(
+      "set_faucet_paused",
+      "test_assets::test_faucet::set_paused",
+      [paused],
+    );
+  }
+
   /** Publisher-signed, evented handoff of routine controls to a separate key. */
   public createOperationalAdminHandoffDraft(
     scope: OperationalAdminScope,

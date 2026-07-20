@@ -48,6 +48,9 @@ const ENTRY_SHAPES: Readonly<Record<TransactionDraft["kind"], readonly EntryShap
   configure_liquidity_limits: [
     { functionId: "test_amm::pool::configure_liquidity_limits", argumentCount: 3 },
   ],
+  set_faucet_paused: [
+    { functionId: "test_assets::test_faucet::set_paused", argumentCount: 1 },
+  ],
   set_operational_admin: [
     { functionId: "reflection_core::reflection_token::set_operational_admin", argumentCount: 1 },
     { functionId: "test_assets::test_faucet::set_operational_admin", argumentCount: 1 },

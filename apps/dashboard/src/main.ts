@@ -57,6 +57,7 @@ const demoState: MockReadState = {
       ledgerVersion: 42_018n,
     },
     claimsPaused: false,
+    faucetPaused: false,
     packageVersion: "testnet-v0.1.0",
     ledgerVersion: 42_018n,
   },
@@ -146,7 +147,10 @@ async function populateReadModel(): Promise<void> {
   setText("protocol-index", formatAmount(protocol.currentIndex));
   setText("protocol-reserves", `${formatAmount(protocol.pool.trflReserve)} tRFL / ${formatAmount(protocol.pool.tusdReserve)} tUSD`);
   setText("protocol-version", protocol.packageVersion);
-  setText("protocol-paused", protocol.pool.swapsPaused || protocol.claimsPaused ? "Paused" : "Active");
+  setText(
+    "protocol-paused",
+    protocol.pool.swapsPaused || protocol.claimsPaused || protocol.faucetPaused ? "Paused" : "Active",
+  );
   setText("protocol-ledger", `Observed ledger version ${formatAmount(protocol.ledgerVersion)}`);
   setStatus("Deterministic preview data loaded. No network or wallet was contacted.");
 }

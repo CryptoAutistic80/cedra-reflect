@@ -1,7 +1,7 @@
 [package]
 name = "ReflectionCore"
 version = "0.1.0"
-upgrade_policy = "compatible"
+upgrade_policy = "immutable"
 
 [dependencies]
 CedraFramework = { git = "https://github.com/cedra-labs/cedra-framework.git", subdir = "cedra-framework", rev = "01e6ceafae19b900772b343a5af8ae236401e0a8" }

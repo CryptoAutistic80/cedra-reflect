@@ -13,13 +13,21 @@ CI must build and verify the package but never publish it automatically.
   `ops/evidence/hook-probe-testnet.json`.
 - [x] Record the supported mode: **claim-backed**. Automatic materialisation is
   not authorized by the current wallet evidence.
-- [ ] Review the compiled package digest and initial package publication policy;
-  explicitly approve or reject retaining `compatible` upgrade authority.
+- [x] Set all three initial package publication policies to `immutable`; no
+  audited logic can be replaced in place after publication.
+- [ ] Review the exact-address compiled package digests against the approved
+  manifest.
+- [ ] Require `exact-address-artifacts.json` to report
+  `working_tree_clean: true` for the reviewed application commit. This keyless
+  bundle remains `approval_eligible: false` until the separate simulation,
+  on-chain policy/digest checks, and two human approvals are recorded.
 - [ ] Record each sparse-metadata publish payload size and require it to remain
   within the normal 65,536-byte boundary; do not guess a large-package route.
 - [ ] Confirm the release contains no post-seal `tRFL` mint, vault sweep, forced
   balance, user-store transfer, or fee-over-100-bps entry point.
 - [ ] Prepare the release manifest from `release-manifest.template.json`.
+- [ ] Record schema/release versions, exact event-source addresses, fixed-supply
+  configuration, metadata URLs, and both icon SHA-256 digests in the manifest.
 - [ ] Obtain two independently recorded human approvals.
 - [ ] Record a distinct non-zero operational address that is not any package
   publisher.

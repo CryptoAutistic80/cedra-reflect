@@ -311,20 +311,29 @@ export function reconcile(
     alerts.push(alert("POOL_RESERVES", "On-chain pool reserves disagree with swap/liquidity receipts.", cursor, tuple([projection.pool.trflReserve, projection.pool.tusdReserve]), tuple([observed.trflReserve, observed.tusdReserve])));
   }
   if (
-    observed.maximumRflContribution !== projection.pool.maximumRflContribution
+    observed.ammFeeBps !== projection.pool.ammFeeBps
+    || observed.maximumGrossSwap !== projection.pool.maximumGrossSwap
+    || observed.maximumReserveBps !== projection.pool.maximumReserveBps
+    || observed.maximumRflContribution !== projection.pool.maximumRflContribution
     || observed.maximumTusdContribution !== projection.pool.maximumTusdContribution
     || observed.maximumNonFinalWithdrawalShareBps !== projection.pool.maximumNonFinalWithdrawalShareBps
   ) {
     alerts.push(alert(
       "POOL_LIMITS",
-      "On-chain liquidity contribution or non-final withdrawal limits disagree with event replay.",
+      "On-chain swap, liquidity contribution, or withdrawal limits disagree with event replay.",
       cursor,
       tuple([
+        projection.pool.ammFeeBps,
+        projection.pool.maximumGrossSwap,
+        projection.pool.maximumReserveBps,
         projection.pool.maximumRflContribution,
         projection.pool.maximumTusdContribution,
         projection.pool.maximumNonFinalWithdrawalShareBps,
       ]),
       tuple([
+        observed.ammFeeBps,
+        observed.maximumGrossSwap,
+        observed.maximumReserveBps,
         observed.maximumRflContribution,
         observed.maximumTusdContribution,
         observed.maximumNonFinalWithdrawalShareBps,
@@ -390,8 +399,22 @@ export function reconcile(
     ));
   }
   if (
+    observed.faucetTrflGrant !== projection.faucetTrflGrant
+    || observed.faucetTusdGrant !== projection.faucetTusdGrant
+    || observed.faucetCooldownSeconds !== projection.faucetCooldownSeconds
+  ) {
+    alerts.push(alert(
+      "FAUCET_CONFIG",
+      "On-chain faucet configuration disagrees with event history.",
+      cursor,
+      tuple([projection.faucetTrflGrant, projection.faucetTusdGrant, projection.faucetCooldownSeconds]),
+      tuple([observed.faucetTrflGrant, observed.faucetTusdGrant, observed.faucetCooldownSeconds]),
+    ));
+  }
+  if (
     observed.swapsPaused !== projection.swapsPaused
     || observed.claimsPaused !== projection.claimsPaused
+    || observed.faucetPaused !== projection.faucetPaused
     || observed.poolPaused !== projection.pool.poolPaused
     || observed.liquidityPaused !== projection.pool.liquidityPaused
     || observed.lpClaimsPaused !== projection.pool.lpClaimsPaused
@@ -400,10 +423,10 @@ export function reconcile(
   ) {
     alerts.push(alert(
       "PAUSE_STATE",
-      "Core/pool pause and shutdown state disagrees with event history.",
+      "Core/faucet/pool pause and shutdown state disagrees with event history.",
       cursor,
-      tuple([projection.swapsPaused, projection.claimsPaused, projection.pool.poolPaused, projection.pool.liquidityPaused, projection.pool.lpClaimsPaused, projection.pool.shutdownMode, projection.pool.seeded]),
-      tuple([observed.swapsPaused, observed.claimsPaused, observed.poolPaused, observed.liquidityPaused, observed.lpClaimsPaused, observed.shutdownMode, observed.poolSeeded]),
+      tuple([projection.swapsPaused, projection.claimsPaused, projection.faucetPaused, projection.pool.poolPaused, projection.pool.liquidityPaused, projection.pool.lpClaimsPaused, projection.pool.shutdownMode, projection.pool.seeded]),
+      tuple([observed.swapsPaused, observed.claimsPaused, observed.faucetPaused, observed.poolPaused, observed.liquidityPaused, observed.lpClaimsPaused, observed.shutdownMode, observed.poolSeeded]),
     ));
   }
 
