@@ -583,6 +583,25 @@ Test:
 9. If LP shares are transferable, their transfer hook checkpoints both LP
    positions without re-entrancy or historical-reward leakage.
 
+## Recorded Testnet result — 2026-07-20
+
+The finalized H1-H8 record is `ops/evidence/hook-probe-testnet.json`.
+H1-H7 passed on Cedra Testnet: package publication and post-publication hook
+registration finalized, standard transfers dispatched exactly once, internal
+reference materialisation did not recurse, secondary-store raw/derived values
+agreed, and CLI/REST/TypeScript SDK reads converged. H8 did not establish a
+real wallet's distinct derived-balance display or transfer path, so it is
+explicitly recorded as failed/inconclusive rather than inferred from equal raw
+and derived probe values.
+
+The initial protocol release mode is therefore **claim-backed**. Withdrawal and
+deposit hooks still maintain exact wallet accounting for standard transfers,
+but the standard displayed/spendable value is raw balance and pending rewards
+must be claimed on chain before spending. Automatic materialisation remains a
+fresh-deployment option only after distinct-balance wallet evidence succeeds;
+it is not a migration or post-deployment toggle. LP shares remain account-bound
+and LP beneficial owners claim from the separately backed LP reward vault.
+
 ## Gate result A: full hook support
 
 Proceed with:
@@ -1195,6 +1214,11 @@ Deliver:
 - Go or no-go decision for automatic materialisation.
 
 **Exit condition:** The exact Cedra Testnet behaviour of deposit, withdrawal, derived balance, and internal reference operations is documented and reproducible.
+
+**Recorded result (2026-07-20):** Exit condition met for the claim-backed path.
+H1-H7 finalized successfully; H8 is an explicit inconclusive/fail result, so
+automatic materialisation is not authorized. See
+`ops/evidence/hook-probe-testnet.json`.
 
 ## Phase 1: specification and model
 

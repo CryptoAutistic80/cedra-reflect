@@ -10,6 +10,7 @@ funding, signing, or submission.
 Status meanings:
 
 - **PASS (local):** current source plus a scope-matched deterministic check.
+- **PASS (Testnet):** finalized public-ledger evidence for the stated scope.
 - **PARTIAL:** an implementation or template exists, but required evidence is
   incomplete or narrower than the plan.
 - **OPEN (live):** requires finalized network, wallet, participant, or service
@@ -20,7 +21,7 @@ Status meanings:
 
 | Plan phase | Status | Current authoritative evidence | Missing evidence or work |
 |---|---|---|---|
-| Phase 0 — network compatibility | PARTIAL | Pinned framework in every `Move.toml`; two local `hook-probe` tests cover primary dispatch, raw/derived reads, exact frozen-vault materialisation, and secondary-store behavior; `move/docs/HOOK_COMPATIBILITY.md`; `ops/HOOK_PROBE.md` | Finalized Testnet H1-H8 record, SDK/wallet display results, gas measurements, and signed automatic-materialisation versus claim-backed decision |
+| Phase 0 — network compatibility | PASS (Testnet, claim-backed) | `ops/evidence/hook-probe-testnet.json`: H1-H7 finalized; publish/init/transfer/materialisation/secondary-store gas recorded; CLI/REST/SDK agree; H8 explicitly failed/inconclusive; claim-backed mode selected | A later native-wallet distinct-derived-balance run is required only before any fresh automatic-materialisation deployment |
 | Phase 1 — specification and model | PASS (local) | `docs/accounting-specification.md`; independent Python model; hand-authored vector; fixed-seed generated Python/Move witness; one-million-operation gate | Re-run from the exact reviewed release commit before publication |
 | Phase 2 — reflection core | PASS (local) | `move/reflection-core`; core and integration tests; exact backing views; raw-store accessor; clean initial schema; 36,421-byte dev-address sparse publish payload components | Exact-address release compilation, independent review, and finalized chain proof |
 | Phase 3 — AMM and faucet | PASS (local) | `move/test-amm`; `move/test-assets`; 54 integration tests; Python and generated conformance witness; 30,326-byte AMM and 7,712-byte asset dev-address sparse publish payload components | Exact-address release compilation, gas results, and finalized chain reconciliation |
@@ -43,7 +44,7 @@ Status meanings:
 | Both vault layers classify every base unit | PASS (local) | Tiny-fee, terminal-dust, Python property, indexer, and generated conformance tests |
 | Wallet and LP claims preserve effective value | PASS (local) | Partial/full wallet and LP claim tests plus Python invariants |
 | LP mint, burn, transfer, and claim prevent historical capture | PASS (local) | Checkpoint-before-mint/transfer, proportional burn, claim replay, and epoch-isolation tests |
-| Pending rewards are spendable when hooks work | PARTIAL | Local VM hook probe and auto-materialisation integration pass | Finalized Testnet and wallet compatibility decision |
+| Pending rewards are spendable when hooks work | PASS (Testnet, claim-backed decision) | H1-H7 finalized in `ops/evidence/hook-probe-testnet.json`; exact explicit claims remain on chain | Automatic spending is deliberately disabled for the initial release because H8 is inconclusive; a later fresh deployment requires wallet evidence |
 | AMM prices from net input and authoritative raw reserves | PASS (local) | Non-divisible AMM rounding unit, raw reserve/custody assertions, and cross-implementation witness |
 | Buy quote/slippage uses net user receipt | PASS (local) | `buy_slippage_uses_net_user_receipt` and SDK quote assertions |
 | Unclaimed LP rewards never change reserves or invariant | PASS (local) | Custody checkpoint and LP claim tests compare reserves before/after |

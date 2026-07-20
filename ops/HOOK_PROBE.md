@@ -45,3 +45,11 @@ Copy `ops/evidence/hook-probe.template.json` to
 `ops/evidence/hook-probe-testnet.json`. Fill every result from finalized
 transactions, checked SDK output and a wallet screenshot/reference. The
 release manifest must link this record.
+
+## Finalized Testnet record
+
+The 2026-07-20 run is recorded in
+`ops/evidence/hook-probe-testnet.json`. H1-H7 passed; H8 did not prove a real
+wallet's distinct derived-balance display or transfer path. The resulting
+initial release decision is **claim-backed**. Automatic materialisation remains
+disabled until a later native-wallet run supplies the missing evidence.

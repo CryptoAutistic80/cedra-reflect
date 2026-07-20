@@ -67,7 +67,7 @@
   },
   "hook_probe": {
     "testnet_report": "ops/evidence/hook-probe-testnet.json",
-    "mode": "automatic-materialisation-or-claim-backed"
+    "mode": "claim-backed"
   },
   "review": {
     "independent_review": "RECORD_INDEPENDENT_REVIEW_PATH",

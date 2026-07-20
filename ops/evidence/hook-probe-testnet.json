@@ -1,0 +1,148 @@
+{
+  "schema_version": 1,
+  "network": "cedra-testnet",
+  "rpc_url": "https://testnet.cedra.dev/v1",
+  "run_at": "2026-07-20T17:01:36Z",
+  "cli_version": "cedra 1.0.4",
+  "framework_revision": "01e6ceafae19b900772b343a5af8ae236401e0a8",
+  "sdk_version": "@cedra-labs/ts-sdk 2.2.8",
+  "wallet": "Zedra 1.1.9 and Nightly 1.49.48 detected in Chrome; probe account was not imported and no wallet transaction was signed",
+  "probe_accounts": {
+    "publisher": "0x1aeca6ee741f8739383f2b80a23942182bea68b9847278f6b4249cf89e323cd7",
+    "sender": "0xed6d1245a6e363fe4a3d1ffd61586be54281a7813fdcf87ea4ec7f8297b20089",
+    "recipient": "0xcc7229673b6f11189a30253b1b4a3dff4f4cd306c683ccfd93a15daf70dd3c18"
+  },
+  "probe_package": {
+    "publisher": "0x1aeca6ee741f8739383f2b80a23942182bea68b9847278f6b4249cf89e323cd7",
+    "package_address": "0x1aeca6ee741f8739383f2b80a23942182bea68b9847278f6b4249cf89e323cd7",
+    "source_commit": "ea228fb42ab6696fb4aa549c3b20d6da5fde05e6",
+    "source_digest": "8a383bbcf52565addc8a828908bcd4abe49919d20e252079cbdb7cf7139d6bac",
+    "compiled_package_digest": "d44b11341d241186cb1f92c30b0dc323d9222c1696a87f8d0a4c9f11b9b43cea",
+    "compiled_digest_scheme": "Cedra PackageRegistry source_digest recorded by the finalized publication",
+    "artifact_components_sha256": "f825fa74df1757f9da606e6d215bd9e31609b8b1ae85915946c6f738ccb3e59e",
+    "artifact_components_digest_order": [
+      "package-metadata.bcs",
+      "hook_probe.mv",
+      "probe_driver.mv"
+    ],
+    "publish_payload_component_bytes": 7510,
+    "publish_payload_bytes": 7581,
+    "publish_transaction": "0x9d1e62049a11d8878af9132cd2a6e7fe587095909a930b20290fc0f7b1ddca93",
+    "initialization_transaction": "0x44a5112f78ffd9866e31c2eefb0a6cd9376803d52f9a59fd06117344ec620052",
+    "metadata": "0x829f63dba6c3bdcca0496f9ba59c7fd6bf6e251a84a8452aaae5d91822c9696",
+    "reward_vault": "0xe8a95231603e2eb636e35b94f307c9998f0ce40e2e720861b3ac9fd9b64f5bec"
+  },
+  "experiments": [
+    {
+      "experiment": "H1",
+      "name": "hook-registration",
+      "transaction_hash": "0x44a5112f78ffd9866e31c2eefb0a6cd9376803d52f9a59fd06117344ec620052",
+      "finalized_ledger_version": "149230273",
+      "gas_used": "2355 initialization; 4389 publication",
+      "result": "pass",
+      "observations": "Package publication finalized at version 149229979 before one-time initialization. DispatchFunctionStore records hook_probe::withdraw_hook, hook_probe::deposit_hook, and hook_probe::derived_balance_hook at the publisher address. ProbeInitialized records supply 1000000000000, frozen-vault allocation 1000000, metadata 0x829f63dba6c3bdcca0496f9ba59c7fd6bf6e251a84a8452aaae5d91822c9696, and reward vault 0xe8a95231603e2eb636e35b94f307c9998f0ce40e2e720861b3ac9fd9b64f5bec.",
+      "evidence_references": [
+        "https://cedrascan.com/txn/0x9d1e62049a11d8878af9132cd2a6e7fe587095909a930b20290fc0f7b1ddca93?network=testnet",
+        "https://cedrascan.com/txn/0x44a5112f78ffd9866e31c2eefb0a6cd9376803d52f9a59fd06117344ec620052?network=testnet",
+        "https://testnet.cedra.dev/v1/transactions/by_hash/0x44a5112f78ffd9866e31c2eefb0a6cd9376803d52f9a59fd06117344ec620052"
+      ]
+    },
+    {
+      "experiment": "H2",
+      "name": "primary-store-peer-transfer",
+      "transaction_hash": "0x9b8c4f5b766aeb800148a18d616d38a7c2841e0bd29fba63b44a8ab59515afdd",
+      "finalized_ledger_version": "149231103",
+      "gas_used": "545",
+      "result": "pass",
+      "observations": "Standard 0x1::primary_fungible_store::transfer moved 101 hRFL from publisher to sender. Finalized events contain exactly one 101-unit FungibleAsset::Withdraw and one 101-unit FungibleAsset::Deposit. Publisher raw/derived balances both became 999998999899; sender raw/derived/standard balances all became 101.",
+      "evidence_references": [
+        "https://cedrascan.com/txn/0x9b8c4f5b766aeb800148a18d616d38a7c2841e0bd29fba63b44a8ab59515afdd?network=testnet",
+        "https://testnet.cedra.dev/v1/transactions/by_hash/0x9b8c4f5b766aeb800148a18d616d38a7c2841e0bd29fba63b44a8ab59515afdd"
+      ]
+    },
+    {
+      "experiment": "H3",
+      "name": "standard-derived-balance-query",
+      "transaction_hash": "0x9b8c4f5b766aeb800148a18d616d38a7c2841e0bd29fba63b44a8ab59515afdd",
+      "finalized_ledger_version": "149231103",
+      "gas_used": "not-applicable-read-only",
+      "result": "pass",
+      "observations": "Cedra CLI returned sender raw=101, derived=101, and standard primary-store balance=101. A direct POST to /v1/view?ledger_version=149231103 returned [\"101\"] for 0x1::primary_fungible_store::balance. The H7 SDK witness independently repeats raw, derived, and standard reads at an exact later ledger version.",
+      "evidence_references": [
+        "https://testnet.cedra.dev/v1/view?ledger_version=149231103",
+        "scripts/run-hook-probe-reads.ts"
+      ]
+    },
+    {
+      "experiment": "H4",
+      "name": "internal-reference-settlement",
+      "transaction_hash": "0xbd18c2a7f75e1cfa60ebb873134a8613aa62e7b0cde485e3e18a014d13a71c4d",
+      "finalized_ledger_version": "149232029",
+      "gas_used": "543",
+      "result": "pass",
+      "observations": "TransferRef moved exactly 101 units from the frozen reward vault without dynamic-hook recursion or a duplicate movement. The transaction emitted one withdrawal, one deposit, and one ProbeRewardMaterialized event.",
+      "evidence_references": [
+        "https://cedrascan.com/txn/0xbd18c2a7f75e1cfa60ebb873134a8613aa62e7b0cde485e3e18a014d13a71c4d?network=testnet",
+        "https://testnet.cedra.dev/v1/transactions/by_hash/0xbd18c2a7f75e1cfa60ebb873134a8613aa62e7b0cde485e3e18a014d13a71c4d"
+      ]
+    },
+    {
+      "experiment": "H5",
+      "name": "reward-vault-materialisation",
+      "transaction_hash": "0xbd18c2a7f75e1cfa60ebb873134a8613aa62e7b0cde485e3e18a014d13a71c4d",
+      "finalized_ledger_version": "149232029",
+      "gas_used": "543",
+      "result": "pass",
+      "observations": "The vault fell exactly from 1000000 to 999899 and the recipient rose from raw/derived 0 to raw/derived/standard 101. ProbeRewardMaterialized records amount 101 and terminal vault balance 999899; no duplicate entitlement or movement was observed.",
+      "evidence_references": [
+        "https://cedrascan.com/txn/0xbd18c2a7f75e1cfa60ebb873134a8613aa62e7b0cde485e3e18a014d13a71c4d?network=testnet",
+        "https://testnet.cedra.dev/v1/transactions/by_hash/0xbd18c2a7f75e1cfa60ebb873134a8613aa62e7b0cde485e3e18a014d13a71c4d"
+      ]
+    },
+    {
+      "experiment": "H6",
+      "name": "secondary-fungible-store",
+      "transaction_hash": "0xf830550f7cc4a365a1b486a8176de3856a001c061a25ab087c3edb9146db4a66",
+      "finalized_ledger_version": "149232588",
+      "gas_used": "1038",
+      "result": "pass",
+      "observations": "The dispatch surface safely moved 40 units from the sender primary store to secondary store 0x844a4949959641953a83669197c6707458c1bc133f8ed27eac57ed18e4d2fd4d. Primary raw/derived both became 61; secondary raw/derived both became 40. The production tRFL policy still excludes arbitrary secondary/delegated custody and supports only explicitly registered canonical custody such as the AMM pool.",
+      "evidence_references": [
+        "https://cedrascan.com/txn/0xf830550f7cc4a365a1b486a8176de3856a001c061a25ab087c3edb9146db4a66?network=testnet",
+        "https://testnet.cedra.dev/v1/transactions/by_hash/0xf830550f7cc4a365a1b486a8176de3856a001c061a25ab087c3edb9146db4a66"
+      ]
+    },
+    {
+      "experiment": "H7",
+      "name": "typescript-sdk-equivalence",
+      "transaction_hash": "0xf830550f7cc4a365a1b486a8176de3856a001c061a25ab087c3edb9146db4a66",
+      "finalized_ledger_version": "149232588",
+      "gas_used": "not-applicable-read-only",
+      "result": "pass",
+      "observations": "The read-only @cedra-labs/ts-sdk 2.2.8 witness queried ledger version 149232588 and returned primary raw=61, derived=61, standard=61; secondary raw=40, derived=40; vault=999899. It also retrieved the exact 40-unit withdraw, deposit, and SecondaryStoreFunded events from the finalized transaction.",
+      "evidence_references": [
+        "scripts/run-hook-probe-reads.ts",
+        "https://testnet.cedra.dev/v1/transactions/by_hash/0xf830550f7cc4a365a1b486a8176de3856a001c061a25ab087c3edb9146db4a66"
+      ]
+    },
+    {
+      "experiment": "H8",
+      "name": "wallet-display-and-transfer",
+      "transaction_hash": "not-applicable-no-wallet-transaction-submitted",
+      "finalized_ledger_version": "149232588",
+      "gas_used": "not-applicable",
+      "result": "fail",
+      "observations": "Zedra 1.1.9 and Nightly 1.49.48 are installed in the user's Chrome profile, but this WSL-hosted task could not attach to that profile because browser control failed before automation with 'sandboxCwd is not a local file URI'. No probe key was imported and no wallet transfer was signed. In addition, this compatibility probe's derived value equals raw value, so a wallet displaying 61 or 101 would not by itself prove derived-balance support. H8 therefore remains inconclusive and is not treated as a pass.",
+      "evidence_references": [
+        "https://docs.cedra.network/getting-started/wallets",
+        "https://docs.cedra.network/getting-started/wallets/nightly",
+        "local Chrome extension manifest inventory; no wallet screenshot or transaction exists"
+      ]
+    }
+  ],
+  "mode_decision": "claim-backed",
+  "decision_rationale": "H1-H7 prove Cedra Testnet publication, hook registration, non-recursive framework transfer, exact TransferRef materialisation, secondary-store dispatch, and CLI/REST/SDK agreement. H8 did not prove a real wallet's distinct derived-balance display or transfer path. The safe initial tRFL release mode is therefore explicit on-chain claims; automatic materialisation remains disabled until a native-wallet run proves the missing behaviour.",
+  "approved_by": [
+    "CryptoAutistic80 - Testnet hook-probe execution authorized in the Codex task on 2026-07-20"
+  ]
+}

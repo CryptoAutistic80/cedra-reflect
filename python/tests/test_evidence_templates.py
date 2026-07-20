@@ -92,6 +92,19 @@ class EvidenceTemplateTests(unittest.TestCase):
             self.assertTrue(entry["evidence_references"])
         self.assertEqual(len(report["approved_by"]), 2)
 
+    def test_finalized_hook_probe_record_is_complete_and_claim_backed(self) -> None:
+        report = self.load_json("ops/evidence/hook-probe-testnet.json")
+        experiments = report["experiments"]
+        self.assertEqual(
+            {entry["experiment"] for entry in experiments},
+            {f"H{number}" for number in range(1, 9)},
+        )
+        self.assertTrue(all(entry["result"] == "pass" for entry in experiments[:7]))
+        self.assertEqual(experiments[7]["result"], "fail")
+        self.assertEqual(report["mode_decision"], "claim-backed")
+        self.assertNotIn("RECORD_", json.dumps(report))
+        self.assertNotIn("PENDING_", json.dumps(report))
+
 
 if __name__ == "__main__":
     unittest.main()
