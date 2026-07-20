@@ -17,6 +17,7 @@ module hook_probe::hook_probe {
 
     const E_NOT_ADMIN: u64 = 1;
     const E_ZERO_AMOUNT: u64 = 2;
+    const E_ALREADY_INITIALIZED: u64 = 3;
     const SUPPLY: u64 = 1_000_000_000_000;
     const VAULT_ALLOCATION: u64 = 1_000_000;
     const SEED: vector<u8> = b"reflection-hook-probe-v1";
@@ -45,7 +46,12 @@ module hook_probe::hook_probe {
         vault_balance: u64,
     }
 
-    fun init_module(admin: &signer) {
+    /// One-time post-publication initialization. Dynamic dispatch registration
+    /// resolves the hook functions from on-chain module storage, so this must
+    /// execute only after the package publication transaction has finalized.
+    public entry fun initialize(admin: &signer) {
+        assert!(signer::address_of(admin) == @hook_probe, E_NOT_ADMIN);
+        assert!(!exists<ProbeState>(@hook_probe), E_ALREADY_INITIALIZED);
         let constructor_ref = object::create_named_object(admin, SEED);
         primary_fungible_store::create_primary_store_enabled_fungible_asset(
             &constructor_ref,
@@ -196,6 +202,6 @@ module hook_probe::hook_probe {
 
     #[test_only]
     public fun initialize_for_test(admin: &signer) {
-        init_module(admin);
+        initialize(admin);
     }
 }

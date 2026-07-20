@@ -22,7 +22,7 @@ from a successful compile of the reflection protocol.
 
 | ID | Experiment | Required observation |
 |---|---|---|
-| H1 | Register withdrawal, deposit and derived-balance hooks | Publish/registration succeeds and the exact function identifiers are recorded. |
+| H1 | Publish, then register withdrawal, deposit and derived-balance hooks | Both transactions finalize in order and the exact function identifiers are recorded. Registration is a one-time post-publication call because Cedra resolves hooks from finalized module storage. |
 | H2 | Primary-store peer transfer | Events and state show both expected hook invocations exactly once. |
 | H3 | Standard balance query | CLI/REST/TypeScript SDK query returns the derived/effective balance, or a proven raw-balance fallback. |
 | H4 | Internal reference operations | A controlled `with_ref`/reference settlement path does not recurse into hooks or change the index twice. |

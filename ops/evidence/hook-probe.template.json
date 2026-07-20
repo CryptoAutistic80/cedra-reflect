@@ -12,7 +12,8 @@
     "package_address": "RECORD_PACKAGE_ADDRESS",
     "source_digest": "RECORD_SOURCE_DIGEST",
     "compiled_package_digest": "RECORD_COMPILED_DIGEST",
-    "publish_transaction": "RECORD_PUBLISH_TRANSACTION"
+    "publish_transaction": "RECORD_PUBLISH_TRANSACTION",
+    "initialization_transaction": "RECORD_INITIALIZATION_TRANSACTION"
   },
   "experiments": [
     {
@@ -22,7 +23,7 @@
       "finalized_ledger_version": "RECORD_LEDGER_VERSION",
       "gas_used": "RECORD_GAS_USED",
       "result": "pass|fail|not-applicable",
-      "observations": "Record exact registered withdrawal, deposit, and derived-balance function identifiers.",
+      "observations": "Record the finalized package publication followed by the one-time initialization and exact registered withdrawal, deposit, and derived-balance function identifiers.",
       "evidence_references": ["RECORD_QUERY_OR_EVENT_EVIDENCE"]
     },
     {

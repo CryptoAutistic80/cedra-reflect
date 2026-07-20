@@ -33,12 +33,16 @@ effective reads use the dispatchable/primary-store path from another module.
 
 ## Required Testnet evidence before enabling auto-materialisation
 
-1. Publish `hook-probe` with the exact pinned framework/package build.
-2. Directly call the standard primary-store transfer and standard balance query.
-3. Record the transaction hash, raw balance, derived balance, and framework
+1. Publish `hook-probe` with the exact pinned framework/package build and wait
+   for finality.
+2. Invoke the one-time `hook_probe::initialize` entry to create the probe asset
+   and register all three hooks. Cedra resolves dynamic hook functions from
+   on-chain module storage, so registration is deliberately post-publication.
+3. Directly call the standard primary-store transfer and standard balance query.
+4. Record the transaction hash, raw balance, derived balance, and framework
    deposit/withdraw events.
-4. Repeat for a primary store and a secondary store.
-5. Repeat through the selected TypeScript SDK and wallet.
+5. Repeat for a primary store and a secondary store.
+6. Repeat through the selected TypeScript SDK and wallet.
 
 If any result differs, retain the same vault/index accounting but use a fresh
 claim-only deployment: Cedra dispatch functions are registered at asset creation

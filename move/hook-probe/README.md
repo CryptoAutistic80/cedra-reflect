@@ -8,7 +8,10 @@ settlement.
 The package pins CedraFramework commit
 `01e6ceafae19b900772b343a5af8ae236401e0a8`, the exact `mainnet`-branch
 framework revision inspected and compiled for this repository. Before Testnet use,
-publish this package independently and record the metadata and frozen probe-vault
+publish this package independently, wait for finality, and invoke the one-time
+`hook_probe::initialize` entry. Registration cannot run in `init_module`
+because Cedra resolves dynamic hook functions from finalized on-chain module
+storage. Record the publish and initialization hashes, metadata and frozen probe-vault
 addresses, transaction hashes for a primary-store transfer, exact reference
 materialisation, secondary-store funding, raw/derived balance reads, and framework
 events. The derived-balance hook is intentionally read-only; queries cannot
