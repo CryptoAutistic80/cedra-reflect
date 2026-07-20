@@ -38,6 +38,15 @@ but its raw units are manually included once in the global index by authenticate
 settlement. It never also appears as a wallet position. Its pending reward is
 routed to the active LP epoch rather than added to the AMM reserve.
 
+Canonical custody registration is a multi-agent operation: the core publisher
+authorizes the one-time binding and the AMM custodian co-signs ownership of the
+two distinct stores. The reserve and first LP reward vault must both be empty
+and previously unclassified. Registration rejects a funded store, an existing
+wallet position, a pre-existing LP liability, one object supplied for both
+roles, or a store not owned by the signing custodian. Pool initialization and
+LP-ledger initialization are one atomic transaction, so a downstream failure
+rolls the custody binding back.
+
 Wallet eligibility is explicit. A wallet registers its primary store before a
 standard receipt, or is registered by a signer-authenticated faucet, buy, LP
 claim, or liquidity-withdrawal path. Unregistered secondary stores, wrappers,

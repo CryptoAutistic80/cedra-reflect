@@ -37,8 +37,9 @@ indexes, balances, liabilities, custody route, AMM reserves, and LP snapshot.
 That generated witness exposed and corrected a non-divisible AMM-fee rounding
 mismatch across Move, the SDK mock, and the indexer. Focused adversarial Move
 proofs now also reject a fake core admin, a second canonical-custody binding,
-bootstrap shares below the provider's minimum, and a second LP claim after the
-entitlement is exhausted. Swap guard proofs cover zero amounts, expired
+funded or already-classified custody stores, a non-owner custody registration,
+pre-existing LP liabilities, bootstrap shares below the provider's minimum,
+and a second LP claim after the entitlement is exhausted. Swap guard proofs cover zero amounts, expired
 deadlines, gross and reserve-percentage caps, net-receipt buy slippage, and the
 independent pool pause; both raw reserves reject direct deposits and
 withdrawals. An evented publisher-authorized handoff now separates the cold
@@ -50,7 +51,7 @@ publication, or public-pilot evidence; those gates remain open until performed
 and preserved separately.
 
 **Local contract gate — passed July 20, 2026:** `make verify` passes all Move
-packages including **48/48 integration tests** and the AMM rounding unit test,
+packages including **54/54 integration tests** and the AMM rounding unit test,
 the independent Python model and evidence-template checks pass **31/31 tests**, and the TypeScript
 contract-support witness passes **23/23 deterministic tests**. The generated
 Python/Move witness drift check also passes. The expanded reference-model gate

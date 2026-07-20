@@ -43,6 +43,8 @@ module reflection_core::reflection_token {
     const E_INVALID_CUSTODY_EPOCH_RESIDUE: u64 = 27;
     const E_INVALID_OPERATIONAL_ADMIN: u64 = 28;
     const E_NOT_OPERATIONAL_ADMIN: u64 = 29;
+    const E_STORE_ALREADY_CLASSIFIED: u64 = 30;
+    const E_NOT_CUSTODY_STORE_OWNER: u64 = 31;
 
     const MAX_FEE_BPS: u64 = 100;
     const BPS_DENOMINATOR: u64 = 10_000;
@@ -342,11 +344,13 @@ module reflection_core::reflection_token {
         FaucetCapability { nonce: 1 }
     }
 
-    /// Called once by the canonical AMM during initialization. Both the raw
-    /// reserve and first epoch payout vault must be empty; their immutable
-    /// binding is represented by the returned non-copyable capability.
+    /// Called once by the canonical AMM during initialization. The custodian
+    /// co-signs and must own two distinct, empty, previously unclassified
+    /// stores. Their immutable binding is represented by the returned
+    /// non-copyable capability.
     public fun register_canonical_custody(
         admin: &signer,
+        custodian: &signer,
         pool_store: Object<FungibleStore>,
         lp_reward_vault: Object<FungibleStore>,
     ): CustodySettlementCapability acquires ReflectionState, CustodyAccounting {
@@ -355,20 +359,36 @@ module reflection_core::reflection_token {
         assert!(!state.pool_registered, E_POOL_ALREADY_REGISTERED);
         assert!(fungible_asset::store_metadata(pool_store) == state.metadata, E_NOT_CANONICAL_POOL);
         assert!(fungible_asset::store_metadata(lp_reward_vault) == state.metadata, E_NOT_CANONICAL_POOL);
+        let custodian_address = signer::address_of(custodian);
+        assert!(
+            object::owner(pool_store) == custodian_address
+                && object::owner(lp_reward_vault) == custodian_address,
+            E_NOT_CUSTODY_STORE_OWNER,
+        );
+        let pool_store_address = object::object_address(&pool_store);
+        let lp_reward_vault_address = object::object_address(&lp_reward_vault);
+        assert!(pool_store_address != lp_reward_vault_address, E_STORE_ALREADY_CLASSIFIED);
         assert!(fungible_asset::balance_with_ref(&state.raw_balance_ref, pool_store) == 0, E_STORE_NOT_EMPTY);
         assert!(fungible_asset::balance_with_ref(&state.raw_balance_ref, lp_reward_vault) == 0, E_STORE_NOT_EMPTY);
         let custody = borrow_global_mut<CustodyAccounting>(@reflection_core);
         assert!(!custody.registered, E_CUSTODY_ALREADY_REGISTERED);
-        state.pool_store = object::object_address(&pool_store);
+        assert!(
+            !is_excluded_store(state, pool_store_address)
+                && !is_excluded_store(state, lp_reward_vault_address)
+                && !is_eligible_wallet_store(state, custody, pool_store)
+                && !is_eligible_wallet_store(state, custody, lp_reward_vault),
+            E_STORE_ALREADY_CLASSIFIED,
+        );
+        state.pool_store = pool_store_address;
         state.pool_registered = true;
         table::add(&mut state.exclusions, state.pool_store, true);
-        table::add(&mut state.exclusions, object::object_address(&lp_reward_vault), true);
+        table::add(&mut state.exclusions, lp_reward_vault_address, true);
         fungible_asset::set_frozen_flag(&state.transfer_ref, pool_store, true);
         fungible_asset::set_frozen_flag(&state.transfer_ref, lp_reward_vault, true);
         custody.registered = true;
         reflection_events::custody_adapter_registered(
-            object::object_address(&pool_store),
-            object::object_address(&lp_reward_vault),
+            pool_store_address,
+            lp_reward_vault_address,
         );
         custody_registry::register(admin, pool_store, lp_reward_vault)
     }

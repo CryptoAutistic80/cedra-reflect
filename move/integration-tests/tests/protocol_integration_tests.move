@@ -2,6 +2,7 @@
 module integration_tests::protocol_integration_tests {
     use cedra_framework::dispatchable_fungible_asset;
     use cedra_framework::fungible_asset;
+    use cedra_framework::object;
     use cedra_framework::primary_fungible_store;
     use cedra_framework::timestamp;
     use reflection_core::custody_registry;
@@ -385,10 +386,126 @@ module integration_tests::protocol_integration_tests {
         setup(core, assets, amm, framework);
         let unexpected_cap = reflection_token::register_canonical_custody(
             core,
+            amm,
             pool::rfl_reserve_store(),
             lp_rewards::reward_vault(1),
         );
         custody_registry::destroy_capability_for_test(unexpected_cap);
+    }
+
+    #[test(core = @0xcafe)]
+    #[expected_failure(abort_code = 22, location = reflection_core::reflection_token)]
+    fun funded_custody_reserve_cannot_be_registered(core: &signer) {
+        reflection_token::initialize_for_test(core);
+        let vault_constructor = object::create_object(signer::address_of(core));
+        let empty_vault = fungible_asset::create_store(
+            &vault_constructor, reflection_token::metadata(),
+        );
+        let unexpected_cap = reflection_token::register_canonical_custody(
+            core,
+            core,
+            reflection_token::distribution_vault(),
+            empty_vault,
+        );
+        custody_registry::destroy_capability_for_test(unexpected_cap);
+    }
+
+    #[test(core = @0xcafe)]
+    #[expected_failure(abort_code = 22, location = reflection_core::reflection_token)]
+    fun funded_lp_reward_vault_cannot_be_registered(core: &signer) {
+        reflection_token::initialize_for_test(core);
+        let reserve_constructor = object::create_object(signer::address_of(core));
+        let empty_reserve = fungible_asset::create_store(
+            &reserve_constructor, reflection_token::metadata(),
+        );
+        let unexpected_cap = reflection_token::register_canonical_custody(
+            core,
+            core,
+            empty_reserve,
+            reflection_token::distribution_vault(),
+        );
+        custody_registry::destroy_capability_for_test(unexpected_cap);
+    }
+
+    #[test(core = @0xcafe, alice = @0xa11ce)]
+    #[expected_failure(abort_code = 30, location = reflection_core::reflection_token)]
+    fun registered_wallet_store_cannot_be_reclassified_as_custody(
+        core: &signer,
+        alice: &signer,
+    ) {
+        reflection_token::initialize_for_test(core);
+        reflection_token::register_wallet(alice);
+        let wallet_store = primary_fungible_store::primary_store(
+            signer::address_of(alice), reflection_token::metadata(),
+        );
+        let vault_constructor = object::create_object(signer::address_of(alice));
+        let empty_vault = fungible_asset::create_store(
+            &vault_constructor, reflection_token::metadata(),
+        );
+        let unexpected_cap = reflection_token::register_canonical_custody(
+            core, alice, wallet_store, empty_vault,
+        );
+        custody_registry::destroy_capability_for_test(unexpected_cap);
+    }
+
+    #[test(core = @0xcafe)]
+    #[expected_failure(abort_code = 30, location = reflection_core::reflection_token)]
+    fun one_store_cannot_be_both_reserve_and_reward_vault(core: &signer) {
+        reflection_token::initialize_for_test(core);
+        let store_constructor = object::create_object(signer::address_of(core));
+        let store = fungible_asset::create_store(
+            &store_constructor, reflection_token::metadata(),
+        );
+        let unexpected_cap = reflection_token::register_canonical_custody(
+            core, core, store, store,
+        );
+        custody_registry::destroy_capability_for_test(unexpected_cap);
+    }
+
+    #[test(core = @0xcafe, alice = @0xa11ce)]
+    #[expected_failure(abort_code = 31, location = reflection_core::reflection_token)]
+    fun custody_registration_requires_store_owner_signature(
+        core: &signer,
+        alice: &signer,
+    ) {
+        reflection_token::initialize_for_test(core);
+        let reserve_constructor = object::create_object(signer::address_of(core));
+        let reserve = fungible_asset::create_store(
+            &reserve_constructor, reflection_token::metadata(),
+        );
+        let vault_constructor = object::create_object(signer::address_of(core));
+        let vault = fungible_asset::create_store(
+            &vault_constructor, reflection_token::metadata(),
+        );
+        let unexpected_cap = reflection_token::register_canonical_custody(
+            core, alice, reserve, vault,
+        );
+        custody_registry::destroy_capability_for_test(unexpected_cap);
+    }
+
+    #[test(
+        core = @0xcafe,
+        assets = @0xbabe,
+        amm = @0xdead,
+        alice = @0xa11ce,
+    )]
+    #[expected_failure(abort_code = 1, location = test_amm::lp_rewards)]
+    fun preexisting_lp_liability_blocks_pool_initialization(
+        core: &signer,
+        assets: &signer,
+        amm: &signer,
+        alice: &signer,
+    ) {
+        reflection_token::initialize_for_test(core);
+        mock_usd::initialize_for_test(assets);
+        let vault_constructor = object::create_object(signer::address_of(amm));
+        let vault = fungible_asset::create_store(
+            &vault_constructor, reflection_token::metadata(),
+        );
+        let lp_cap = lp_rewards::initialize(amm, vault);
+        lp_rewards::mint_active(&lp_cap, signer::address_of(alice), 1);
+        lp_rewards::destroy_capability_for_test(lp_cap);
+        pool::initialize(core, assets, amm);
     }
 
     #[test(

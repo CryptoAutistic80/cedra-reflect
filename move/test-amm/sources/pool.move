@@ -158,7 +158,9 @@ module test_amm::pool {
         let lp_vault_constructor = object::create_object(@test_amm);
         let lp_reward_vault = fungible_asset::create_store(&lp_vault_constructor, reflection_token::metadata());
         let settlement_cap = reflection_token::issue_settlement_capability(core_admin);
-        let custody_cap = reflection_token::register_canonical_custody(core_admin, rfl_reserve, lp_reward_vault);
+        let custody_cap = reflection_token::register_canonical_custody(
+            core_admin, amm_admin, rfl_reserve, lp_reward_vault,
+        );
         let lp_cap = lp_rewards::initialize(amm_admin, lp_reward_vault);
         let usd_pool_cap = mock_usd::issue_pool_settlement_capability(assets_admin);
         reflection_token::register_excluded_primary_store(core_admin, signer::address_of(assets_admin));
