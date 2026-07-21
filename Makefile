@@ -1,4 +1,4 @@
-.PHONY: verify conformance-check move-lint move-test python-test ts-test release-tooling-test schema-check release-closure-check pilot-gate release-artifacts clean-release-verification exact-address-artifacts exact-address-artifacts-from-candidate validate-public-role-candidate assemble-testnet-candidate
+.PHONY: contract-verify verify conformance-check move-lint move-test python-test ts-test release-tooling-test schema-check release-closure-check pilot-gate release-artifacts clean-release-verification exact-address-artifacts exact-address-artifacts-from-candidate validate-public-role-candidate assemble-testnet-candidate
 
 # The system Cedra CLI is the reviewed v1.0.4 binary. Node's bin directory can
 # contain an unrelated `cedra` executable, so do not resolve this through PATH.
@@ -20,6 +20,14 @@ define strict_move_lint
 		fi
 endef
 
+# Authoritative completion gate for the on-chain package. It intentionally
+# excludes the optional UI, TypeScript SDK/indexer, release-candidate ceremony,
+# profiles, and live Testnet operations. The randomized model gate defaults to
+# one million successfully applied state transitions.
+contract-verify: conformance-check move-lint move-test python-test pilot-gate
+
+# Broader repository/release-tooling verification. This is not the definition
+# of contract completion; it additionally exercises off-chain tooling.
 verify: conformance-check move-lint move-test python-test ts-test release-tooling-test schema-check release-closure-check
 
 conformance-check:

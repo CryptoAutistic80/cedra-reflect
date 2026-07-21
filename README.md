@@ -43,15 +43,29 @@ it does not infer or apportion rewards among the vault's depositors. Custom and
 secondary stores fail closed, and no other custody or LP adapter is supported
 by this deployment.
 
-## Safety and operational boundary
+## Current deliverable: the contract
 
-- Repository scripts may build and non-commit simulation-test exact transaction
-  candidates, but they must never fund accounts, sign, publish, or submit a
-  state-changing Testnet transaction.
-- Every exact state-changing candidate requires two verified detached OpenSSH
-  approvals from distinct trusted identities and keys. The final release
-  manifest cross-binds those per-transaction approval envelopes and finalized
-  evidence; it does not replace them.
+The current completion target is the on-chain package, not a frontend or a
+deployment ceremony. The contract is considered locally complete only when
+`make contract-verify` passes from the selected source tree. That gate compiles
+and strictly lints all three immutable packages, runs every Move unit and
+cross-package integration test, checks the independently implemented Python
+accounting model and generated Move/Python conformance vectors, and completes
+one million successfully applied randomized state transitions with continuous
+invariant audits.
+
+There is one operator and no external reviewer for this Testnet project. Codex
+can implement, inspect, and test the code with the operator, but that is
+author-side engineering review, not independent human assurance. Independent
+review is therefore not a blocker for completing this local contract package.
+It remains recommended before reusing the design for a mainnet asset or a
+multi-token factory.
+
+## Deferred deployment boundary
+
+- Repository release scripts and generated profiles are outside the contract
+  completion gate. They are retained for a later, explicitly requested Testnet
+  deployment and do not affect on-chain accounting or contract test results.
 - Three package publishers and the destination operations account co-sign one
   atomic, evented handoff of routine fee, pause, faucet, shutdown, and limit
   controls. Individual package setters are recovery-only.
@@ -98,12 +112,18 @@ The clean record binds the exact Git commit/tree, source, Cedra CLI/framework,
 verification log, model report, and local release builds. It remains local
 evidence, and it must be regenerated whenever the reviewed commit changes.
 
-Independent local re-audits currently report GO for the contract with no
-remaining Critical, High, Medium, or Low finding, for SDK/indexer parity, and
-for release tooling. They do not replace the external human source/bytecode
-review or signed SDK-review attestation required by the release process.
+The current author-side audit records no unresolved Critical, High, Medium, or
+Low contract finding. This is not a claim of independent human assurance.
 
-The root verification command is deliberately read-only/local:
+The authoritative contract command is:
+
+```bash
+make contract-verify
+```
+
+It performs no funding, signing, publication, wallet, or network operation.
+
+The broader repository/release-tooling command is deliberately read-only/local:
 
 ```bash
 make verify RELEASE_NODE_RUNTIME=/ABSOLUTE/REVIEWED/PATH/node

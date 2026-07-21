@@ -33,8 +33,16 @@ Testnet.
 
 ### Evidence boundary
 
+- Added `make contract-verify` as the authoritative contract-only completion
+  gate: strict Move compilation/lint, 118 Move tests, 60 Python model/surface
+  tests, generated conformance checks, and one million randomized applied
+  transitions with continuous invariant audits.
+- Recorded the one-operator review model accurately. The operator and Codex
+  perform author-side review; no external reviewer or independence claim is
+  fabricated.
 - Local deterministic checks and the isolated hook-compatibility probe do not
   prove that the three release packages are deployed.
-- Testnet funding, exact simulations, authenticated two-person approval,
-  independent source/bytecode review, publication, initialization, and pilot
-  workload evidence remain release gates.
+- Testnet funding, exact simulations, publication, initialization, and pilot
+  workload evidence are deferred outside the current contract-only scope.
+- Independent review is recommended before mainnet or reflection-token-factory
+  reuse, where the risk and architecture are materially broader.

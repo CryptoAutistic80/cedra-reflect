@@ -29,14 +29,15 @@ reproduction. Do not publish a proof of concept that could endanger a running
 pilot until maintainers have had an opportunity to pause the pool and preserve
 the ledger evidence.
 
-## Disclosure and release bar
+## Disclosure and contract bar
 
 Every report receives a public disposition in the release changelog. Public
 beta cannot proceed with unresolved critical or high-severity findings. A
 reproducible accounting mismatch pauses swaps under `ops/INCIDENT_RESPONSE.md`.
 
-The current independent local contract re-audit reports GO with no unresolved
-Critical, High, Medium, or Low finding; SDK/indexer parity and release tooling
-also passed their local rechecks. These are dirty-tree engineering results, not
-an external human review of clean exact package bytes, a signed SDK-review
-attestation, transaction approval, or live Testnet proof.
+The current author-side contract audit records no unresolved Critical, High,
+Medium, or Low finding. The local contract bar is `make contract-verify` from
+the selected source tree. There is no external reviewer for this Testnet
+project, and no internal or automated check is represented as independent
+human assurance. Mainnet or factory reuse should establish a new threat model
+and obtain independent review appropriate to that materially larger risk.

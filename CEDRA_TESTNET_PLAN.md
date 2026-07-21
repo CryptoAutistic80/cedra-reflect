@@ -19,12 +19,19 @@ core accounting, with its accrued rewards passed through to LP holders by a
 checkpointed LP-share index. The AMM's raw reserve remains the sole pricing
 reserve; reflections must never silently change `x * y`.
 
-**Current execution priority:** complete and prove the full on-chain package —
+**Current execution priority — contract-only:** complete and prove the full on-chain package —
 the reflection core, canonical AMM, LP shares, LP reward passthrough, and their
-Move tests — before resuming frontend work. SDK and indexer work during this
-stage is limited to transaction generation, independent replay, and accounting
-evidence. Later UI requirements remain pilot scope, not the current critical
-path.
+Move tests. Frontend, wallet integration, live Testnet publication, release
+ceremony, indexer operation, and participant/load phases are deferred. The
+authoritative completion command for this scope is `make contract-verify`; it
+contains no wallet or network operation.
+
+**Review model — July 21, 2026:** this is a one-operator project. The operator
+and Codex perform the author-side implementation, audit, and verification.
+There is no external reviewer, and the plan will not invent a reviewer,
+signature, or independence claim. Independent human review is not a blocker
+for the local Testnet contract deliverable; it becomes a recommended new gate
+before mainnet use or extraction into a multi-token factory.
 
 **Single-token boundary:** this release creates exactly one address-bound
 `tRFL` instance across three immutable packages. It is the reference contract
@@ -91,14 +98,10 @@ boundary. Both records are local release-review evidence and must be regenerated
 after any change to the selected commit. They authorize no funding,
 publication, or live transaction.
 
-Independent local code re-audits report **GO** for the contract (no remaining
-Critical, High, Medium, or Low finding), the SDK/indexer parity surface, and the
-release tooling. Those reviews are source-level engineering evidence, not the
-external human source/bytecode or SDK-review attestations required for release.
-Candidate, approval, and finalized-evidence commands still require an
-externally isolated, different-owner, read-only exact-commit release root, the
-exact executable closure, a real signed SDK-review attestation and external
-trust anchor, and two independent transaction approvals.
+The current author-side audit records no remaining Critical, High, Medium, or
+Low contract finding. SDK/indexer and release-tooling results are separate
+off-chain evidence and are not part of the contract completion claim. No
+internal check is represented as an external or independent human review.
 
 ## Generated Testnet role candidates
 
@@ -121,8 +124,7 @@ recorded address; the keyless assembler later repeats that check with the
 reviewed Cedra SDK 2.2.8. That local evidence does not establish funding,
 account existence, private-key control, release authorization, or any finalized
 on-chain release state.
-Funding is forbidden until the final contract, exact-address artifacts, and
-independent human source/bytecode review gates pass.
+Funding and publication are deferred outside the current contract-only scope.
 
 ---
 
@@ -134,8 +136,8 @@ independent human source/bytecode review gates pass.
 | Multiple third-party DEX integrations | **One canonical reflection-aware AMM** |
 | Public liquidity provision | **Admin-seeded bootstrap, then controlled public LP positions** |
 | Permanent token supply ceremony | **Fixed supply per deployment, distributed through a test faucet** |
-| DAO or timelocked governance | **Controlled testnet admin with two-person release approval** |
-| Multiple external audits | **Internal review, property testing, one independent review before public beta** |
+| DAO or timelocked governance | **Controlled Testnet admin; deployment deferred** |
+| Multiple external audits | **Author-side review and property testing for the local contract; independent review recommended before mainnet/factory use** |
 | Permanent state assumption | **Deployment identity, snapshots, fresh-redeployment runbook** |
 | Full economic launch | **No-value test assets with persistent warnings** |
 | Broad wallet compatibility | **Cedra TypeScript SDK plus one documented wallet integration first** |
@@ -1567,6 +1569,10 @@ The full contract package is complete when:
 Passing this gate is local contract evidence. It is not Testnet deployment,
 wallet, participant, or public-beta evidence.
 
+For this contract-only project state, passing this gate is the definition of
+done. Everything in the later pilot completion gate remains explicitly
+deferred rather than silently required.
+
 ## Later pilot completion gate
 
 The broader Cedra Testnet build is complete when:
@@ -1601,10 +1607,8 @@ public accounting dashboard
 fresh-deployment recovery rehearsal
 ```
 
-The compatibility probe, accounting specification, clean verification capture,
-and exact-address review bundle are complete locally. The current next gate is
-independent human source/bytecode and SDK review, followed by the first
-validator-accepted keyless Testnet candidate. Funding/account-control proof,
-independent human review,
-per-transaction approvals, external signing/submission, and finalized Testnet
-evidence remain separate gates.
+The compatibility probe, accounting specification, and prior release evidence
+remain useful background. The current endpoint is the verified contract
+package. Funding, account-control proof, transaction construction, signing,
+submission, finalized Testnet evidence, UI, and public-pilot work are deferred
+until separately requested.

@@ -1,13 +1,13 @@
 # Internal contract security audit
 
-Status: remediated internal review plus independent local code re-audit GO.
+Status: remediated author-side review; no unresolved rated finding.
 Date: 2026-07-21.
 
-This is an author-side security review. A separate independent local code
-re-audit found no remaining Critical, High, Medium, or Low issue and returned
-GO. Neither document is the external human source/bytecode review of the exact
-clean release bytes required by the release gate. This review covers the
-initial, never-deployed schema in
+This is an author-side security review performed by the operator and Codex.
+There is no external reviewer, and this document does not claim independent
+human assurance. It records no remaining Critical, High, Medium, or Low issue
+in the reviewed local source. This review covers the initial, never-deployed
+schema in
 `move/reflection-core`, `move/test-assets`, `move/test-amm`, and the event
 normalizer/reconciler that witnesses their accounting.
 
@@ -193,9 +193,9 @@ the same security properties while changing the storage topology:
    must pin the application commit and icon SHA-256 digests; a production
    factory should use immutable content-addressed metadata.
 5. Exact-address compilation, bytecode/package digests, Testnet simulation,
-   finalized on-chain reconciliation, quantitative pilot gates, and a genuinely
-   independent human source/bytecode review remain mandatory before public
-   release.
+   finalized on-chain reconciliation, and quantitative pilot gates are
+   deployment evidence, not contract-completion requirements. Independent
+   review remains recommended before mainnet or factory reuse.
 6. The TypeScript indexer locally normalizes and reduces `WalletRegistered`,
    `LpFractionalResidueRetired`, and `LpEpochTerminalDustClassified`, persists
    the two terminal-dust units without conflation, reconciles
@@ -203,7 +203,6 @@ the same security properties while changing the storage topology:
    positive LP positions, and enforces Move arithmetic widths. Live finalized
    replay of the exact deployed addresses remains unproved.
 
-No unresolved Critical, High, Medium, or Low finding from the independent local
-code re-audit is being carried as accepted risk. That statement does not
-replace the external human exact-source/bytecode review and does not claim
-clean-commit, signed-release, or live-chain proof.
+No unresolved Critical, High, Medium, or Low finding is being carried as
+accepted risk by this author-side review. That statement does not claim
+independent assurance, signed-release evidence, or live-chain proof.
