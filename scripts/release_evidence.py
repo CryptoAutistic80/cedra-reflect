@@ -30,14 +30,13 @@ ROLE_KEYS = (
     "core_publisher",
     "assets_publisher",
     "amm_publisher",
-    "operations",
     "bootstrap_lp",
 )
 PACKAGE_KEYS = ("reflection_core", "test_assets", "test_amm")
 CHAIN_ID = "2"
 NETWORK = "cedra-testnet"
 API_URL = "https://testnet.cedra.dev/v1"
-APPROVAL_NAMESPACE = "cedra-reflect-testnet-release-v1"
+APPROVAL_NAMESPACE = "cedra-reflect-testnet-release-v2"
 CEDRA_COIN = "0x1::cedra_coin::CedraCoin"
 PUBLIC_KEY_RE = re.compile(r"^ed25519-pub-0x([0-9a-f]{64})$")
 ZERO_SIMULATION_SIGNATURE = "0x" + "00" * 64
@@ -49,7 +48,6 @@ PROFILE_NAMES = {
     "core_publisher": "cedra-reflect-core-publisher",
     "assets_publisher": "cedra-reflect-assets-publisher",
     "amm_publisher": "cedra-reflect-amm-publisher",
-    "operations": "cedra-reflect-operations",
     "bootstrap_lp": "cedra-reflect-bootstrap-lp",
 }
 
@@ -525,19 +523,20 @@ def expected_operation(candidate: dict[str, Any], roles: dict[str, str], tx: dic
         require(len(arguments) == 2, f"{operation} must carry metadata and ordered module byte arrays")
         return
 
-    core_initialize = f"{roles['core_publisher']}::reflection_token::initialize"
-    faucet_initialize = f"{roles['assets_publisher']}::test_faucet::initialize"
-    pool_initialize = f"{roles['amm_publisher']}::pool::initialize"
     if operation == "core_initialize":
-        expected = ("core_initialize", roles["core_publisher"], [], core_initialize, [])
-    elif operation == "faucet_initialize":
-        expected = ("faucet_initialize", roles["core_publisher"], [roles["assets_publisher"]], faucet_initialize, [])
-    elif operation == "pool_initialize":
         expected = (
-            "pool_initialize",
+            "core_initialize",
             roles["core_publisher"],
-            [roles["assets_publisher"], roles["amm_publisher"]],
-            pool_initialize,
+            [],
+            f"{roles['core_publisher']}::reflection_token::initialize",
+            ["100"],
+        )
+    elif operation == "pool_launch":
+        expected = (
+            "pool_launch",
+            roles["core_publisher"],
+            [roles["assets_publisher"], roles["amm_publisher"], roles["bootstrap_lp"]],
+            f"{roles['amm_publisher']}::pool::launch",
             [],
         )
     else:
@@ -549,44 +548,7 @@ def expected_operation(candidate: dict[str, Any], roles: dict[str, str], tx: dic
         require(function == expected_function and arguments == expected_arguments, f"{operation} function or argument mismatch")
         return
 
-    if operation == "amm_tusd_claim":
-        require(kind == "faucet_claim", "amm_tusd_claim has the wrong transaction_kind")
-        require(tx["sender"] == roles["amm_publisher"] and tx["secondary_signers"] == [], "amm_tusd_claim must be a single-signer AMM-publisher transaction")
-        require(
-            function == f"{roles['assets_publisher']}::test_faucet::claim_tusd" and arguments == [],
-            "amm_tusd_claim must call the asset faucet with zero payload arguments",
-        )
-        return
-
-    if operation == "atomic_operational_handoff":
-        require(kind == "operational_handoff", "atomic_operational_handoff has the wrong transaction_kind")
-        require(tx["sender"] == roles["core_publisher"], "atomic handoff sender must be core publisher")
-        require(
-            tx["secondary_signers"]
-            == [roles["assets_publisher"], roles["amm_publisher"], roles["operations"]],
-            "atomic handoff ordered secondary signers must be assets, AMM, operations",
-        )
-        require(
-            function == f"{roles['amm_publisher']}::pool::set_all_operational_admin" and arguments == [],
-            "atomic handoff must call set_all_operational_admin with zero payload arguments",
-        )
-        return
-
-    if operation == "pool_seed":
-        require(kind == "pool_seed", "pool_seed has the wrong transaction_kind")
-        require(tx["sender"] == roles["core_publisher"], "pool_seed sender must be core publisher")
-        require(
-            tx["secondary_signers"] == [roles["amm_publisher"], roles["bootstrap_lp"]],
-            "pool_seed ordered secondary signers must be AMM then bootstrap LP",
-        )
-        require(function == f"{roles['amm_publisher']}::pool::seed_liquidity", "pool_seed function mismatch")
-        require(isinstance(arguments, list) and len(arguments) == 3, "pool_seed payload must contain exactly three amount arguments")
-        for index, argument in enumerate(arguments):
-            require_decimal(argument, f"pool_seed amount argument {index}", positive=True)
-        return
-
-    # Individual handoffs and any unknown bootstrap operation fail closed
-    # instead of accepting a merely plausible function name or signer list.
+    # Any operation outside the reviewed ownerless release flow fails closed.
     fail(f"unsupported fail-closed operation_key: {operation}")
 
 
@@ -659,7 +621,7 @@ def validate_candidate(candidate_path: Path, exact_path: Path, profile_path: Pat
     require_string(candidate["exact_address_artifacts_sha256"], "exact_address_artifacts_sha256", SHA256_RE)
     roles = role_map(candidate["roles"])
     validate_public_profile_binding(candidate["public_profile_binding"], roles)
-    require(candidate["transaction_kind"] in {"package_publish", "core_initialize", "faucet_initialize", "pool_initialize", "faucet_claim", "operational_handoff", "pool_seed"}, "unsupported transaction_kind")
+    require(candidate["transaction_kind"] in {"package_publish", "core_initialize", "pool_launch"}, "unsupported transaction_kind")
     require_string(candidate["operation_key"], "operation_key", re.compile(r"^[a-z][a-z0-9_]{0,63}$"))
     tx = transaction_semantics(candidate["transaction"])
     identity = validate_transaction_identity(candidate["transaction_identity"], tx)
@@ -783,7 +745,7 @@ def validate_envelope(envelope_path: Path, trusted_path: Path, exact_path: Path,
         fail(f"cannot read approval statement: {exc}")
     require(observed_statement_bytes == canonical_json_bytes(expected_statement), "approval statement is not the canonical derivation of the exact candidate")
     approvals = envelope["approvals"]
-    require(isinstance(approvals, list) and len(approvals) == 2, "exactly two detached approvals are required")
+    require(isinstance(approvals, list) and len(approvals) == 1, "exactly one detached operator approval is required")
     identities: list[str] = []
     key_fingerprints: list[str] = []
     signature_names: list[str] = []
@@ -796,9 +758,9 @@ def validate_envelope(envelope_path: Path, trusted_path: Path, exact_path: Path,
         identities.append(identity)
         key_fingerprints.append(key_fingerprint)
         signature_names.append(str(approval["signature_file"]))
-    require(len(set(identities)) == 2, "approval identities must be distinct")
-    require(len(set(key_fingerprints)) == 2, "approval signing-key fingerprints must be distinct")
-    require(len(set(signature_names)) == 2, "approval signature filenames must be distinct")
+    require(len(set(identities)) == 1, "exactly one approval identity is required")
+    require(len(set(key_fingerprints)) == 1, "exactly one approval signing-key fingerprint is required")
+    require(len(set(signature_names)) == 1, "exactly one approval signature filename is required")
     reserved_names = {
         "transaction-candidate.json",
         "approval-statement.json",

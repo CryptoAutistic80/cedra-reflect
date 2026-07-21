@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "evidence_scope": "local-public-role-candidate",
-  "recorded_date": "2026-07-20",
+  "recorded_date": "2026-07-21",
   "network_intent": "cedra-testnet",
   "source": "Cedra CLI-generated public account addresses recorded under explicit operator authorization",
   "funding_status": "not-checked",
@@ -10,29 +10,24 @@
   "contains_private_key_material": false,
   "roles": {
     "core_publisher": {
-      "profile_name": "cedra-reflect-core-publisher",
-      "address": "0x14110b05c8b667577e2ffefab66b01fa2f48bca8091f51af33b1a6c6762773db",
-      "intended_use": "immutable reflection-core publication and publisher-only bootstrap"
+      "profile_name": "cedra-reflect-v02-core-publisher",
+      "address": "0xab143b5378b1744e5b1971fdd54631a0af4c076b226d5d74102bee4211fc2116",
+      "intended_use": "immutable v0.2 reflection-core publication and source-bound launch"
     },
     "assets_publisher": {
-      "profile_name": "cedra-reflect-assets-publisher",
-      "address": "0x445292601c73f8542d576908c67e8a28a861575bdc8841e02753651f56492f8f",
-      "intended_use": "immutable test-assets publication and publisher-only bootstrap"
+      "profile_name": "cedra-reflect-v02-assets-publisher",
+      "address": "0xe11b73d13d614bb1259879496301dc5a34724766c8107f7330806e83f72e7ade",
+      "intended_use": "immutable v0.2 test-assets publication and source-bound launch"
     },
     "amm_publisher": {
-      "profile_name": "cedra-reflect-amm-publisher",
-      "address": "0x47f0e7670e63258035b0f71fea8a80d9e24ed118d5262a47a97a555bc6506721",
-      "intended_use": "immutable test-amm publication and publisher-only bootstrap"
-    },
-    "operations": {
-      "profile_name": "cedra-reflect-operations",
-      "address": "0xb736430fcbb1b1f3d7dac953dcc11fa6cb033efcbc52a36816f1be32ed28ffa3",
-      "intended_use": "post-bootstrap routine operational controls"
+      "profile_name": "cedra-reflect-v02-amm-publisher",
+      "address": "0x60e977ada672ddfa52cc075683085d77182714d0910d91bee598dad3de72e658",
+      "intended_use": "immutable v0.2 test-amm publication and source-bound launch"
     },
     "bootstrap_lp": {
-      "profile_name": "cedra-reflect-bootstrap-lp",
-      "address": "0x0b1cd21450f8b849a1235494c1646e3d338a332d286ba6aef79030d92e7b1f82",
-      "intended_use": "controlled initial LP beneficiary"
+      "profile_name": "cedra-reflect-v02-bootstrap-lp",
+      "address": "0x7c52f952c1f9d7fb08dc9ea2d5919360d982c1c069266d040f2b83f5e1522768",
+      "intended_use": "authenticated initial LP beneficiary with ordinary post-launch rights"
     }
   },
   "evidence_boundaries": {

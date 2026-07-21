@@ -4,24 +4,28 @@ module test_assets::mock_usd {
     use cedra_framework::fungible_asset::{Self, FungibleAsset, FungibleStore, Metadata, MintRef, TransferRef};
     use cedra_framework::object::{Self, Object};
     use cedra_framework::primary_fungible_store;
+    use reflection_core::reflection_token;
     use std::option;
     use std::signer;
     use std::string;
 
     const E_ALREADY_INITIALIZED: u64 = 1;
-    const E_NOT_ADMIN: u64 = 2;
+    const E_NOT_PUBLISHER: u64 = 2;
     const E_CAPABILITY_ALREADY_ISSUED: u64 = 3;
     const E_INVALID_CAP: u64 = 4;
     const E_ZERO_AMOUNT: u64 = 5;
+    const E_BOOTSTRAP_COMPLETE: u64 = 6;
+    const E_NOT_CONFIGURING: u64 = 7;
     const SEED: vector<u8> = b"reflection-pilot-tusd-v1";
+    const FIXED_POOL_BOOTSTRAP: u64 = 500_000_000;
 
     struct MockUsdState has key {
-        admin: address,
         metadata: Object<Metadata>,
         mint_ref: MintRef,
         transfer_ref: TransferRef,
         faucet_capability_issued: bool,
         pool_capability_issued: bool,
+        pool_bootstrap_complete: bool,
         pool_reserve: address,
     }
 
@@ -57,19 +61,19 @@ module test_assets::mock_usd {
         let transfer_ref = fungible_asset::generate_transfer_ref(&constructor_ref);
         let metadata = fungible_asset::mint_ref_metadata(&mint_ref);
         move_to(admin, MockUsdState {
-            admin: signer::address_of(admin),
             metadata,
             mint_ref,
             transfer_ref,
             faucet_capability_issued: false,
             pool_capability_issued: false,
+            pool_bootstrap_complete: false,
             pool_reserve: @0x0,
         });
     }
 
     public fun issue_faucet_capability(admin: &signer): FaucetMintCapability acquires MockUsdState {
         let state = borrow_global_mut<MockUsdState>(@test_assets);
-        assert!(signer::address_of(admin) == state.admin, E_NOT_ADMIN);
+        assert!(signer::address_of(admin) == @test_assets, E_NOT_PUBLISHER);
         assert!(!state.faucet_capability_issued, E_CAPABILITY_ALREADY_ISSUED);
         state.faucet_capability_issued = true;
         FaucetMintCapability { nonce: 1 }
@@ -91,7 +95,7 @@ module test_assets::mock_usd {
         store: Object<FungibleStore>,
     ): PoolSettlementCapability acquires MockUsdState {
         let state = borrow_global_mut<MockUsdState>(@test_assets);
-        assert!(signer::address_of(admin) == state.admin, E_NOT_ADMIN);
+        assert!(signer::address_of(admin) == @test_assets, E_NOT_PUBLISHER);
         assert!(!state.pool_capability_issued, E_CAPABILITY_ALREADY_ISSUED);
         assert!(fungible_asset::store_metadata(store) == state.metadata, E_INVALID_CAP);
         assert!(object::owner(store) == signer::address_of(custodian), E_INVALID_CAP);
@@ -114,6 +118,28 @@ module test_assets::mock_usd {
         fungible_asset::deposit_with_ref(&state.transfer_ref, store, asset);
     }
 
+    /// One-shot CONFIGURING-only seed for the exact canonical AMM reserve.
+    /// The non-copyable reserve capability is held only inside `test_amm::pool`;
+    /// callers cannot choose a recipient or amount.
+    public fun bootstrap_pool_reserve(
+        cap: &PoolSettlementCapability,
+        store: Object<FungibleStore>,
+    ): u64 acquires MockUsdState {
+        assert!(reflection_token::launch_state() == 0, E_NOT_CONFIGURING);
+        assert_pool_cap(cap, store);
+        let state = borrow_global_mut<MockUsdState>(@test_assets);
+        assert!(!state.pool_bootstrap_complete, E_BOOTSTRAP_COMPLETE);
+        state.pool_bootstrap_complete = true;
+        let asset = fungible_asset::mint(&state.mint_ref, FIXED_POOL_BOOTSTRAP);
+        fungible_asset::deposit_with_ref(&state.transfer_ref, store, asset);
+        event::emit(MockUsdMinted {
+            recipient: object::object_address(&store),
+            amount: FIXED_POOL_BOOTSTRAP,
+            operator: @test_amm,
+        });
+        FIXED_POOL_BOOTSTRAP
+    }
+
     public fun withdraw_from_pool(cap: &PoolSettlementCapability, store: Object<FungibleStore>, amount: u64): FungibleAsset acquires MockUsdState {
         assert_pool_cap(cap, store);
         let state = borrow_global<MockUsdState>(@test_assets);
@@ -125,6 +151,9 @@ module test_assets::mock_usd {
 
     #[view]
     public fun pool_reserve(): address acquires MockUsdState { borrow_global<MockUsdState>(@test_assets).pool_reserve }
+
+    #[view]
+    public fun fixed_pool_bootstrap(): u64 { FIXED_POOL_BOOTSTRAP }
 
     fun assert_pool_cap(cap: &PoolSettlementCapability, store: Object<FungibleStore>) acquires MockUsdState {
         let store_address = object::object_address(&store);

@@ -65,7 +65,7 @@ if [[ "$output_directory" == "$repo_root" || "$output_directory" == "$repo_root/
 fi
 
 profiles_json='{}'
-for role_key in core_publisher assets_publisher amm_publisher operations bootstrap_lp; do
+for role_key in core_publisher assets_publisher amm_publisher bootstrap_lp; do
   profile_name="$(jq -er --arg role "$role_key" '.roles[$role].profile_name' "$role_file")"
   expected_address="$(jq -er --arg role "$role_key" '.roles[$role].address' "$role_file")"
   [[ "$profile_name" =~ ^cedra-reflect-[a-z0-9-]+$ ]] || {

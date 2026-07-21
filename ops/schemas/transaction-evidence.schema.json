@@ -18,12 +18,11 @@
     "roles": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["core_publisher", "assets_publisher", "amm_publisher", "operations", "bootstrap_lp"],
+      "required": ["core_publisher", "assets_publisher", "amm_publisher", "bootstrap_lp"],
       "properties": {
         "core_publisher": { "$ref": "#/$defs/address" },
         "assets_publisher": { "$ref": "#/$defs/address" },
         "amm_publisher": { "$ref": "#/$defs/address" },
-        "operations": { "$ref": "#/$defs/address" },
         "bootstrap_lp": { "$ref": "#/$defs/address" }
       }
     },
@@ -41,12 +40,11 @@
         "profiles": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["core_publisher", "assets_publisher", "amm_publisher", "operations", "bootstrap_lp"],
+          "required": ["core_publisher", "assets_publisher", "amm_publisher", "bootstrap_lp"],
           "properties": {
             "core_publisher": { "$ref": "#/$defs/core_profile" },
             "assets_publisher": { "$ref": "#/$defs/assets_profile" },
             "amm_publisher": { "$ref": "#/$defs/amm_profile" },
-            "operations": { "$ref": "#/$defs/operations_profile" },
             "bootstrap_lp": { "$ref": "#/$defs/bootstrap_lp_profile" }
           }
         }
@@ -169,8 +167,8 @@
         "public_profile_binding": { "$ref": "#/$defs/public_profile_binding" },
         "build_environment": { "$ref": "#/$defs/build_environment" },
         "roles": { "$ref": "#/$defs/roles" },
-        "transaction_kind": { "enum": ["package_publish", "core_initialize", "faucet_initialize", "pool_initialize", "faucet_claim", "operational_handoff", "pool_seed"] },
-        "operation_key": { "enum": ["core_publish", "assets_publish", "amm_publish", "core_initialize", "faucet_initialize", "amm_tusd_claim", "pool_initialize", "atomic_operational_handoff", "pool_seed"] },
+        "transaction_kind": { "enum": ["package_publish", "core_initialize", "pool_launch"] },
+        "operation_key": { "enum": ["core_publish", "core_initialize", "assets_publish", "amm_publish", "pool_launch"] },
         "transaction": { "$ref": "#/$defs/transaction" },
         "transaction_identity": { "$ref": "#/$defs/transaction_identity" },
         "transaction_semantics_sha256": { "$ref": "#/$defs/sha256" },
@@ -219,12 +217,6 @@
       "allOf": [
         { "$ref": "#/$defs/profile" },
         { "properties": { "profile_name": { "const": "cedra-reflect-amm-publisher" } } }
-      ]
-    },
-    "operations_profile": {
-      "allOf": [
-        { "$ref": "#/$defs/profile" },
-        { "properties": { "profile_name": { "const": "cedra-reflect-operations" } } }
       ]
     },
     "bootstrap_lp_profile": {
@@ -285,8 +277,8 @@
             "trusted_allowed_signers_sha256": { "$ref": "#/$defs/sha256" },
             "signatures": {
               "type": "array",
-              "minItems": 2,
-              "maxItems": 2,
+              "minItems": 1,
+              "maxItems": 1,
               "items": {
                 "type": "object",
                 "additionalProperties": false,

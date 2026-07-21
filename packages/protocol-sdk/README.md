@@ -16,8 +16,10 @@ also supply a separately reviewed `CedraWriteAdapter`. This keeps dashboard
 rendering, quote generation, test fixtures, and indexer operation free of
 wallet and network dependencies by default.
 
-All monetary values use `bigint` base units; the wrapper rejects a reflection
-fee above 100 bps and makes the Testnet/no-value warning part of every draft.
+All monetary values use `bigint` base units. The v0.2 reflection fee is an
+immutable creation parameter in the `0..=500` bps range; the reviewed Testnet
+release operation initializes it to `100` bps. Every draft carries the
+Testnet/no-value warning.
 
 Swap drafts accept only frozen quotes issued by that exact
 `ReflectionPilotClient`. A quote carries its declared slippage plus finalized
@@ -39,34 +41,19 @@ builders:
 | `createTransferLpSharesDraft` | `recipient`, `shares` |
 | `createLpRewardClaimDraft` | `epoch`, `amount` (`0` means claim all) |
 | `createCheckpointLpRewardsDraft` | none |
-| `createConfigureLiquidityLimitsDraft` | `max_rfl_contribution`, `max_usd_contribution`, `max_withdrawal_share_bps` |
-| `createSetFaucetPausedDraft` | `paused` |
-| `createOperationalAdminHandoffDraft` | recovery-only; no payload arguments; operations account is the sole ordered secondary signer |
-| `createAllOperationalAdminHandoffDraft` | preferred; no payload arguments; assets publisher, AMM publisher, then operations account are ordered secondary signers |
-| `createSeedLiquidityDraft` | `rfl_amount`, `usd_amount`, `min_lp_shares`; AMM publisher then LP beneficiary are ordered secondary signers |
-| `createReseedLiquidityDraft` | same authenticated signer and payload shape as first seed |
 
 Builders validate Move integer bounds, positive contribution maxima and LP
 share amounts, non-negative minimum outputs, future deadlines, non-zero
-recipient addresses, and the 10,000-bps ceiling before a draft can reach an
+recipient addresses, and the 10,000-bps slippage ceiling before a draft can reach an
 explicitly injected writer. Draft creation and encoding do not discover a
 wallet, sign, simulate, submit, or otherwise mutate chain state.
 
-The preferred authority path is the atomic four-signer coordinator: the core
-publisher is primary, followed by assets publisher, AMM publisher, and proposed
-operations account as ordered secondary signers. The three individual package
-handoffs remain recovery-only two-signer transactions. Signer addresses are
-never duplicated as payload arguments. Core permanently excludes the proposed
-account's empty tRFL primary store before appointment; faucet and AMM can only
-align to that same core operator. Once handed off, routine fee, pause, faucet,
-shutdown, and limit calls require the operational account; publishers retain
-only cold package, capability, and co-signed recovery authority.
-
-Seed and reseed also prove consent through the authenticator list. The core
-publisher is primary; the AMM publisher and bootstrap LP beneficiary are
-ordered secondary signers. Only the two reserve amounts and minimum LP shares
-are payload arguments, so initial LP ownership cannot be assigned to an
-unauthenticated address.
+v0.2 exposes no fee setter, pause, operational administrator, limit
+configuration, seed, reseed, or handoff draft. Launch is a separate reviewed
+release operation: core publisher is primary, followed by assets publisher,
+AMM publisher, and bootstrap LP as ordered secondary signers. Its Move payload
+has no non-signer arguments; fixed reserves and initial LP ownership are
+enforced on chain.
 
 `PoolSnapshot` reports the three corresponding operator limits as
 `maximumRflContribution`, `maximumTusdContribution`, and
@@ -74,9 +61,9 @@ unauthenticated address.
 
 For a finalized deployment, `encodeCedraEntryFunction(draft, moduleAddresses)`
 qualifies single-signer drafts with the three recorded publisher addresses.
-`encodeCedraMultiAgentEntryFunction` returns both the payload and its exact
-ordered secondary-signer addresses; it refuses single-signer drafts, while the
-single-signer encoder refuses multi-agent drafts.
+The generic transaction-draft surface contains only single-signer economic
+entries. Release-only multi-agent construction is isolated in the candidate
+assembler and `CedraReleaseClient`.
 
 `FinalizedCedraReadAdapter` is Testnet-only. Its immutable manifest must carry
 `networkLabel: "cedra-testnet"` and `chainId: 2`; every public read first checks
@@ -102,7 +89,7 @@ snapshot is covered by the same detached, recursively frozen read boundary.
 
 `CedraReleaseClient` accepts only public addresses and public keys and exposes
 single- and multi-agent build/simulation paths. This covers immutable package
-publishes and core initialization as well as co-signed operations. Every build
+publishes, core initialization, and the four-signer pool launch. Every build
 requires explicit sequence number, maximum gas, gas price, and absolute expiry.
 `describeSingleSignerTransaction` and `describeMultiAgentTransaction` return a
 common JSON-safe identity containing raw-transaction BCS, transaction-wrapper

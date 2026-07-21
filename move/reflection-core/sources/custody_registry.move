@@ -15,7 +15,6 @@ module reflection_core::custody_registry {
     const E_INVALID_RESERVE: u64 = 4;
     const E_INVALID_ACTIVE_VAULT: u64 = 5;
     const E_UNAPPROVED_VAULT: u64 = 6;
-    const E_VAULT_ALREADY_REGISTERED: u64 = 7;
 
     struct CustodySettlementCapability has store {
         adapter_id: u64,
@@ -50,25 +49,6 @@ module reflection_core::custody_registry {
             approved_lp_vaults,
         });
         CustodySettlementCapability { adapter_id: 1, reserve_store, nonce: 1 }
-    }
-
-    /// Activates a fresh immutable epoch-to-vault binding. The token module
-    /// validates the zero-reserve/zero-pending boundary before calling this.
-    public(package) fun open_epoch(
-        admin: &signer,
-        cap: &CustodySettlementCapability,
-        epoch: u64,
-        lp_vault: Object<FungibleStore>,
-    ) acquires CustodyRegistry {
-        assert!(signer::address_of(admin) == @reflection_core, E_NOT_CORE_ADMIN);
-        assert_capability(cap);
-        let registry = borrow_global_mut<CustodyRegistry>(@reflection_core);
-        assert!(epoch == registry.active_epoch + 1, E_INVALID_ACTIVE_VAULT);
-        let vault_address = object::object_address(&lp_vault);
-        assert!(!table::contains(&registry.approved_lp_vaults, vault_address), E_VAULT_ALREADY_REGISTERED);
-        table::add(&mut registry.approved_lp_vaults, vault_address, epoch);
-        registry.active_epoch = epoch;
-        registry.active_lp_vault = vault_address;
     }
 
     public(package) fun assert_active_route(

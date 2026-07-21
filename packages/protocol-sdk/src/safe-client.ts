@@ -9,7 +9,6 @@ import {
   type PortfolioSnapshot,
   type ProtocolClientOptions,
   type ProtocolSnapshot,
-  type OperationalAdminScope,
   type SubmittedTransaction,
   type SwapDirection,
   type SwapQuote,
@@ -23,7 +22,7 @@ export const TESTNET_NO_VALUE_WARNING =
   "TESTNET ASSET — NO MONETARY VALUE — STATE AND ADDRESSES MAY CHANGE";
 
 const BPS_DENOMINATOR = 10_000n;
-const MAX_REFLECTION_FEE_BPS = 100n;
+const MAX_REFLECTION_FEE_BPS = 500n;
 const MAX_U64 = (1n << 64n) - 1n;
 const MAX_U128 = (1n << 128n) - 1n;
 const MAX_U256 = (1n << 256n) - 1n;
@@ -40,18 +39,6 @@ export interface RemoveLiquidityDraftInput {
   readonly minRfl: bigint;
   readonly minUsd: bigint;
   readonly deadlineUnixSeconds: bigint;
-}
-
-export interface ConfigureLiquidityLimitsDraftInput {
-  readonly maxRfl: bigint;
-  readonly maxUsd: bigint;
-  readonly maxWithdrawalShareBps: bigint;
-}
-
-export interface BootstrapLiquidityDraftInput {
-  readonly rflAmount: bigint;
-  readonly usdAmount: bigint;
-  readonly minLpShares: bigint;
 }
 
 export class StateChangingCallsDisabledError extends Error {
@@ -91,7 +78,7 @@ export function reflectionFee(grossAmount: bigint, feeBps = 100n): bigint {
     throw new TypeError("gross amount and fee must be bigint base units");
   }
   if (grossAmount < 0n || grossAmount > MAX_U64 || feeBps < 0n || feeBps > MAX_REFLECTION_FEE_BPS) {
-    throw new RangeError("gross amount must be non-negative and fee must be between 0 and 100 basis points");
+    throw new RangeError("gross amount must be non-negative and fee must be between 0 and 500 basis points");
   }
   return (grossAmount * feeBps) / BPS_DENOMINATOR;
 }
@@ -128,17 +115,6 @@ function assertFutureDeadline(deadlineUnixSeconds: bigint, nowUnixSeconds: bigin
 function assertNonZeroAddress(address: unknown, label: string): asserts address is Address {
   if (typeof address !== "string" || !/^0x[0-9a-fA-F]{1,64}$/.test(address) || /^0x0+$/.test(address)) {
     throw new TypeError(`${label} must be a non-zero Cedra account address`);
-  }
-}
-
-function canonicalAddressKey(address: unknown): string {
-  assertNonZeroAddress(address, "signer address");
-  return address.slice(2).replace(/^0+/, "").toLowerCase();
-}
-
-function assertDistinctAddresses(addresses: readonly unknown[], label: string): void {
-  if (new Set(addresses.map(canonicalAddressKey)).size !== addresses.length) {
-    throw new TypeError(`${label} must use distinct Cedra accounts`);
   }
 }
 
@@ -481,96 +457,6 @@ export class ReflectionPilotClient {
     );
   }
 
-  public createConfigureLiquidityLimitsDraft(input: ConfigureLiquidityLimitsDraftInput): TransactionDraft {
-    assertPositive(input.maxRfl, MAX_U64, "maximum tRFL contribution");
-    assertPositive(input.maxUsd, MAX_U64, "maximum tUSD contribution");
-    if (input.maxWithdrawalShareBps <= 0n || input.maxWithdrawalShareBps > BPS_DENOMINATOR) {
-      throw new RangeError("maximum non-final LP withdrawal share must be between 1 and 10,000 basis points");
-    }
-    return this.createDraft(
-      "configure_liquidity_limits",
-      "test_amm::pool::configure_liquidity_limits",
-      [input.maxRfl, input.maxUsd, input.maxWithdrawalShareBps],
-    );
-  }
-
-  public createSetFaucetPausedDraft(paused: boolean): TransactionDraft {
-    if (typeof paused !== "boolean") throw new TypeError("faucet pause state must be a boolean");
-    return this.createDraft(
-      "set_faucet_paused",
-      "test_assets::test_faucet::set_paused",
-      [paused],
-    );
-  }
-
-  /**
-   * Publisher-primary, operations-secondary handoff. The operations address is
-   * authenticated by Cedra's multi-agent envelope and is therefore omitted
-   * from the Move payload arguments for all three package scopes.
-   */
-  public createOperationalAdminHandoffDraft(
-    scope: OperationalAdminScope,
-    operationalAdmin: Address,
-  ): TransactionDraft {
-    if (scope !== "reflection-core" && scope !== "test-assets" && scope !== "test-amm") {
-      throw new TypeError("operational admin scope must be reflection-core, test-assets, or test-amm");
-    }
-    assertNonZeroAddress(operationalAdmin, "operational admin");
-    const functionId = scope === "reflection-core"
-      ? "reflection_core::reflection_token::set_operational_admin"
-      : scope === "test-assets"
-        ? "test_assets::test_faucet::set_operational_admin"
-        : "test_amm::pool::set_operational_admin";
-    return this.createDraft(
-      "set_operational_admin",
-      functionId,
-      [],
-      undefined,
-      [operationalAdmin],
-    );
-  }
-
-  /**
-   * Preferred atomic authority handoff. Core is the primary signer; asset and
-   * AMM publishers plus the proposed operations account are ordered Cedra
-   * secondary signers. Individual package setters are recovery-only.
-   */
-  public createAllOperationalAdminHandoffDraft(
-    assetsPublisher: Address,
-    ammPublisher: Address,
-    operationalAdmin: Address,
-  ): TransactionDraft {
-    assertDistinctAddresses(
-      [assetsPublisher, ammPublisher, operationalAdmin],
-      "Atomic operational handoff signers",
-    );
-    return this.createDraft(
-      "set_all_operational_admin",
-      "test_amm::pool::set_all_operational_admin",
-      [],
-      undefined,
-      [assetsPublisher, ammPublisher, operationalAdmin],
-    );
-  }
-
-  /** First canonical reserve bootstrap; beneficiary consent is authenticated. */
-  public createSeedLiquidityDraft(
-    ammPublisher: Address,
-    beneficiary: Address,
-    input: BootstrapLiquidityDraftInput,
-  ): TransactionDraft {
-    return this.createBootstrapLiquidityDraft("seed_liquidity", ammPublisher, beneficiary, input);
-  }
-
-  /** Fresh epoch bootstrap after final exit; beneficiary consent is authenticated. */
-  public createReseedLiquidityDraft(
-    ammPublisher: Address,
-    beneficiary: Address,
-    input: BootstrapLiquidityDraftInput,
-  ): TransactionDraft {
-    return this.createBootstrapLiquidityDraft("reseed_liquidity", ammPublisher, beneficiary, input);
-  }
-
   public async submit(draft: TransactionDraft): Promise<SubmittedTransaction> {
     assertCedraTransactionDraft(draft);
     if (draft.kind === "swap") {
@@ -582,7 +468,7 @@ export class ReflectionPilotClient {
         throw new RangeError("swap draft has expired");
       }
     }
-    if (draft.kind === "set_operational_admin" || draft.secondarySignerAddresses.length > 0) {
+    if (draft.secondarySignerAddresses.length > 0) {
       throw new MultiAgentSubmissionRequiredError();
     }
     if (this.writer === undefined) {
@@ -611,25 +497,6 @@ export class ReflectionPilotClient {
     };
     assertCedraTransactionDraft(draft);
     return draft;
-  }
-
-  private createBootstrapLiquidityDraft(
-    kind: "seed_liquidity" | "reseed_liquidity",
-    ammPublisher: Address,
-    beneficiary: Address,
-    input: BootstrapLiquidityDraftInput,
-  ): TransactionDraft {
-    assertDistinctAddresses([ammPublisher, beneficiary], "Bootstrap liquidity signers");
-    assertPositive(input.rflAmount, MAX_U64, "bootstrap tRFL amount");
-    assertPositive(input.usdAmount, MAX_U64, "bootstrap tUSD amount");
-    assertUnsigned(input.minLpShares, MAX_U128, "minimum bootstrap LP shares");
-    return this.createDraft(
-      kind,
-      `test_amm::pool::${kind}`,
-      [input.rflAmount, input.usdAmount, input.minLpShares],
-      undefined,
-      [ammPublisher, beneficiary],
-    );
   }
 
   private currentTime(): bigint {

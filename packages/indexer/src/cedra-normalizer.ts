@@ -1,4 +1,5 @@
 import type { Address } from "../../protocol-sdk/src/types.js";
+import { MATERIALIZATION_TRIGGERS, type MaterializationTrigger } from "../../protocol-sdk/src/types.js";
 import type {
   EventBase,
   LpEpochStatus,
@@ -80,6 +81,14 @@ function requiredBoolean(data: DataRecord, key: string): boolean {
   const value = data[key];
   if (typeof value !== "boolean") throw new TypeError(`Cedra event field ${key} must be a boolean`);
   return value;
+}
+
+function materializationTrigger(data: DataRecord): MaterializationTrigger {
+  const value = requiredUnsigned(data, "trigger", 8);
+  if (!Object.values(MATERIALIZATION_TRIGGERS).includes(Number(value) as MaterializationTrigger)) {
+    throw new TypeError(`Cedra event field trigger has unsupported v0.2 code ${value.toString()}`);
+  }
+  return Number(value) as MaterializationTrigger;
 }
 
 function requiredUtf8Vector(data: DataRecord, key: string): string {
@@ -219,6 +228,29 @@ export class CedraEventNormalizer {
         protocolExclusionSlots: requiredUnsigned(data, "protocol_exclusion_slots", 64),
       };
     }
+    if (coreType("reflection_events", "TokenCreated")) {
+      const schemaVersion = requiredUnsigned(data, "version", 64);
+      if (schemaVersion !== 2n) {
+        throw new TypeError(`Unsupported TokenCreated schema version: ${schemaVersion.toString()}`);
+      }
+      const releaseMajor = requiredUnsigned(data, "release_major", 64);
+      const releaseMinor = requiredUnsigned(data, "release_minor", 64);
+      const releasePatch = requiredUnsigned(data, "release_patch", 64);
+      return {
+        ...eventBase,
+        type: "TokenCreated",
+        eventSchema: "v0.2",
+        deploymentId: requiredUtf8Vector(data, "deployment_id"),
+        networkLabel: requiredUtf8Vector(data, "network_label"),
+        tokenMetadata: requiredAddress(data, "metadata"),
+        rewardVault: requiredAddress(data, "reward_vault"),
+        distributionVault: requiredAddress(data, "distribution_vault"),
+        reflectionFeeBps: requiredUnsigned(data, "reflection_fee_bps", 64),
+        totalSupply: requiredUnsigned(data, "total_supply", 64),
+        decimals: requiredUnsigned(data, "decimals", 8),
+        packageVersion: `testnet-v${releaseMajor.toString()}.${releaseMinor.toString()}.${releasePatch.toString()}`,
+      };
+    }
     if (coreType("reflection_events", "ProtocolPrimaryStoreExcluded")) {
       return {
         ...eventBase,
@@ -302,7 +334,7 @@ export class CedraEventNormalizer {
       };
     }
     if (coreType("reflection_events", "RewardsMaterialized")) {
-      return { ...eventBase, type: "RewardsMaterialized", account: requiredAddress(data, "account"), amount: requiredUnsigned(data, "amount", 64), totalClaimed: requiredUnsigned(data, "total_claimed", 256) };
+      return { ...eventBase, type: "RewardsMaterialized", account: requiredAddress(data, "account"), amount: requiredUnsigned(data, "amount", 64), totalClaimed: requiredUnsigned(data, "total_claimed", 256), trigger: materializationTrigger(data) };
     }
     if (coreType("reflection_events", "RewardsClaimed")) {
       return { ...eventBase, type: "RewardsClaimed", account: requiredAddress(data, "account"), amount: requiredUnsigned(data, "amount", 64), totalClaimed: requiredUnsigned(data, "total_claimed", 256) };
@@ -408,6 +440,44 @@ export class CedraEventNormalizer {
         finalExit: requiredBoolean(data, "final_exit"),
         trflReserveAfter: requiredUnsigned(data, "reserve_rfl", 64),
         tusdReserveAfter: requiredUnsigned(data, "reserve_usd", 64),
+      };
+    }
+    if (ammType("pool", "LaunchSealed")) {
+      return {
+        ...eventBase,
+        type: "LaunchSealed",
+        eventSchema: "v0.2",
+        reflectionFeeBps: requiredUnsigned(data, "reflection_fee_bps", 64),
+        ammFeeBps: requiredUnsigned(data, "amm_fee_bps", 64),
+        maximumReserveBps: requiredUnsigned(data, "max_reserve_bps", 64),
+        maximumGrossSwap: requiredUnsigned(data, "max_gross_swap", 64),
+        maximumRflContribution: requiredUnsigned(data, "max_liquidity_rfl", 64),
+        maximumTusdContribution: requiredUnsigned(data, "max_liquidity_usd", 64),
+        maximumNonFinalWithdrawalShareBps: requiredUnsigned(data, "max_withdrawal_share_bps", 64),
+        faucetTrflGrant: requiredUnsigned(data, "faucet_trfl_grant", 64),
+        faucetTusdGrant: requiredUnsigned(data, "faucet_tusd_grant", 64),
+        faucetCooldownSeconds: requiredUnsigned(data, "faucet_cooldown_seconds", 64),
+        bootstrap: requiredAddress(data, "bootstrap"),
+        rflReserve: requiredAddress(data, "rfl_reserve"),
+        usdReserve: requiredAddress(data, "usd_reserve"),
+        lpRewardVault: requiredAddress(data, "lp_reward_vault"),
+        seedRfl: requiredUnsigned(data, "seed_rfl", 64),
+        seedUsd: requiredUnsigned(data, "seed_usd", 64),
+        initialLpShares: requiredUnsigned(data, "initial_lp_shares", 128),
+      };
+    }
+    if (ammType("pool", "PoolClosed")) {
+      return {
+        ...eventBase,
+        type: "PoolClosed",
+        eventSchema: "v0.2",
+        provider: requiredAddress(data, "provider"),
+        epoch: requiredUnsigned(data, "epoch", 64),
+        lpShares: requiredUnsigned(data, "lp_shares", 128),
+        rflOutput: requiredUnsigned(data, "rfl_output", 64),
+        usdOutput: requiredUnsigned(data, "usd_output", 64),
+        rflReserveAfter: requiredUnsigned(data, "reserve_rfl", 64),
+        usdReserveAfter: requiredUnsigned(data, "reserve_usd", 64),
       };
     }
     if (ammType("pool", "SwapExecuted")) {

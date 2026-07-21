@@ -21,7 +21,6 @@ bash "$repo_root/scripts/validate_release_evidence.sh" "$role_file"
 core_address="$(jq -er '.roles.core_publisher.address' "$role_file")"
 assets_address="$(jq -er '.roles.assets_publisher.address' "$role_file")"
 amm_address="$(jq -er '.roles.amm_publisher.address' "$role_file")"
-operations_address="$(jq -er '.roles.operations.address' "$role_file")"
 bootstrap_lp_address="$(jq -er '.roles.bootstrap_lp.address' "$role_file")"
 
 CEDRA_BIN="${CEDRA_BIN:-/usr/bin/cedra}" \
@@ -29,4 +28,4 @@ CEDRA_BIN="${CEDRA_BIN:-/usr/bin/cedra}" \
   PUBLIC_ROLE_CANDIDATE_FILE="$(readlink -f "$role_file")" \
   bash "$repo_root/scripts/prepare_exact_address_release.sh" \
     "$core_address" "$assets_address" "$amm_address" \
-    "$operations_address" "$bootstrap_lp_address" "$output_directory"
+    "$bootstrap_lp_address" "$output_directory"

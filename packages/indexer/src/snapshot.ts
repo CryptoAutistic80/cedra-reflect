@@ -388,7 +388,7 @@ function isProjection(value: unknown): value is SerializableProjection {
     )))
     && typeof value.automaticMaterialization === "boolean"
     && isMoveUnsigned(value.feeBps, 64)
-    && value.feeBps <= 100n
+    && value.feeBps <= (value.packageVersion === "testnet-v0.2.0" ? 500n : 100n)
     && isMoveUnsigned(value.currentIndex, 256)
     && isMoveUnsigned(value.indexRemainder, 256)
     && isMoveUnsigned(value.eligibleSupply, 128)
@@ -406,6 +406,12 @@ function isProjection(value: unknown): value is SerializableProjection {
     && typeof value.packageVersion === "string"
     && value.packageVersion.length > 0
     && value.packageVersion.length <= 128
+    && (
+      value.packageVersion === "testnet-v0.2.0"
+        ? (value.lifecycle === "CONFIGURING" || value.lifecycle === "LIVE" || value.lifecycle === "CLOSED")
+          && value.automaticMaterialization === true
+        : value.lifecycle === undefined
+    )
     && typeof value.swapsPaused === "boolean"
     && typeof value.claimsPaused === "boolean"
     && typeof value.faucetPaused === "boolean"
@@ -416,11 +422,11 @@ function isProjection(value: unknown): value is SerializableProjection {
     && isOptionalAddress(admins.testAssets)
     && isOptionalAddress(admins.testAmm)
     && typeof value.deploymentReady === "boolean"
-    && value.deploymentReady === (
-      admins.reflectionCore !== null
-      && admins.testAssets !== null
-      && admins.testAmm !== null
-    )
+    && value.deploymentReady === (value.packageVersion === "testnet-v0.2.0"
+      ? value.lifecycle !== "CONFIGURING"
+      : admins.reflectionCore !== null
+        && admins.testAssets !== null
+        && admins.testAmm !== null)
     && isMoveUnsigned(pool.trflReserve, 64)
     && isMoveUnsigned(pool.tusdReserve, 64)
     && isMoveUnsigned(pool.ammFeeBps, 64)

@@ -269,43 +269,55 @@ export function reconcile(
     ));
   }
 
-  const observedOperationalAdmins = {
-    reflectionCore: observed.coreOperationalAdmin,
-    testAssets: observed.faucetOperationalAdmin,
-    testAmm: observed.ammOperationalAdmin,
-  } as const;
-  for (const key of ["reflectionCore", "testAssets", "testAmm"] as const) {
-    const expected = projection.operationalAdmins[key];
-    if (expected === null) {
+  const isV02 = projection.packageVersion === "testnet-v0.2.0";
+  if (!isV02) {
+    const observedOperationalAdmins = {
+      reflectionCore: observed.coreOperationalAdmin,
+      testAssets: observed.faucetOperationalAdmin,
+      testAmm: observed.ammOperationalAdmin,
+    } as const;
+    for (const key of ["reflectionCore", "testAssets", "testAmm"] as const) {
+      const expected = projection.operationalAdmins[key];
+      if (expected === null) {
+        alerts.push(alert(
+          "OPERATIONAL_ADMIN",
+          "Legacy v0.1 deployment is missing an operational-admin initialization event.",
+          cursor,
+          "evented non-zero authority",
+          observedOperationalAdmins[key] ?? "missing",
+          key,
+        ));
+      } else if (expected !== observedOperationalAdmins[key]) {
+        alerts.push(alert(
+          "OPERATIONAL_ADMIN",
+          "Legacy v0.1 on-chain operational admin differs from the evented publisher handoff.",
+          cursor,
+          expected,
+          observedOperationalAdmins[key] ?? "missing",
+          key,
+        ));
+      }
+    }
+    const allAuthorityHistoriesPresent = projection.operationalAdmins.reflectionCore !== null
+      && projection.operationalAdmins.testAssets !== null
+      && projection.operationalAdmins.testAmm !== null;
+    if (projection.deploymentReady !== allAuthorityHistoriesPresent || !projection.deploymentReady) {
       alerts.push(alert(
         "OPERATIONAL_ADMIN",
-        "Deployment is not ready because an operational-admin initialization event is absent from replay.",
+        "Legacy v0.1 deployment readiness requires complete core, faucet, and AMM authority histories.",
         cursor,
-        "evented non-zero authority",
-        observedOperationalAdmins[key],
-        key,
-      ));
-    } else if (expected !== observedOperationalAdmins[key]) {
-      alerts.push(alert(
-        "OPERATIONAL_ADMIN",
-        "On-chain operational admin differs from the evented publisher handoff.",
-        cursor,
-        expected,
-        observedOperationalAdmins[key],
-        key,
+        true,
+        projection.deploymentReady,
+        "deployment-readiness",
       ));
     }
-  }
-  const allAuthorityHistoriesPresent = projection.operationalAdmins.reflectionCore !== null
-    && projection.operationalAdmins.testAssets !== null
-    && projection.operationalAdmins.testAmm !== null;
-  if (projection.deploymentReady !== allAuthorityHistoriesPresent || !projection.deploymentReady) {
+  } else if (!projection.deploymentReady || projection.lifecycle === "CONFIGURING") {
     alerts.push(alert(
-      "OPERATIONAL_ADMIN",
-      "Deployment readiness requires complete core, faucet, and AMM authority histories.",
+      "EVENT_DATA",
+      "v0.2 deployment readiness requires the ownerless launch seal.",
       cursor,
-      true,
-      projection.deploymentReady,
+      "LIVE|CLOSED",
+      projection.lifecycle ?? "missing",
       "deployment-readiness",
     ));
   }
@@ -559,6 +571,19 @@ export function reconcile(
       "materialization-mode",
     ));
   }
+  if (isV02 && (
+    observed.lifecycle !== projection.lifecycle
+    || observed.reflectionFeeBps !== projection.feeBps
+  )) {
+    alerts.push(alert(
+      "EVENT_DATA",
+      "On-chain v0.2 lifecycle or immutable reflection fee disagrees with event history.",
+      cursor,
+      tuple([projection.lifecycle ?? "missing", projection.feeBps]),
+      tuple([observed.lifecycle ?? "missing", observed.reflectionFeeBps ?? "missing"]),
+      "v0.2-identity",
+    ));
+  }
   if (
     observed.faucetTrflGrant !== projection.faucetTrflGrant
     || observed.faucetTusdGrant !== projection.faucetTusdGrant
@@ -572,7 +597,7 @@ export function reconcile(
       tuple([observed.faucetTrflGrant, observed.faucetTusdGrant, observed.faucetCooldownSeconds]),
     ));
   }
-  if (
+  if (!isV02 && (
     observed.swapsPaused !== projection.swapsPaused
     || observed.claimsPaused !== projection.claimsPaused
     || observed.faucetPaused !== projection.faucetPaused
@@ -581,7 +606,7 @@ export function reconcile(
     || observed.lpClaimsPaused !== projection.pool.lpClaimsPaused
     || observed.shutdownMode !== projection.pool.shutdownMode
     || observed.poolSeeded !== projection.pool.seeded
-  ) {
+  )) {
     alerts.push(alert(
       "PAUSE_STATE",
       "Core/faucet/pool pause and shutdown state disagrees with event history.",

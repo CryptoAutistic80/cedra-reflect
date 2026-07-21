@@ -1,4 +1,9 @@
-# Incident response
+# Legacy v0.1 incident response
+
+This document applies only to the separately deployed, controllable v0.1
+contract. Cedra Reflect v0.2 has no pause, faucet-control, upgrade, recovery, or
+resume authority, and its single-operator detached release policy does not alter
+this historical v0.1 procedure.
 
 The primary emergency action is **pause swaps**. Do not pause ordinary wallet
 transfers or claims unless the specific accounting defect requires it.

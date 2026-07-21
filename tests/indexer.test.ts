@@ -2116,3 +2116,86 @@ test("Cedra normalizer rejects zero and canonically duplicate package identities
     "Package identities must remain distinct after address canonicalization",
   );
 });
+
+test("v0.2 creation, launch, closure, and trigger-coded materialization normalize separately from legacy v0.1", () => {
+  const normalizer = eventNormalizer();
+  const envelope = (typeTag: string, data: Record<string, unknown>, eventIndex: number) => ({
+    typeTag,
+    data,
+    txHash: "0xv02",
+    ledgerVersion: 20n,
+    eventIndex,
+    timestampUnixMilliseconds: 20_000n,
+  });
+  const created = normalizer.normalize(envelope("0xcafe::reflection_events::TokenCreated", {
+    version: "2",
+    release_major: "0",
+    release_minor: "2",
+    release_patch: "0",
+    deployment_id: [...new TextEncoder().encode("v02-test")],
+    network_label: [...new TextEncoder().encode("cedra-testnet")],
+    metadata: TOKEN_METADATA,
+    reward_vault: CORE_REWARD_VAULT,
+    distribution_vault: DISTRIBUTION_VAULT,
+    reflection_fee_bps: "500",
+    total_supply: "1000000000000000",
+    decimals: "6",
+  }, 0));
+  equal(created?.type, "TokenCreated", "v0.2 uses TokenCreated rather than the legacy ProtocolInitialized event");
+  if (created?.type !== "TokenCreated") throw new Error("TokenCreated did not normalize");
+  equal(created.eventSchema, "v0.2", "Creation event carries an explicit v0.2 schema marker");
+  equal(created.reflectionFeeBps, 500n, "Creation accepts the full immutable v0.2 fee range");
+  equal(created.packageVersion, "testnet-v0.2.0", "Creation binds the semantic package release");
+
+  const launch = normalizer.normalize(envelope("0xdead::pool::LaunchSealed", {
+    reflection_fee_bps: "500",
+    amm_fee_bps: "30",
+    max_reserve_bps: "2000",
+    max_gross_swap: "100000000000",
+    max_liquidity_rfl: "100000000000",
+    max_liquidity_usd: "100000000000",
+    max_withdrawal_share_bps: "10000",
+    faucet_trfl_grant: "1000000000",
+    faucet_tusd_grant: "1000000000",
+    faucet_cooldown_seconds: "3600",
+    bootstrap: TEST_ACCOUNT,
+    rfl_reserve: CUSTODY_RESERVE,
+    usd_reserve: USD_RESERVE,
+    lp_reward_vault: LP_REWARD_VAULT,
+    seed_rfl: "500000000",
+    seed_usd: "500000000",
+    initial_lp_shares: "500000000",
+  }, 1));
+  equal(launch?.type, "LaunchSealed", "The fixed four-signer launch envelope normalizes");
+
+  const closed = normalizer.normalize(envelope("0xdead::pool::PoolClosed", {
+    provider: TEST_ACCOUNT,
+    epoch: "1",
+    lp_shares: "500000000",
+    rfl_output: "500000000",
+    usd_output: "500000000",
+    reserve_rfl: "0",
+    reserve_usd: "0",
+  }, 2));
+  equal(closed?.type, "PoolClosed", "Permissionless final closure normalizes as terminal evidence");
+
+  const materialized = normalizer.normalize(envelope("0xcafe::reflection_events::RewardsMaterialized", {
+    account: TEST_ACCOUNT,
+    amount: "42",
+    total_claimed: "84",
+    trigger: "9",
+  }, 3));
+  equal(materialized?.type, "RewardsMaterialized", "Automatic materialization receipt normalizes");
+  if (materialized?.type !== "RewardsMaterialized") throw new Error("RewardsMaterialized did not normalize");
+  equal(materialized.trigger, 9, "LP payout trigger remains explicit in indexed evidence");
+  equal(
+    thrownBy(() => normalizer.normalize(envelope("0xcafe::reflection_events::RewardsMaterialized", {
+      account: TEST_ACCOUNT,
+      amount: "1",
+      total_claimed: "1",
+      trigger: "11",
+    }, 4))) instanceof TypeError,
+    true,
+    "Unknown v0.2 trigger codes fail closed",
+  );
+});

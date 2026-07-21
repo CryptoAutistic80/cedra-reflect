@@ -22,8 +22,6 @@ module reflection_core::reflection_token {
     const E_NOT_ADMIN: u64 = 2;
     const E_NOT_CANONICAL_POOL: u64 = 3;
     const E_CAPABILITY_ALREADY_ISSUED: u64 = 4;
-    const E_SWAPS_PAUSED: u64 = 5;
-    const E_CLAIMS_PAUSED: u64 = 6;
     const E_FEE_TOO_HIGH: u64 = 7;
     const E_DIRECT_EXCLUDED_STORE_DEPOSIT: u64 = 8;
     const E_INSUFFICIENT_EFFECTIVE_BALANCE: u64 = 9;
@@ -40,31 +38,46 @@ module reflection_core::reflection_token {
     const E_CUSTODY_PENDING_AT_EPOCH_CHANGE: u64 = 24;
     const E_UNREGISTERED_WALLET: u64 = 25;
     const E_UNSUPPORTED_STORE: u64 = 26;
-    const E_INVALID_CUSTODY_EPOCH_RESIDUE: u64 = 27;
-    const E_INVALID_OPERATIONAL_ADMIN: u64 = 28;
-    const E_NOT_OPERATIONAL_ADMIN: u64 = 29;
     const E_STORE_ALREADY_CLASSIFIED: u64 = 30;
     const E_NOT_CUSTODY_STORE_OWNER: u64 = 31;
-    const E_AUTOMATIC_MATERIALIZATION_DISABLED: u64 = 32;
     const E_PROTOCOL_EXCLUSIONS_CLOSED: u64 = 33;
-    const E_INVALID_PROTOCOL_PUBLISHER: u64 = 34;
-    const E_OPERATIONAL_ADMIN_REGISTERED: u64 = 35;
-    const E_OPERATIONAL_ADMIN_FUNDED: u64 = 36;
+    const E_NOT_CONFIGURING: u64 = 34;
+    const E_NOT_LIVE: u64 = 35;
+    const E_NOT_SEALABLE: u64 = 36;
+    const E_ALREADY_CLOSED: u64 = 37;
+    const E_POOL_NOT_EMPTY: u64 = 38;
+    const E_INVALID_SEED: u64 = 39;
 
-    const MAX_FEE_BPS: u64 = 100;
+    const MAX_FEE_BPS: u64 = 500;
     const BPS_DENOMINATOR: u64 = 10_000;
-    const INITIAL_FEE_BPS: u64 = 100;
-    const SCHEMA_VERSION: u64 = 1;
+    const SCHEMA_VERSION: u64 = 2;
     const RELEASE_MAJOR: u64 = 0;
-    const RELEASE_MINOR: u64 = 1;
+    const RELEASE_MINOR: u64 = 2;
     const RELEASE_PATCH: u64 = 0;
     const TOTAL_SUPPLY: u64 = 1_000_000_000_000_000;
-    const ASSET_SEED: vector<u8> = b"reflection-pilot-trfl-v1";
-    const REWARD_VAULT_SEED: vector<u8> = b"reflection-reward-vault-v1";
-    const DISTRIBUTION_VAULT_SEED: vector<u8> = b"reflection-distribution-vault-v1";
-    const DEPLOYMENT_ID: vector<u8> = b"reflection-pilot-001";
+    const INITIAL_POOL_RFL: u64 = 500_000_000;
+    const TOKEN_DECIMALS: u8 = 6;
+    const ASSET_SEED: vector<u8> = b"reflection-pilot-trfl-v2";
+    const REWARD_VAULT_SEED: vector<u8> = b"reflection-reward-vault-v2";
+    const DISTRIBUTION_VAULT_SEED: vector<u8> = b"reflection-distribution-vault-v2";
+    const DEPLOYMENT_ID: vector<u8> = b"reflection-pilot-002";
     const NETWORK_LABEL: vector<u8> = b"cedra-testnet";
-    const PROTOCOL_EXCLUSION_SLOTS: u64 = 2;
+
+    const CONFIGURING: u8 = 0;
+    const LIVE: u8 = 1;
+    const CLOSED: u8 = 2;
+
+    const TRIGGER_MANUAL: u8 = 0;
+    const TRIGGER_TRANSFER_SEND: u8 = 1;
+    const TRIGGER_TRANSFER_RECEIVE: u8 = 2;
+    const TRIGGER_BUY_PRE: u8 = 3;
+    const TRIGGER_BUY_POST: u8 = 4;
+    const TRIGGER_SELL_PRE: u8 = 5;
+    const TRIGGER_SELL_POST: u8 = 6;
+    const TRIGGER_LIQUIDITY_IN: u8 = 7;
+    const TRIGGER_LIQUIDITY_OUT: u8 = 8;
+    const TRIGGER_LP_PAYOUT: u8 = 9;
+    const TRIGGER_FAUCET: u8 = 10;
 
     /// `claimed` is whole-token materialisation. `correction` preserves the
     /// accrued dividend when raw balance changes, exactly as a magnified
@@ -75,8 +88,6 @@ module reflection_core::reflection_token {
     }
 
     struct ReflectionState has key {
-        admin: address,
-        operational_admin: address,
         metadata: Object<Metadata>,
         transfer_ref: TransferRef,
         raw_balance_ref: RawBalanceRef,
@@ -90,12 +101,10 @@ module reflection_core::reflection_token {
         lifetime_materialized: u256,
 
         fee_bps: u64,
-        swaps_paused: bool,
-        claims_paused: bool,
-        automatic_materialization: bool,
+        lifecycle: u8,
         positions: Table<address, Position>,
         exclusions: Table<address, bool>,
-        protocol_exclusions_remaining: u64,
+        protocol_exclusions_bound: bool,
 
         reward_vault: Object<FungibleStore>,
         distribution_vault: Object<FungibleStore>,
@@ -131,23 +140,17 @@ module reflection_core::reflection_token {
     /// from finalized module storage, so registration must occur after package
     /// publication rather than from `init_module`. The selected materialization
     /// mode is immutable for this deployment.
-    public entry fun initialize(admin: &signer) {
-        initialize_with_mode(admin, false)
-    }
-
-    /// This Testnet release is hard-bound to the probe-selected claim-backed
-    /// mode. The parameterized path exists only so unit tests can exercise
-    /// automatic dispatcher behavior that is not publishable in this build.
-    fun initialize_with_mode(admin: &signer, automatic_materialization: bool) {
+    public entry fun initialize(admin: &signer, reflection_fee_bps: u64) {
         assert!(signer::address_of(admin) == @reflection_core, E_NOT_ADMIN);
         assert!(!exists<ReflectionState>(@reflection_core), E_ALREADY_INITIALIZED);
+        assert!(reflection_fee_bps <= MAX_FEE_BPS, E_FEE_TOO_HIGH);
         let constructor_ref = object::create_named_object(admin, ASSET_SEED);
         primary_fungible_store::create_primary_store_enabled_fungible_asset(
             &constructor_ref,
             option::some(TOTAL_SUPPLY as u128),
             string::utf8(b"TESTNET ASSET NO VALUE tRFL"),
             string::utf8(b"tRFL"),
-            6,
+            TOKEN_DECIMALS,
             string::utf8(b"https://raw.githubusercontent.com/CryptoAutistic80/cedra-reflect/main/assets/trfl-testnet.svg"),
             string::utf8(b"https://github.com/CryptoAutistic80/cedra-reflect"),
         );
@@ -193,8 +196,6 @@ module reflection_core::reflection_token {
         table::add(&mut exclusions, object::object_address(&distribution_vault), true);
         table::add(&mut exclusions, admin_primary_store, true);
         move_to(admin, ReflectionState {
-            admin: signer::address_of(admin),
-            operational_admin: signer::address_of(admin),
             metadata,
             transfer_ref,
             raw_balance_ref,
@@ -205,13 +206,11 @@ module reflection_core::reflection_token {
             unallocated_fees: 0,
             lifetime_fees: 0,
             lifetime_materialized: 0,
-            fee_bps: INITIAL_FEE_BPS,
-            swaps_paused: false,
-            claims_paused: false,
-            automatic_materialization,
+            fee_bps: reflection_fee_bps,
+            lifecycle: CONFIGURING,
             positions: table::new<address, Position>(),
             exclusions,
-            protocol_exclusions_remaining: PROTOCOL_EXCLUSION_SLOTS,
+            protocol_exclusions_bound: false,
             reward_vault,
             distribution_vault,
             pool_store: @0x0,
@@ -237,7 +236,7 @@ module reflection_core::reflection_token {
             RELEASE_MINOR,
             RELEASE_PATCH,
         );
-        reflection_events::protocol_initialized(
+        reflection_events::token_created(
             SCHEMA_VERSION,
             RELEASE_MAJOR,
             RELEASE_MINOR,
@@ -247,13 +246,9 @@ module reflection_core::reflection_token {
             metadata_address,
             reward_vault_address,
             distribution_vault_address,
-            automatic_materialization,
-            INITIAL_FEE_BPS,
-            PROTOCOL_EXCLUSION_SLOTS,
-        );
-        reflection_events::operational_admin_changed(
-            @0x0,
-            signer::address_of(admin),
+            reflection_fee_bps,
+            TOTAL_SUPPLY,
+            TOKEN_DECIMALS,
         );
     }
 
@@ -265,15 +260,13 @@ module reflection_core::reflection_token {
         transfer_ref: &TransferRef,
     ): FungibleAsset acquires ReflectionState, CustodyAccounting {
         let state = borrow_global_mut<ReflectionState>(@reflection_core);
+        assert_token_transferable(state);
         let custody = borrow_global<CustodyAccounting>(@reflection_core);
         if (is_eligible_wallet_store(state, custody, store)) {
             let account = object::owner(store);
+            materialize_all_to_store(state, account, store, false, TRIGGER_TRANSFER_SEND);
             let raw = fungible_asset::balance_with_ref(&state.raw_balance_ref, store);
-            if (raw < amount) {
-                assert!(state.automatic_materialization, E_AUTOMATIC_MATERIALIZATION_DISABLED);
-                assert!(!state.claims_paused, E_CLAIMS_PAUSED);
-                materialize_to_store(state, account, store, amount - raw, false);
-            };
+            assert!(raw >= amount, E_INSUFFICIENT_EFFECTIVE_BALANCE);
             remove_raw_shares(state, account, amount);
             reflection_events::eligible_balance_debited(account, amount);
         } else {
@@ -288,13 +281,16 @@ module reflection_core::reflection_token {
         transfer_ref: &TransferRef,
     ) acquires ReflectionState, CustodyAccounting {
         let state = borrow_global_mut<ReflectionState>(@reflection_core);
-        let custody = borrow_global<CustodyAccounting>(@reflection_core);
+        assert_token_transferable(state);
         let store_address = object::object_address(&store);
         assert!(!is_excluded_store(state, store_address), E_DIRECT_EXCLUDED_STORE_DEPOSIT);
+        let account = object::owner(store);
+        let custody = borrow_global_mut<CustodyAccounting>(@reflection_core);
+        ensure_registered_wallet_for_store(state, custody, account, store);
         assert!(is_eligible_wallet_store(state, custody, store), E_UNSUPPORTED_STORE);
         let amount = fungible_asset::amount(&asset);
+        materialize_all_to_store(state, account, store, false, TRIGGER_TRANSFER_RECEIVE);
         fungible_asset::deposit_with_ref(transfer_ref, store, asset);
-        let account = object::owner(store);
         add_raw_shares(state, account, amount);
         reflection_events::eligible_balance_credited(account, amount);
     }
@@ -304,7 +300,6 @@ module reflection_core::reflection_token {
         let custody = borrow_global<CustodyAccounting>(@reflection_core);
         let raw = fungible_asset::balance_with_ref(&state.raw_balance_ref, store);
         if (!is_eligible_wallet_store(state, custody, store)) return raw;
-        if (!state.automatic_materialization) return raw;
         raw + claimable_for_store(state, object::owner(store), store)
     }
 
@@ -315,6 +310,7 @@ module reflection_core::reflection_token {
     public entry fun register_wallet(owner: &signer) acquires ReflectionState, CustodyAccounting {
         let account = signer::address_of(owner);
         let state = borrow_global<ReflectionState>(@reflection_core);
+        assert_token_transferable(state);
         let store = primary_fungible_store::ensure_primary_store_exists(account, state.metadata);
         assert!(!is_excluded_store(state, object::object_address(&store)), E_EXCLUDED_RECIPIENT);
         let custody = borrow_global_mut<CustodyAccounting>(@reflection_core);
@@ -327,105 +323,44 @@ module reflection_core::reflection_token {
     public entry fun claim(owner: &signer, amount: u64) acquires ReflectionState, CustodyAccounting {
         assert!(amount > 0, E_ZERO_AMOUNT);
         let state = borrow_global_mut<ReflectionState>(@reflection_core);
-        assert!(!state.claims_paused, E_CLAIMS_PAUSED);
+        assert_token_transferable(state);
         let account = signer::address_of(owner);
         assert_registered_wallet(borrow_global<CustodyAccounting>(@reflection_core), account);
         let store = primary_fungible_store::ensure_primary_store_exists(account, state.metadata);
-        materialize_to_store(state, account, store, amount, true);
+        materialize_to_store(state, account, store, amount, true, TRIGGER_MANUAL);
     }
 
     public entry fun claim_all(owner: &signer) acquires ReflectionState, CustodyAccounting {
         let state = borrow_global_mut<ReflectionState>(@reflection_core);
-        assert!(!state.claims_paused, E_CLAIMS_PAUSED);
+        assert_token_transferable(state);
         let account = signer::address_of(owner);
         assert_registered_wallet(borrow_global<CustodyAccounting>(@reflection_core), account);
         let store = primary_fungible_store::ensure_primary_store_exists(account, state.metadata);
-        let amount = materialize_all_to_store(state, account, store, true);
+        let amount = materialize_all_to_store(state, account, store, true, TRIGGER_MANUAL);
         assert!(amount > 0, E_ZERO_AMOUNT);
     }
 
-    public entry fun set_fee_bps(admin: &signer, new_fee_bps: u64) acquires ReflectionState {
+    public fun issue_settlement_capability(
+        admin: &signer,
+        amm_publisher: &signer,
+    ): SettlementCapability acquires ReflectionState {
         let state = borrow_global_mut<ReflectionState>(@reflection_core);
-        assert_operational_admin(state, admin);
-        assert!(new_fee_bps <= MAX_FEE_BPS, E_FEE_TOO_HIGH);
-        let old_fee_bps = state.fee_bps;
-        state.fee_bps = new_fee_bps;
-        reflection_events::fee_changed(old_fee_bps, new_fee_bps);
-    }
-
-    public entry fun set_pause_state(admin: &signer, swaps_paused: bool, claims_paused: bool) acquires ReflectionState {
-        let state = borrow_global_mut<ReflectionState>(@reflection_core);
-        assert_operational_admin(state, admin);
-        state.swaps_paused = swaps_paused;
-        state.claims_paused = claims_paused;
-        reflection_events::pause_changed(swaps_paused, claims_paused);
-    }
-
-    /// Recovery-only core-role handoff. Normal cross-package rotations use the
-    /// AMM coordinator so every operational authority changes atomically.
-    public entry fun set_operational_admin(
-        publisher: &signer,
-        new_operational_admin: &signer,
-    ) acquires ReflectionState, CustodyAccounting {
-        let new_operational_admin_address = signer::address_of(new_operational_admin);
-        assert!(
-            new_operational_admin_address != @0x0
-                && new_operational_admin_address != @reflection_core
-                && new_operational_admin_address != @test_assets
-                && new_operational_admin_address != @test_amm,
-            E_INVALID_OPERATIONAL_ADMIN,
-        );
-        let state = borrow_global_mut<ReflectionState>(@reflection_core);
-        assert_admin(state, publisher);
-        let custody = borrow_global<CustodyAccounting>(@reflection_core);
-        assert!(
-            !is_registered_wallet(custody, new_operational_admin_address),
-            E_OPERATIONAL_ADMIN_REGISTERED,
-        );
-        let store = primary_fungible_store::primary_store_address_inlined(
-            new_operational_admin_address,
-            state.metadata,
-        );
-        if (primary_fungible_store::primary_store_exists(
-            new_operational_admin_address,
-            state.metadata,
-        )) {
-            assert!(
-                fungible_asset::balance_with_ref(
-                    &state.raw_balance_ref,
-                    primary_fungible_store::primary_store(
-                        new_operational_admin_address,
-                        state.metadata,
-                    ),
-                ) == 0,
-                E_OPERATIONAL_ADMIN_FUNDED,
-            );
-        };
-        if (!is_excluded_store(state, store)) {
-            table::add(&mut state.exclusions, store, true);
-            reflection_events::operational_primary_store_excluded(
-                new_operational_admin_address,
-                store,
-            );
-        };
-        let old_operational_admin = state.operational_admin;
-        state.operational_admin = new_operational_admin_address;
-        reflection_events::operational_admin_changed(
-            old_operational_admin, new_operational_admin_address,
-        );
-    }
-
-    public fun issue_settlement_capability(admin: &signer): SettlementCapability acquires ReflectionState {
-        let state = borrow_global_mut<ReflectionState>(@reflection_core);
-        assert_admin(state, admin);
+        assert_core_publisher(admin);
+        assert!(signer::address_of(amm_publisher) == @test_amm, E_NOT_CANONICAL_POOL);
+        assert_configuring(state);
         assert!(!state.settlement_capability_issued, E_CAPABILITY_ALREADY_ISSUED);
         state.settlement_capability_issued = true;
         SettlementCapability { nonce: 1 }
     }
 
-    public fun issue_faucet_capability(admin: &signer): FaucetCapability acquires ReflectionState {
+    public fun issue_faucet_capability(
+        admin: &signer,
+        assets_publisher: &signer,
+    ): FaucetCapability acquires ReflectionState {
         let state = borrow_global_mut<ReflectionState>(@reflection_core);
-        assert_admin(state, admin);
+        assert_core_publisher(admin);
+        assert!(signer::address_of(assets_publisher) == @test_assets, E_NOT_CANONICAL_POOL);
+        assert_configuring(state);
         assert!(!state.faucet_capability_issued, E_CAPABILITY_ALREADY_ISSUED);
         state.faucet_capability_issued = true;
         FaucetCapability { nonce: 1 }
@@ -442,7 +377,9 @@ module reflection_core::reflection_token {
         lp_reward_vault: Object<FungibleStore>,
     ): CustodySettlementCapability acquires ReflectionState, CustodyAccounting {
         let state = borrow_global_mut<ReflectionState>(@reflection_core);
-        assert_admin(state, admin);
+        assert_core_publisher(admin);
+        assert_configuring(state);
+        assert!(signer::address_of(custodian) == @test_amm, E_NOT_CANONICAL_POOL);
         assert!(!state.pool_registered, E_POOL_ALREADY_REGISTERED);
         assert!(fungible_asset::store_metadata(pool_store) == state.metadata, E_NOT_CANONICAL_POOL);
         assert!(fungible_asset::store_metadata(lp_reward_vault) == state.metadata, E_NOT_CANONICAL_POOL);
@@ -480,84 +417,27 @@ module reflection_core::reflection_token {
         custody_registry::register(admin, pool_store, lp_reward_vault)
     }
 
-    /// Binds the next LP epoch to a fresh empty reward vault. The previous
-    /// vault remains approved for claim-only payouts, but current custody
-    /// rewards can route only to the new active vault.
-    public fun open_custody_epoch_route(
+    /// Binds exactly the two source-named companion publishers. There is no
+    /// caller-selected exclusion target and this function is unusable after
+    /// the one-time launch seal.
+    public fun bind_protocol_exclusions(
         admin: &signer,
-        cap: &CustodySettlementCapability,
-        epoch: u64,
-        pool_store: Object<FungibleStore>,
-        lp_reward_vault: Object<FungibleStore>,
     ) acquires ReflectionState, CustodyAccounting {
         let state = borrow_global_mut<ReflectionState>(@reflection_core);
-        assert_admin(state, admin);
-        assert_pool(state, pool_store);
-        custody_registry::assert_reserve(cap, pool_store);
-        let custody = borrow_global_mut<CustodyAccounting>(@reflection_core);
-        assert!(custody.custody_shares == 0, E_CUSTODY_SHARE_MISMATCH);
-        assert!(fungible_asset::balance_with_ref(&state.raw_balance_ref, pool_store) == 0, E_STORE_NOT_EMPTY);
-        assert!(custody_pending_for_store(state, custody, pool_store) == 0, E_CUSTODY_PENDING_AT_EPOCH_CHANGE);
-
-        // A zero-share position can still contain a sub-base-unit magnified
-        // residue from the prior epoch. Reusing that correction would let a
-        // later epoch mature old fractions into a whole reward. Preserve the
-        // already-routed whole entitlement (`claimed * M`), remove only the
-        // fractional residue from both position and aggregate corrections, and
-        // let the exact vault partition name any resulting whole unit as core
-        // rounding reserve.
-        let (negative, correction_magnitude) = reflection_math::parts(
-            custody.pool_position.correction,
-        );
-        let normalized_magnitude = custody.pool_position.claimed
-            * reflection_math::magnitude();
-        assert!(
-            !negative
-                && correction_magnitude >= normalized_magnitude
-                && correction_magnitude < normalized_magnitude + reflection_math::magnitude(),
-            E_INVALID_CUSTODY_EPOCH_RESIDUE,
-        );
-        let retired_residue = correction_magnitude - normalized_magnitude;
-        if (retired_residue > 0) {
-            reflection_math::subtract_unsigned(
-                &mut custody.pool_position.correction,
-                retired_residue,
-            );
-            reflection_math::subtract_unsigned(
-                &mut state.aggregate_correction,
-                retired_residue,
-            );
-        };
-        recompute_rounding_reserve(state, custody);
-        assert!(fungible_asset::store_metadata(lp_reward_vault) == state.metadata, E_NOT_CANONICAL_POOL);
-        assert!(fungible_asset::balance_with_ref(&state.raw_balance_ref, lp_reward_vault) == 0, E_STORE_NOT_EMPTY);
-        let vault_address = object::object_address(&lp_reward_vault);
-        assert!(!table::contains(&state.exclusions, vault_address), E_CUSTODY_ALREADY_REGISTERED);
-        table::add(&mut state.exclusions, vault_address, true);
-        fungible_asset::set_frozen_flag(&state.transfer_ref, lp_reward_vault, true);
-        custody_registry::open_epoch(admin, cap, epoch, lp_reward_vault);
-        reflection_events::custody_epoch_route_opened(
-            epoch,
-            object::object_address(&pool_store),
-            vault_address,
-            retired_residue,
-        );
+        assert_core_publisher(admin);
+        assert_configuring(state);
+        assert!(!state.protocol_exclusions_bound, E_PROTOCOL_EXCLUSIONS_CLOSED);
+        bind_protocol_exclusion(state, borrow_global<CustodyAccounting>(@reflection_core), @test_assets);
+        bind_protocol_exclusion(state, borrow_global<CustodyAccounting>(@reflection_core), @test_amm);
+        state.protocol_exclusions_bound = true;
     }
 
-    /// Exactly two co-signing protocol publishers may exclude their empty
-    /// primary stores during bootstrap. Requiring the target signer, a vacant
-    /// store, a finite slot, and an event prevents this from becoming a
-    /// unilateral wallet-blacklisting primitive after launch.
-    public fun register_protocol_publisher_store(
-        admin: &signer,
-        publisher: &signer,
-    ) acquires ReflectionState, CustodyAccounting {
-        let state = borrow_global_mut<ReflectionState>(@reflection_core);
-        assert_admin(state, admin);
-        assert!(state.protocol_exclusions_remaining > 0, E_PROTOCOL_EXCLUSIONS_CLOSED);
-        let account = signer::address_of(publisher);
-        assert!(!is_registered_wallet(borrow_global<CustodyAccounting>(@reflection_core), account), E_UNREGISTERED_WALLET);
-        assert!(account == @test_assets || account == @test_amm, E_INVALID_PROTOCOL_PUBLISHER);
+    fun bind_protocol_exclusion(
+        state: &mut ReflectionState,
+        custody: &CustodyAccounting,
+        account: address,
+    ) {
+        assert!(!is_registered_wallet(custody, account), E_UNREGISTERED_WALLET);
         let store = primary_fungible_store::primary_store_address_inlined(account, state.metadata);
         assert!(!table::contains(&state.exclusions, store), E_STORE_ALREADY_CLASSIFIED);
         if (primary_fungible_store::primary_store_exists(account, state.metadata)) {
@@ -570,12 +450,65 @@ module reflection_core::reflection_token {
             );
         };
         table::add(&mut state.exclusions, store, true);
-        state.protocol_exclusions_remaining = state.protocol_exclusions_remaining - 1;
         reflection_events::protocol_primary_store_excluded(
             account,
             store,
-            state.protocol_exclusions_remaining,
         );
+    }
+
+    /// Permanently ends privileged setup. Every mutable launch prerequisite is
+    /// checked in the same transaction; no function can return to CONFIGURING.
+    public fun seal_launch(
+        admin: &signer,
+        assets_publisher: &signer,
+        amm_publisher: &signer,
+    ) acquires ReflectionState, CustodyAccounting {
+        assert_core_publisher(admin);
+        assert!(
+            signer::address_of(assets_publisher) == @test_assets
+                && signer::address_of(amm_publisher) == @test_amm,
+            E_NOT_SEALABLE,
+        );
+        let state = borrow_global_mut<ReflectionState>(@reflection_core);
+        assert_configuring(state);
+        let custody = borrow_global<CustodyAccounting>(@reflection_core);
+        assert!(
+            state.settlement_capability_issued
+                && state.faucet_capability_issued
+                && state.pool_registered
+                && state.protocol_exclusions_bound
+                && custody.registered
+                && custody.custody_shares > 0,
+            E_NOT_SEALABLE,
+        );
+        state.lifecycle = LIVE;
+        reflection_events::core_launch_sealed(
+            state.fee_bps,
+            object::object_address(&state.metadata),
+            object::object_address(&state.reward_vault),
+            object::object_address(&state.distribution_vault),
+            state.pool_store,
+        );
+    }
+
+    /// Called by the canonical AMM only after the permissionless final LP exit.
+    /// Token transfers and residual claims continue to work after pool closure.
+    public fun close_pool(
+        cap: &CustodySettlementCapability,
+    ) acquires ReflectionState, CustodyAccounting {
+        let state = borrow_global_mut<ReflectionState>(@reflection_core);
+        assert_live(state);
+        let pool_store = object::address_to_object<FungibleStore>(state.pool_store);
+        custody_registry::assert_reserve(cap, pool_store);
+        let custody = borrow_global<CustodyAccounting>(@reflection_core);
+        assert!(
+            custody.custody_shares == 0
+                && fungible_asset::balance_with_ref(&state.raw_balance_ref, pool_store) == 0
+                && custody_pending_for_store(state, custody, pool_store) == 0,
+            E_POOL_NOT_EMPTY,
+        );
+        state.lifecycle = CLOSED;
+        reflection_events::core_pool_closed(state.pool_store);
     }
 
     /// Bootstrap movement from the pre-minted excluded reserve. Requiring the
@@ -588,10 +521,11 @@ module reflection_core::reflection_token {
         amount: u64,
     ) acquires ReflectionState, CustodyAccounting {
         let state = borrow_global_mut<ReflectionState>(@reflection_core);
-        assert_admin(state, admin);
+        assert_core_publisher(admin);
+        assert_configuring(state);
         assert_pool(state, pool_store);
         custody_registry::assert_reserve(cap, pool_store);
-        assert!(amount > 0, E_ZERO_AMOUNT);
+        assert!(amount == INITIAL_POOL_RFL, E_INVALID_SEED);
         fungible_asset::transfer_with_ref(&state.transfer_ref, state.distribution_vault, pool_store, amount);
         let custody = borrow_global_mut<CustodyAccounting>(@reflection_core);
         add_custody_shares(state, custody, amount);
@@ -604,10 +538,12 @@ module reflection_core::reflection_token {
         assert!(cap.nonce == 1, E_INVALID_CAP);
         assert!(amount > 0, E_ZERO_AMOUNT);
         let state = borrow_global_mut<ReflectionState>(@reflection_core);
+        assert_live(state);
         let recipient_store = primary_fungible_store::ensure_primary_store_exists(recipient, state.metadata);
         let custody = borrow_global_mut<CustodyAccounting>(@reflection_core);
         ensure_registered_wallet_for_store(state, custody, recipient, recipient_store);
         assert_eligible_primary_store(state, custody, recipient_store);
+        materialize_all_to_store(state, recipient, recipient_store, false, TRIGGER_FAUCET);
         fungible_asset::transfer_with_ref(&state.transfer_ref, state.distribution_vault, recipient_store, amount);
         add_raw_shares(state, recipient, amount);
         reflection_events::faucet_grant(recipient, amount, operator);
@@ -624,18 +560,13 @@ module reflection_core::reflection_token {
         assert!(cap.nonce == 1, E_INVALID_CAP);
         assert!(gross_input > 0, E_ZERO_AMOUNT);
         let state = borrow_global_mut<ReflectionState>(@reflection_core);
-        assert!(!state.swaps_paused, E_SWAPS_PAUSED);
+        assert_live(state);
         assert_pool(state, pool_store);
         let seller_address = signer::address_of(seller);
         let seller_store = primary_fungible_store::ensure_primary_store_exists(seller_address, state.metadata);
         let custody = borrow_global_mut<CustodyAccounting>(@reflection_core);
         assert_eligible_primary_store(state, custody, seller_store);
-        let raw = fungible_asset::balance_with_ref(&state.raw_balance_ref, seller_store);
-        if (raw < gross_input) {
-            assert!(state.automatic_materialization, E_AUTOMATIC_MATERIALIZATION_DISABLED);
-            assert!(!state.claims_paused, E_CLAIMS_PAUSED);
-            materialize_to_store(state, seller_address, seller_store, gross_input - raw, false);
-        };
+        materialize_all_to_store(state, seller_address, seller_store, false, TRIGGER_SELL_PRE);
         let raw_after_materialisation = fungible_asset::balance_with_ref(&state.raw_balance_ref, seller_store);
         assert!(raw_after_materialisation >= gross_input, E_INSUFFICIENT_EFFECTIVE_BALANCE);
         let input_asset = fungible_asset::withdraw_with_ref(&state.transfer_ref, seller_store, gross_input);
@@ -647,6 +578,7 @@ module reflection_core::reflection_token {
             fungible_asset::deposit_with_ref(&state.transfer_ref, state.reward_vault, fee_asset);
             advance_index(state, custody, seller_address, gross_input, fee, 1);
         };
+        materialize_all_to_store(state, seller_address, seller_store, false, TRIGGER_SELL_POST);
         fungible_asset::deposit_with_ref(&state.transfer_ref, pool_store, input_asset);
         add_custody_shares(state, custody, net_input);
         assert_custody_matches_raw(state, custody, pool_store);
@@ -664,9 +596,14 @@ module reflection_core::reflection_token {
         assert!(cap.nonce == 1, E_INVALID_CAP);
         assert!(gross_output > 0, E_ZERO_AMOUNT);
         let state = borrow_global_mut<ReflectionState>(@reflection_core);
-        assert!(!state.swaps_paused, E_SWAPS_PAUSED);
+        assert_live(state);
         assert_pool(state, pool_store);
         let custody = borrow_global_mut<CustodyAccounting>(@reflection_core);
+        let buyer_address = signer::address_of(buyer);
+        let buyer_store = primary_fungible_store::ensure_primary_store_exists(buyer_address, state.metadata);
+        ensure_registered_wallet_for_store(state, custody, buyer_address, buyer_store);
+        assert_eligible_primary_store(state, custody, buyer_store);
+        materialize_all_to_store(state, buyer_address, buyer_store, false, TRIGGER_BUY_PRE);
         remove_custody_shares(state, custody, gross_output);
         let output_asset = fungible_asset::withdraw_with_ref(&state.transfer_ref, pool_store, gross_output);
         let fee = fee_for(state, gross_output);
@@ -677,10 +614,7 @@ module reflection_core::reflection_token {
             fungible_asset::deposit_with_ref(&state.transfer_ref, state.reward_vault, fee_asset);
             advance_index(state, custody, signer::address_of(buyer), gross_output, fee, 2);
         };
-        let buyer_address = signer::address_of(buyer);
-        let buyer_store = primary_fungible_store::ensure_primary_store_exists(buyer_address, state.metadata);
-        ensure_registered_wallet_for_store(state, custody, buyer_address, buyer_store);
-        assert_eligible_primary_store(state, custody, buyer_store);
+        materialize_all_to_store(state, buyer_address, buyer_store, false, TRIGGER_BUY_POST);
         fungible_asset::deposit_with_ref(&state.transfer_ref, buyer_store, output_asset);
         add_raw_shares(state, buyer_address, net_output);
         assert_custody_matches_raw(state, custody, pool_store);
@@ -698,18 +632,16 @@ module reflection_core::reflection_token {
     ) acquires ReflectionState, CustodyAccounting {
         assert!(amount > 0, E_ZERO_AMOUNT);
         let state = borrow_global_mut<ReflectionState>(@reflection_core);
+        assert_live(state);
         assert_pool(state, pool_store);
         custody_registry::assert_reserve(cap, pool_store);
         let provider_address = signer::address_of(provider);
         let custody = borrow_global_mut<CustodyAccounting>(@reflection_core);
         assert_registered_wallet(custody, provider_address);
         let provider_store = primary_fungible_store::ensure_primary_store_exists(provider_address, state.metadata);
+        materialize_all_to_store(state, provider_address, provider_store, false, TRIGGER_LIQUIDITY_IN);
         let raw = fungible_asset::balance_with_ref(&state.raw_balance_ref, provider_store);
-        if (raw < amount) {
-            assert!(state.automatic_materialization, E_AUTOMATIC_MATERIALIZATION_DISABLED);
-            assert!(!state.claims_paused, E_CLAIMS_PAUSED);
-            materialize_to_store(state, provider_address, provider_store, amount - raw, false);
-        };
+        assert!(raw >= amount, E_INSUFFICIENT_EFFECTIVE_BALANCE);
         let asset = fungible_asset::withdraw_with_ref(&state.transfer_ref, provider_store, amount);
         remove_raw_shares(state, provider_address, amount);
         fungible_asset::deposit_with_ref(&state.transfer_ref, pool_store, asset);
@@ -728,15 +660,17 @@ module reflection_core::reflection_token {
     ) acquires ReflectionState, CustodyAccounting {
         assert!(amount > 0, E_ZERO_AMOUNT);
         let state = borrow_global_mut<ReflectionState>(@reflection_core);
+        assert_live(state);
         assert_pool(state, pool_store);
         custody_registry::assert_reserve(cap, pool_store);
         let custody = borrow_global_mut<CustodyAccounting>(@reflection_core);
-        remove_custody_shares(state, custody, amount);
-        let asset = fungible_asset::withdraw_with_ref(&state.transfer_ref, pool_store, amount);
         let recipient_address = signer::address_of(recipient);
         let recipient_store = primary_fungible_store::ensure_primary_store_exists(recipient_address, state.metadata);
         ensure_registered_wallet_for_store(state, custody, recipient_address, recipient_store);
         assert_eligible_primary_store(state, custody, recipient_store);
+        materialize_all_to_store(state, recipient_address, recipient_store, false, TRIGGER_LIQUIDITY_OUT);
+        remove_custody_shares(state, custody, amount);
+        let asset = fungible_asset::withdraw_with_ref(&state.transfer_ref, pool_store, amount);
         fungible_asset::deposit_with_ref(&state.transfer_ref, recipient_store, asset);
         add_raw_shares(state, recipient_address, amount);
         assert_custody_matches_raw(state, custody, pool_store);
@@ -752,6 +686,7 @@ module reflection_core::reflection_token {
         lp_reward_vault: Object<FungibleStore>,
     ): u64 acquires ReflectionState, CustodyAccounting {
         let state = borrow_global<ReflectionState>(@reflection_core);
+        assert_live(state);
         assert_pool(state, pool_store);
         custody_registry::assert_active_route(cap, pool_store, epoch, lp_reward_vault);
         let custody = borrow_global_mut<CustodyAccounting>(@reflection_core);
@@ -782,14 +717,28 @@ module reflection_core::reflection_token {
         lp_reward_vault: Object<FungibleStore>,
         amount: u64,
     ) acquires ReflectionState, CustodyAccounting {
+        payout_lp_reward_to(cap, signer::address_of(claimant), epoch, lp_reward_vault, amount)
+    }
+
+    /// Address form used by the canonical AMM to settle both LP-transfer
+    /// endpoints before it mutates their share weights. The immutable custody
+    /// capability and primary-store-only destination prevent arbitrary payout.
+    public fun payout_lp_reward_to(
+        cap: &CustodySettlementCapability,
+        claimant_address: address,
+        epoch: u64,
+        lp_reward_vault: Object<FungibleStore>,
+        amount: u64,
+    ) acquires ReflectionState, CustodyAccounting {
         assert!(amount > 0, E_ZERO_AMOUNT);
         let state = borrow_global_mut<ReflectionState>(@reflection_core);
+        assert_token_transferable(state);
         custody_registry::assert_claim_vault(cap, epoch, lp_reward_vault);
-        let claimant_address = signer::address_of(claimant);
         let custody = borrow_global_mut<CustodyAccounting>(@reflection_core);
         let claimant_store = primary_fungible_store::ensure_primary_store_exists(claimant_address, state.metadata);
         ensure_registered_wallet_for_store(state, custody, claimant_address, claimant_store);
         assert_eligible_primary_store(state, custody, claimant_store);
+        materialize_all_to_store(state, claimant_address, claimant_store, false, TRIGGER_LP_PAYOUT);
         let asset = fungible_asset::withdraw_with_ref(&state.transfer_ref, lp_reward_vault, amount);
         fungible_asset::deposit_with_ref(&state.transfer_ref, claimant_store, asset);
         add_raw_shares(state, claimant_address, amount);
@@ -804,6 +753,8 @@ module reflection_core::reflection_token {
     #[view]
     public fun fixed_supply(): u64 { TOTAL_SUPPLY }
     #[view]
+    public fun initial_pool_rfl(): u64 { INITIAL_POOL_RFL }
+    #[view]
     public fun distribution_vault_balance(): u64 acquires ReflectionState {
         let state = borrow_global<ReflectionState>(@reflection_core);
         fungible_asset::balance_with_ref(&state.raw_balance_ref, state.distribution_vault)
@@ -811,23 +762,22 @@ module reflection_core::reflection_token {
     #[view]
     public fun fee_bps(): u64 acquires ReflectionState { borrow_global<ReflectionState>(@reflection_core).fee_bps }
     #[view]
+    public fun reflection_fee_bps(): u64 acquires ReflectionState { borrow_global<ReflectionState>(@reflection_core).fee_bps }
+    #[view]
     public fun reflection_fee_for(gross_amount: u64): u64 acquires ReflectionState {
         fee_for(borrow_global<ReflectionState>(@reflection_core), gross_amount)
     }
     #[view]
-    public fun pauses(): (bool, bool) acquires ReflectionState { let s = borrow_global<ReflectionState>(@reflection_core); (s.swaps_paused, s.claims_paused) }
-    #[view]
-    public fun operational_admin(): address acquires ReflectionState {
-        borrow_global<ReflectionState>(@reflection_core).operational_admin
-    }
-    #[view]
     public fun automatic_materialization_enabled(): bool acquires ReflectionState {
-        borrow_global<ReflectionState>(@reflection_core).automatic_materialization
+        let _ = borrow_global<ReflectionState>(@reflection_core);
+        true
     }
     #[view]
-    public fun protocol_exclusions_remaining(): u64 acquires ReflectionState {
-        borrow_global<ReflectionState>(@reflection_core).protocol_exclusions_remaining
-    }
+    public fun launch_state(): u8 acquires ReflectionState { borrow_global<ReflectionState>(@reflection_core).lifecycle }
+    #[view]
+    public fun is_sealed(): bool acquires ReflectionState { borrow_global<ReflectionState>(@reflection_core).lifecycle != CONFIGURING }
+    #[view]
+    public fun is_closed(): bool acquires ReflectionState { borrow_global<ReflectionState>(@reflection_core).lifecycle == CLOSED }
     #[view]
     public fun primary_store_is_excluded(account: address): bool acquires ReflectionState {
         let s = borrow_global<ReflectionState>(@reflection_core);
@@ -960,15 +910,20 @@ module reflection_core::reflection_token {
             E_CUSTODY_SHARE_MISMATCH,
         );
     }
-    fun assert_admin(state: &ReflectionState, admin: &signer) {
-        assert!(signer::address_of(admin) == state.admin, E_NOT_ADMIN);
+    fun assert_core_publisher(admin: &signer) {
+        assert!(signer::address_of(admin) == @reflection_core, E_NOT_ADMIN);
     }
 
-    fun assert_operational_admin(state: &ReflectionState, admin: &signer) {
-        assert!(
-            signer::address_of(admin) == state.operational_admin,
-            E_NOT_OPERATIONAL_ADMIN,
-        );
+    fun assert_configuring(state: &ReflectionState) {
+        assert!(state.lifecycle == CONFIGURING, E_NOT_CONFIGURING);
+    }
+
+    fun assert_live(state: &ReflectionState) {
+        assert!(state.lifecycle == LIVE, E_NOT_LIVE);
+    }
+
+    fun assert_token_transferable(state: &ReflectionState) {
+        assert!(state.lifecycle == LIVE || state.lifecycle == CLOSED, E_NOT_LIVE);
     }
 
     fun assert_pool(state: &ReflectionState, pool_store: Object<FungibleStore>) {
@@ -1033,11 +988,11 @@ module reflection_core::reflection_token {
     /// reward shares. All signer-authenticated receipt paths call this before
     /// their privileged deposit; an already-funded unregistered store is
     /// rejected rather than receiving retroactive reward weight.
-    fun ensure_registered_wallet_for_store(
+    fun ensure_registered_wallet_for_store<T: key>(
         state: &ReflectionState,
         custody: &mut CustodyAccounting,
         account: address,
-        store: Object<FungibleStore>,
+        store: Object<T>,
     ) {
         if (!is_registered_wallet(custody, account)) {
             assert!(
@@ -1168,16 +1123,16 @@ module reflection_core::reflection_token {
     /// Returns materialised amount. It first updates correction and claimed
     /// accounting, then moves exactly that amount from the excluded reward
     /// vault. Thus raw balance rises and pending falls by the same amount.
-    fun materialize_all_to_store<T: key>(state: &mut ReflectionState, account: address, store: Object<T>, explicit_claim: bool): u64 {
+    fun materialize_all_to_store<T: key>(state: &mut ReflectionState, account: address, store: Object<T>, explicit_claim: bool, trigger: u8): u64 {
         if (!table::contains(&state.positions, account)) return 0;
         let pending = claimable_for_store(state, account, store);
         if (pending == 0) return 0;
-        materialize_to_store(state, account, store, pending, explicit_claim)
+        materialize_to_store(state, account, store, pending, explicit_claim, trigger)
     }
 
     /// Materialises an exact positive portion of pending reward. This is the
     /// public `claim(amount)` primitive; hooks call the all-pending wrapper.
-    fun materialize_to_store<T: key>(state: &mut ReflectionState, account: address, store: Object<T>, amount: u64, explicit_claim: bool): u64 {
+    fun materialize_to_store<T: key>(state: &mut ReflectionState, account: address, store: Object<T>, amount: u64, explicit_claim: bool, trigger: u8): u64 {
         let pending = claimable_for_store(state, account, store);
         assert!(amount > 0 && amount <= pending, E_CLAIM_EXCEEDS_PENDING);
         let index = state.index;
@@ -1193,7 +1148,7 @@ module reflection_core::reflection_token {
         state.lifetime_materialized = state.lifetime_materialized + (amount as u256);
         let asset = fungible_asset::withdraw_with_ref(&state.transfer_ref, state.reward_vault, amount);
         fungible_asset::deposit_with_ref(&state.transfer_ref, store, asset);
-        reflection_events::rewards_materialized(account, amount, total_claimed);
+        reflection_events::rewards_materialized(account, amount, total_claimed, trigger);
         if (explicit_claim) reflection_events::rewards_claimed(account, amount, total_claimed);
         amount
     }
@@ -1229,10 +1184,10 @@ module reflection_core::reflection_token {
     }
 
     #[test_only]
-    public fun initialize_for_test(admin: &signer) { initialize_with_mode(admin, true); }
+    public fun initialize_for_test(admin: &signer) { initialize(admin, 100); }
 
     #[test_only]
-    public fun initialize_claim_backed_for_test(admin: &signer) { initialize_with_mode(admin, false); }
+    public fun initialize_with_fee_for_test(admin: &signer, fee_bps: u64) { initialize(admin, fee_bps); }
 
     #[test_only]
     /// Deliberately creates the otherwise unreachable funded/unregistered
@@ -1243,7 +1198,8 @@ module reflection_core::reflection_token {
         amount: u64,
     ) acquires ReflectionState {
         let state = borrow_global_mut<ReflectionState>(@reflection_core);
-        assert_admin(state, admin);
+        assert_core_publisher(admin);
+        assert_configuring(state);
         let store = primary_fungible_store::ensure_primary_store_exists(
             account,
             state.metadata,
@@ -1259,5 +1215,10 @@ module reflection_core::reflection_token {
     #[test_only]
     public fun destroy_faucet_capability_for_test(cap: FaucetCapability) {
         let FaucetCapability { nonce: _ } = cap;
+    }
+
+    #[test_only]
+    public fun destroy_settlement_capability_for_test(cap: SettlementCapability) {
+        let SettlementCapability { nonce: _ } = cap;
     }
 }

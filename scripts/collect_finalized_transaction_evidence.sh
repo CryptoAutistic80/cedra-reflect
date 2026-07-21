@@ -212,14 +212,9 @@ ledger_response="$bundle/ledger-info-response.json"
 
 simulation_name="$(/usr/bin/jq -er '.simulation.raw_response_file | select(. == "simulation-response.json")' "$candidate_file")"
 statement_name="$(/usr/bin/jq -er '.statement_file | select(. == "approval-statement.json")' "$approval_envelope")"
-signature_name_1="$(/usr/bin/jq -er '.approvals[0].signature_file | select(test("^[A-Za-z0-9._-]+$") and (contains("..") | not))' "$approval_envelope")"
-signature_name_2="$(/usr/bin/jq -er '.approvals[1].signature_file | select(test("^[A-Za-z0-9._-]+$") and (contains("..") | not))' "$approval_envelope")"
-[[ "$signature_name_1" != "$signature_name_2" ]] || {
-  /usr/bin/printf 'approval signature filenames must be distinct\n' >&2
-  exit 65
-}
+operator_signature_name="$(/usr/bin/jq -er '.approvals[0].signature_file | select(test("^[A-Za-z0-9._-]+$") and (contains("..") | not))' "$approval_envelope")"
 for reserved in transaction-candidate.json simulation-response.json approval-statement.json approval-envelope.json transaction-response.json ledger-info-response.json transaction-evidence.json; do
-  [[ "$signature_name_1" != "$reserved" && "$signature_name_2" != "$reserved" ]] || {
+  [[ "$operator_signature_name" != "$reserved" ]] || {
     /usr/bin/printf 'approval signature filename collides with a reserved bundle filename\n' >&2
     exit 65
   }
@@ -229,8 +224,7 @@ copy_exclusive=(/usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C LANG=C /usr/bin/pyth
 "${copy_exclusive[@]}" "$candidate_file" "$bundle/transaction-candidate.json"
 "${copy_exclusive[@]}" "$release_snapshot_root/$simulation_name" "$bundle/simulation-response.json"
 "${copy_exclusive[@]}" "$release_snapshot_root/$statement_name" "$bundle/approval-statement.json"
-"${copy_exclusive[@]}" "$release_snapshot_root/$signature_name_1" "$bundle/$signature_name_1"
-"${copy_exclusive[@]}" "$release_snapshot_root/$signature_name_2" "$bundle/$signature_name_2"
+"${copy_exclusive[@]}" "$release_snapshot_root/$operator_signature_name" "$bundle/$operator_signature_name"
 "${copy_exclusive[@]}" "$approval_envelope" "$bundle/approval-envelope.json"
 
 candidate_sha256="$(/usr/bin/sha256sum "$bundle/transaction-candidate.json" | /usr/bin/cut -d ' ' -f 1)"
@@ -324,7 +318,7 @@ approval_signatures="$(/usr/bin/jq -c '[.approvals[] | {identity,key_fingerprint
 expected_inventory="$(/usr/bin/printf '%s\n' \
   approval-envelope.json approval-statement.json ledger-info-response.json simulation-response.json \
   transaction-candidate.json transaction-evidence.json transaction-response.json \
-  "$signature_name_1" "$signature_name_2" | /usr/bin/sort)"
+  "$operator_signature_name" | /usr/bin/sort)"
 actual_inventory="$(/usr/bin/find "$bundle" -mindepth 1 -maxdepth 1 -type f -printf '%f\n' | /usr/bin/sort)"
 [[ "$actual_inventory" == "$expected_inventory" \
   && -z "$(/usr/bin/find "$bundle" -mindepth 1 ! -type f -print -quit)" ]] || {

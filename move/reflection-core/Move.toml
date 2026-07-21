@@ -1,6 +1,6 @@
 [package]
 name = "ReflectionCore"
-version = "0.1.0"
+version = "0.2.0"
 upgrade_policy = "immutable"
 
 [dependencies]
@@ -10,8 +10,10 @@ CedraFramework = { git = "https://github.com/cedra-labs/cedra-framework.git", su
 reflection_core = "_"
 test_assets = "_"
 test_amm = "_"
+bootstrap_lp = "_"
 
 [dev-addresses]
 reflection_core = "0xcafe"
 test_assets = "0xbabe"
 test_amm = "0xdead"
+bootstrap_lp = "0xa11ce"

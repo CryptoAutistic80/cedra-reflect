@@ -3,7 +3,7 @@
 # The system Cedra CLI is the reviewed v1.0.4 binary. Node's bin directory can
 # contain an unrelated `cedra` executable, so do not resolve this through PATH.
 CEDRA ?= /usr/bin/cedra
-MOVE_DEV_ADDRESSES := reflection_core=0xcafe,test_assets=0xbabe,test_amm=0xdead
+MOVE_DEV_ADDRESSES := reflection_core=0xcafe,test_assets=0xbabe,test_amm=0xdead,bootstrap_lp=0xa11ce
 
 define strict_move_lint
 	@set -eu; \
@@ -84,12 +84,12 @@ clean-release-verification:
 
 exact-address-artifacts:
 	@test -n "$(CORE_ADDRESS)" -a -n "$(ASSETS_ADDRESS)" -a -n "$(AMM_ADDRESS)" \
-		-a -n "$(OPERATIONS_ADDRESS)" -a -n "$(BOOTSTRAP_LP_ADDRESS)" -a -n "$(OUTPUT_DIRECTORY)" || \
-		{ echo "set CORE_ADDRESS, ASSETS_ADDRESS, AMM_ADDRESS, OPERATIONS_ADDRESS, BOOTSTRAP_LP_ADDRESS, and OUTPUT_DIRECTORY" >&2; exit 64; }
+		-a -n "$(BOOTSTRAP_LP_ADDRESS)" -a -n "$(OUTPUT_DIRECTORY)" || \
+		{ echo "set CORE_ADDRESS, ASSETS_ADDRESS, AMM_ADDRESS, BOOTSTRAP_LP_ADDRESS, and OUTPUT_DIRECTORY" >&2; exit 64; }
 	CEDRA_BIN=$(CEDRA) RELEASE_VERIFICATION_RECORD="$(RELEASE_VERIFICATION_RECORD)" \
 		bash scripts/prepare_exact_address_release.sh \
 		"$(CORE_ADDRESS)" "$(ASSETS_ADDRESS)" "$(AMM_ADDRESS)" \
-		"$(OPERATIONS_ADDRESS)" "$(BOOTSTRAP_LP_ADDRESS)" "$(OUTPUT_DIRECTORY)"
+		"$(BOOTSTRAP_LP_ADDRESS)" "$(OUTPUT_DIRECTORY)"
 
 validate-public-role-candidate:
 	bash scripts/validate_release_evidence.sh ops/testnet-roles.candidate.json

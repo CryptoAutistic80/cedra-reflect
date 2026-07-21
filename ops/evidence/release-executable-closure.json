@@ -2,7 +2,7 @@
   "dist": {
     "file_count": 36,
     "path": "fresh-private-tsc-outdir",
-    "sha256": "dcba95d727339f5221089101e3c95a56f298851432dc1e76611e41982514fef7"
+    "sha256": "3eef58863e5b4e18e95c11db964e259240ed29ba099925aad4cf36c75c5c2947"
   },
   "evidence_scope": "reviewed-release-executable-closure",
   "node_modules": {
@@ -14,8 +14,8 @@
     "byte_length": 121116896,
     "sha256": "5796fd9700e83170bc7ddfdf7f18858c794a9f91cb39dd6f9e95060b292f2563"
   },
-  "package_json_sha256": "73c49dda7f808ec6f2e13ff57499590f19b4173895e893081e649a4098737d27",
-  "package_lock_sha256": "6afba139af2ed4006fd109665ab1cd1edd910dad7a16c8cdd92b789a80a0eabb",
+  "package_json_sha256": "85fba0dc0c5d0cbcdf8285193ee94139bb4517c543bec09ec6cc905d39b773cd",
+  "package_lock_sha256": "de1e7cc7345b4455ff10c88dc5d1c39c0eecbd0a02e24749e22213abf7f67b6b",
   "python_runtime": {
     "byte_length": 8020928,
     "sha256": "1643dacd9feaedc58f3cc581e4d22577dfe25c09b10282936186ccf0f2e61118"

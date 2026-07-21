@@ -16,9 +16,7 @@ import {
   describeMultiAgentTransaction,
   describeSingleSignerTransaction,
   encodeCedraEntryFunction,
-  encodeCedraMultiAgentEntryFunction,
   MockCedraReadAdapter,
-  MultiAgentSubmissionRequiredError,
   ReflectionPilotClient,
   StateChangingCallsDisabledError,
   UnverifiedSwapDraftError,
@@ -292,48 +290,6 @@ test("liquidity and LP drafts match the finalized Move entries and ABI argument 
   equal(checkpoint.functionId, "test_amm::pool::checkpoint_lp_rewards", "Checkpoint targets the permissionless pool entry");
   equal(checkpoint.arguments.length, 0, "Checkpoint carries no caller argument because the signer is implicit");
 
-  const limits = client.createConfigureLiquidityLimitsDraft({
-    maxRfl: 808n,
-    maxUsd: 909n,
-    maxWithdrawalShareBps: 2_500n,
-  });
-  equal(limits.kind, "configure_liquidity_limits", "Liquidity-limit configuration has a distinct transaction kind");
-  equal(limits.functionId, "test_amm::pool::configure_liquidity_limits", "Liquidity limits target the admin pool entry");
-  equal(JSON.stringify(limits.arguments, (_, value) => typeof value === "bigint" ? value.toString() : value), '["808","909","2500"]', "Liquidity limit arguments preserve the Move ABI order");
-
-  const faucetPause = client.createSetFaucetPausedDraft(true);
-  equal(faucetPause.kind, "set_faucet_paused", "Faucet emergency control has a distinct transaction kind");
-  equal(faucetPause.functionId, "test_assets::test_faucet::set_paused", "Faucet pause targets the on-chain operational control");
-
-  const coreOperator = client.createOperationalAdminHandoffDraft("reflection-core", "0x0bed");
-  const faucetOperator = client.createOperationalAdminHandoffDraft("test-assets", "0x0bed");
-  const ammOperator = client.createOperationalAdminHandoffDraft("test-amm", "0x0bed");
-  const allOperators = client.createAllOperationalAdminHandoffDraft("0xbabe", "0xdead", "0x0bed");
-  const seed = client.createSeedLiquidityDraft("0xdead", "0x1b00", {
-    rflAmount: 1_001n,
-    usdAmount: 2_002n,
-    minLpShares: 3_003n,
-  });
-  const reseed = client.createReseedLiquidityDraft("0xdead", "0x1b00", {
-    rflAmount: 4_004n,
-    usdAmount: 5_005n,
-    minLpShares: 6_006n,
-  });
-  equal(coreOperator.kind, "set_operational_admin", "Operational handoffs have a distinct transaction kind");
-  equal(coreOperator.functionId, "reflection_core::reflection_token::set_operational_admin", "Core handoff targets the core publisher surface");
-  equal(faucetOperator.functionId, "test_assets::test_faucet::set_operational_admin", "Faucet handoff targets the asset publisher surface");
-  equal(ammOperator.functionId, "test_amm::pool::set_operational_admin", "AMM handoff targets the AMM publisher surface");
-  for (const handoff of [coreOperator, faucetOperator, ammOperator]) {
-    equal(handoff.arguments.length, 0, "Operations address is never forged as a Move payload argument");
-    equal(JSON.stringify(handoff.secondarySignerAddresses), '["0x0bed"]', "Operations account is the sole ordered secondary signer");
-  }
-  equal(allOperators.functionId, "test_amm::pool::set_all_operational_admin", "Preferred handoff targets the four-signer coordinator");
-  equal(JSON.stringify(allOperators.arguments), "[]", "Preferred atomic handoff has no forged address arguments");
-  equal(JSON.stringify(allOperators.secondarySignerAddresses), '["0xbabe","0xdead","0x0bed"]', "Atomic handoff preserves assets, AMM, then operations signer order");
-  equal(JSON.stringify(seed.arguments, (_, value) => typeof value === "bigint" ? value.toString() : value), '["1001","2002","3003"]', "Seed payload contains amounts only");
-  equal(JSON.stringify(seed.secondarySignerAddresses), '["0xdead","0x1b00"]', "Seed authenticates AMM funding and LP beneficiary consent in order");
-  equal(JSON.stringify(reseed.arguments, (_, value) => typeof value === "bigint" ? value.toString() : value), '["4004","5005","6006"]', "Reseed payload contains amounts only");
-
   const modules = {
     reflectionCore: "0xcafe" as const,
     testAssets: "0xbabe" as const,
@@ -345,8 +301,6 @@ test("liquidity and LP drafts match the finalized Move entries and ABI argument 
     [transfer, "0xdead::pool::transfer_lp_shares", '["0xabc123","707"]'],
     [claimAll, "0xdead::pool::claim_lp_rewards", '["8","0"]'],
     [checkpoint, "0xdead::pool::checkpoint_lp_rewards", "[]"],
-    [limits, "0xdead::pool::configure_liquidity_limits", '["808","909","2500"]'],
-    [faucetPause, "0xbabe::test_faucet::set_paused", "[true]"],
   ];
   for (const [draft, expectedFunction, expectedArguments] of encodedCases) {
     const encoded = encodeCedraEntryFunction(draft, modules);
@@ -354,25 +308,6 @@ test("liquidity and LP drafts match the finalized Move entries and ABI argument 
     equal(JSON.stringify(encoded.functionArguments), expectedArguments, `${draft.kind} encodes bigint arguments as exact decimal strings`);
   }
 
-  for (const [draft, expectedFunction, expectedSender, expectedArguments] of [
-    [coreOperator, "0xcafe::reflection_token::set_operational_admin", "0xcafe", "[]"],
-    [faucetOperator, "0xbabe::test_faucet::set_operational_admin", "0xbabe", "[]"],
-    [ammOperator, "0xdead::pool::set_operational_admin", "0xdead", "[]"],
-    [allOperators, "0xdead::pool::set_all_operational_admin", "0xcafe", "[]"],
-    [seed, "0xdead::pool::seed_liquidity", "0xcafe", '["1001","2002","3003"]'],
-    [reseed, "0xdead::pool::reseed_liquidity", "0xcafe", '["4004","5005","6006"]'],
-  ] as const) {
-    const encoded = encodeCedraMultiAgentEntryFunction(draft, modules);
-    equal(encoded.data.function, expectedFunction, "Multi-agent handoff qualifies the correct package publisher");
-    equal(encoded.senderAddress, expectedSender, "Multi-agent encoder derives the exact ABI primary signer");
-    equal(JSON.stringify(encoded.data.functionArguments), expectedArguments, "Multi-agent payload preserves the exact non-signer argument order");
-    equal(thrownBy(() => encodeCedraEntryFunction(draft, modules)) instanceof TypeError, true, "Single-signer encoder refuses a multi-agent handoff");
-  }
-  equal(
-    thrownBy(() => encodeCedraMultiAgentEntryFunction(add, modules)) instanceof TypeError,
-    true,
-    "Multi-agent encoder refuses a single-signer liquidity draft",
-  );
 });
 
 test("liquidity and LP drafts reject unsafe values before reaching a writer", async () => {
@@ -387,15 +322,8 @@ test("liquidity and LP drafts reject unsafe values before reaching a writer", as
   equal(thrownBy(() => client.createTransferLpSharesDraft("0xabc", 0n)) instanceof RangeError, true, "LP transfer rejects zero shares");
   equal(thrownBy(() => client.createLpRewardClaimDraft(0n, 0n)) instanceof RangeError, true, "LP claim rejects epoch zero");
   equal(thrownBy(() => client.createLpRewardClaimDraft(1n, -1n)) instanceof RangeError, true, "LP claim permits zero as claim-all but rejects negative amounts");
-  equal(thrownBy(() => client.createConfigureLiquidityLimitsDraft({ maxRfl: 1n, maxUsd: 1n, maxWithdrawalShareBps: 10_001n })) instanceof RangeError, true, "Liquidity withdrawal caps cannot exceed 100 percent");
-  equal(thrownBy(() => client.createOperationalAdminHandoffDraft("reflection-core", "0x0")) instanceof TypeError, true, "Operational handoff rejects the zero address");
-  equal(thrownBy(() => client.createOperationalAdminHandoffDraft("invalid" as never, "0xbed")) instanceof TypeError, true, "Operational handoff fails closed on an invalid runtime scope");
-  equal(thrownBy(() => client.createAllOperationalAdminHandoffDraft("0xbabe", "0x0babe", "0xbed")) instanceof TypeError, true, "Atomic handoff rejects canonically duplicate signers");
-  equal(thrownBy(() => client.createSeedLiquidityDraft("0xdead", "0xdead", { rflAmount: 1n, usdAmount: 1n, minLpShares: 0n })) instanceof TypeError, true, "Bootstrap requires distinct AMM and LP-beneficiary signers");
-  equal(thrownBy(() => client.createReseedLiquidityDraft("0xdead", "0xbeef", { rflAmount: 0n, usdAmount: 1n, minLpShares: 0n })) instanceof RangeError, true, "Reseed rejects a zero reserve contribution");
   equal(thrownBy(() => client.createFaucetClaimDraft("bogus" as never)) instanceof TypeError, true, "Faucet drafts reject an invalid runtime asset instead of falling through to tUSD");
   equal(thrownBy(() => client.createRewardClaimDraft(1n << 64n)) instanceof RangeError, true, "Reward claims reject values outside Move u64");
-  equal(thrownBy(() => client.createSetFaucetPausedDraft("false" as never)) instanceof TypeError, true, "Faucet pause drafts require a runtime boolean");
 
   const quote = await client.quoteSwap({
     direction: "sell",
@@ -430,8 +358,6 @@ test("liquidity and LP drafts reject unsafe values before reaching a writer", as
 
   const draft = client.createCheckpointLpRewardsDraft();
   await rejects(() => client.submit(draft), StateChangingCallsDisabledError);
-  const handoff = client.createOperationalAdminHandoffDraft("reflection-core", "0x0bed");
-  await rejects(() => client.submit(handoff), MultiAgentSubmissionRequiredError);
 });
 
 test("swap drafts bind finalized provenance, exact arithmetic, slippage, mutation, rounding, and expiry", async () => {
@@ -502,7 +428,7 @@ test("swap drafts bind finalized provenance, exact arithmetic, slippage, mutatio
   for (const [name, mutate] of [
     ["excess reflection fee rate", (quote: SwapQuote) => ({
       ...quote,
-      context: { ...quote.context, reflectionFeeBps: 101n },
+      context: { ...quote.context, reflectionFeeBps: 501n },
     })],
     ["wrong reflection fee", (quote: SwapQuote) => ({ ...quote, reflectionFee: quote.reflectionFee + 1n })],
     ["wrong AMM fee", (quote: SwapQuote) => ({ ...quote, ammFee: quote.ammFee + 1n })],
@@ -558,15 +484,16 @@ test("swap drafts bind finalized provenance, exact arithmetic, slippage, mutatio
   );
 });
 
-test("SDK wrapper enforces the Testnet reflection fee ceiling", () => {
+test("SDK wrapper enforces the immutable v0.2 reflection fee ceiling", () => {
   equal(reflectionFee(1_999n, 100n), 19n, "Reflection fee uses floor arithmetic");
+  equal(reflectionFee(10_000n, 500n), 500n, "Creation-time fees may use the full v0.2 range");
   let threw = false;
   try {
-    reflectionFee(1n, 101n);
+    reflectionFee(1n, 501n);
   } catch (error) {
     threw = error instanceof RangeError;
   }
-  equal(threw, true, "Fees over 100 bps must be rejected");
+  equal(threw, true, "Fees over 500 bps must be rejected");
 });
 
 test("release client is structurally build/simulate-only", () => {

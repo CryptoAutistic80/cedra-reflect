@@ -1,6 +1,6 @@
 [package]
 name = "TestAmm"
-version = "0.1.0"
+version = "0.2.0"
 upgrade_policy = "immutable"
 
 [dependencies]
@@ -12,8 +12,10 @@ TestAssets = { local = "../test-assets" }
 test_amm = "_"
 reflection_core = "_"
 test_assets = "_"
+bootstrap_lp = "_"
 
 [dev-addresses]
 test_amm = "0xdead"
 reflection_core = "0xcafe"
 test_assets = "0xbabe"
+bootstrap_lp = "0xa11ce"

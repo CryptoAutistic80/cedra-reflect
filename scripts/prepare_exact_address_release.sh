@@ -4,19 +4,18 @@ set -euo pipefail
 export LC_ALL=C
 
 usage() {
-  printf 'usage: %s CORE_ADDRESS ASSETS_ADDRESS AMM_ADDRESS OPERATIONS_ADDRESS BOOTSTRAP_LP_ADDRESS OUTPUT_DIRECTORY\n' "$0" >&2
+  printf 'usage: %s CORE_ADDRESS ASSETS_ADDRESS AMM_ADDRESS BOOTSTRAP_LP_ADDRESS OUTPUT_DIRECTORY\n' "$0" >&2
   printf 'optional: RELEASE_VERIFICATION_RECORD=/path/to/verification-record.json\n' >&2
   exit 64
 }
 
-[[ $# -eq 6 ]] || usage
+[[ $# -eq 5 ]] || usage
 
 core_address="$1"
 assets_address="$2"
 amm_address="$3"
-operations_address="$4"
-bootstrap_lp_address="$5"
-output_directory="$6"
+bootstrap_lp_address="$4"
+output_directory="$5"
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cedra_bin="${CEDRA_BIN:-/usr/bin/cedra}"
 source_digest_script="$repo_root/scripts/compute_release_source_digest.sh"
@@ -65,18 +64,16 @@ git_worktree_clean() {
 core_address="$(canonical_address "$core_address")"
 assets_address="$(canonical_address "$assets_address")"
 amm_address="$(canonical_address "$amm_address")"
-operations_address="$(canonical_address "$operations_address")"
 bootstrap_lp_address="$(canonical_address "$bootstrap_lp_address")"
 
 role_addresses_json="$(jq -cn \
   --arg core "$core_address" \
   --arg assets "$assets_address" \
   --arg amm "$amm_address" \
-  --arg operations "$operations_address" \
   --arg bootstrap "$bootstrap_lp_address" \
-  '{core_publisher:$core,assets_publisher:$assets,amm_publisher:$amm,operations:$operations,bootstrap_lp:$bootstrap}')"
-[[ "$(jq -r '[.[]] | unique | length' <<<"$role_addresses_json")" == 5 ]] || {
-  printf 'all five release-role addresses must be distinct\n' >&2
+  '{core_publisher:$core,assets_publisher:$assets,amm_publisher:$amm,bootstrap_lp:$bootstrap}')"
+[[ "$(jq -r '[.[]] | unique | length' <<<"$role_addresses_json")" == 4 ]] || {
+  printf 'all four release-role addresses must be distinct\n' >&2
   exit 65
 }
 
@@ -357,20 +354,20 @@ compile_package() {
 compile_package \
   reflection_core \
   "$repo_root/move/reflection-core" \
-  "reflection_core=$core_address,test_assets=$assets_address,test_amm=$amm_address" \
-  "$(jq -cn --arg core "$core_address" --arg assets "$assets_address" --arg amm "$amm_address" '{reflection_core:$core,test_assets:$assets,test_amm:$amm}')" \
+  "reflection_core=$core_address,test_assets=$assets_address,test_amm=$amm_address,bootstrap_lp=$bootstrap_lp_address" \
+  "$(jq -cn --arg core "$core_address" --arg assets "$assets_address" --arg amm "$amm_address" --arg bootstrap "$bootstrap_lp_address" '{reflection_core:$core,test_assets:$assets,test_amm:$amm,bootstrap_lp:$bootstrap}')" \
   "$core_address"
 compile_package \
   test_assets \
   "$repo_root/move/test-assets" \
-  "test_assets=$assets_address,reflection_core=$core_address,test_amm=$amm_address" \
-  "$(jq -cn --arg core "$core_address" --arg assets "$assets_address" --arg amm "$amm_address" '{reflection_core:$core,test_assets:$assets,test_amm:$amm}')" \
+  "test_assets=$assets_address,reflection_core=$core_address,test_amm=$amm_address,bootstrap_lp=$bootstrap_lp_address" \
+  "$(jq -cn --arg core "$core_address" --arg assets "$assets_address" --arg amm "$amm_address" --arg bootstrap "$bootstrap_lp_address" '{reflection_core:$core,test_assets:$assets,test_amm:$amm,bootstrap_lp:$bootstrap}')" \
   "$assets_address"
 compile_package \
   test_amm \
   "$repo_root/move/test-amm" \
-  "test_amm=$amm_address,reflection_core=$core_address,test_assets=$assets_address" \
-  "$(jq -cn --arg core "$core_address" --arg assets "$assets_address" --arg amm "$amm_address" '{reflection_core:$core,test_assets:$assets,test_amm:$amm}')" \
+  "test_amm=$amm_address,reflection_core=$core_address,test_assets=$assets_address,bootstrap_lp=$bootstrap_lp_address" \
+  "$(jq -cn --arg core "$core_address" --arg assets "$assets_address" --arg amm "$amm_address" --arg bootstrap "$bootstrap_lp_address" '{reflection_core:$core,test_assets:$assets,test_amm:$amm,bootstrap_lp:$bootstrap}')" \
   "$amm_address"
 
 application_commit_after="$(git -C "$repo_root" rev-parse --verify HEAD)"
@@ -460,12 +457,11 @@ if [[ -n "${PUBLIC_ROLE_CANDIDATE_FILE:-}" ]]; then
     core_publisher:.roles.core_publisher.address,
     assets_publisher:.roles.assets_publisher.address,
     amm_publisher:.roles.amm_publisher.address,
-    operations:.roles.operations.address,
     bootstrap_lp:.roles.bootstrap_lp.address
   }' "$public_role_candidate_file")"
   candidate_roles_json="$(jq -c 'with_entries(.value |= (ascii_downcase | sub("^0x0+"; "0x")))' <<<"$candidate_roles_json")"
   [[ "$candidate_roles_json" == "$role_addresses_json" ]] || {
-    printf 'public role candidate does not match all five requested release addresses\n' >&2
+    printf 'public role candidate does not match all four requested release addresses\n' >&2
     exit 71
   }
   mkdir -p "$output_directory/provenance"
@@ -484,7 +480,7 @@ fi
 
 approval_blockers=(
   "Testnet simulation evidence not recorded"
-  "two distinct human release approvals not recorded"
+  "single-operator detached release approval not recorded"
   "finalized on-chain package digest and immutable publication policy not observed"
 )
 if [[ "$working_tree_clean" != true ]]; then
@@ -494,7 +490,7 @@ if [[ "$verification_bound" != true ]]; then
   approval_blockers+=("clean full-verification record is not bound")
 fi
 if [[ "$public_role_candidate_bound" != true ]]; then
-  approval_blockers+=("validated five-role candidate is not bound")
+  approval_blockers+=("validated four-role candidate is not bound")
 fi
 approval_blockers_json="$(printf '%s\n' "${approval_blockers[@]}" | jq -Rsc 'split("\n") | map(select(length > 0))')"
 
@@ -514,6 +510,7 @@ jq -n \
   --arg core_address "$core_address" \
   --arg assets_address "$assets_address" \
   --arg amm_address "$amm_address" \
+  --arg bootstrap_lp_address "$bootstrap_lp_address" \
   --argjson roles "$role_addresses_json" \
   --argjson verification_binding "$verification_binding_json" \
   --argjson public_role_candidate_binding "$public_role_candidate_binding_json" \
@@ -544,7 +541,8 @@ jq -n \
     named_addresses: {
       reflection_core: $core_address,
       test_assets: $assets_address,
-      test_amm: $amm_address
+      test_amm: $amm_address,
+      bootstrap_lp: $bootstrap_lp_address
     },
     roles: $roles,
     verification_binding: $verification_binding,

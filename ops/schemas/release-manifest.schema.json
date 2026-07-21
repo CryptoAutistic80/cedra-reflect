@@ -9,7 +9,7 @@
     "deployment_id", "release", "event_schema_version", "no_value_notice",
     "framework_commit", "application_commit", "roles", "provenance", "approval_policy",
     "external_execution_boundary", "execution_order", "packages", "transactions", "contract_configuration",
-    "metadata", "operational_authority", "bootstrap_liquidity", "objects", "initialization",
+    "metadata", "bootstrap_liquidity", "objects", "initialization",
     "initial_reconciliation_snapshot", "hook_probe", "review"
   ],
   "properties": {
@@ -20,8 +20,8 @@
     "chain_id": { "const": "2" },
     "api_url": { "const": "https://testnet.cedra.dev/v1" },
     "deployment_id": { "type": "string", "pattern": "^[A-Za-z0-9._-]{1,80}$" },
-    "release": { "type": "string", "pattern": "^testnet-v[0-9]+\\.[0-9]+\\.[0-9]+([+-][A-Za-z0-9.-]+)?$" },
-    "event_schema_version": { "const": 1 },
+    "release": { "const": "testnet-v0.2.0" },
+    "event_schema_version": { "const": 2 },
     "no_value_notice": { "const": "TESTNET ASSET — NO MONETARY VALUE — STATE AND ADDRESSES MAY CHANGE" },
     "framework_commit": { "$ref": "#/$defs/commit" },
     "application_commit": { "$ref": "#/$defs/commit" },
@@ -45,10 +45,10 @@
       "additionalProperties": false,
       "required": ["signature_namespace", "trusted_allowed_signers_sha256", "required_distinct_identities", "required_distinct_signing_keys"],
       "properties": {
-        "signature_namespace": { "const": "cedra-reflect-testnet-release-v1" },
+        "signature_namespace": { "const": "cedra-reflect-testnet-release-v2" },
         "trusted_allowed_signers_sha256": { "$ref": "#/$defs/sha256" },
-        "required_distinct_identities": { "const": 2 },
-        "required_distinct_signing_keys": { "const": 2 }
+        "required_distinct_identities": { "const": 1 },
+        "required_distinct_signing_keys": { "const": 1 }
       }
     },
     "external_execution_boundary": {
@@ -64,7 +64,7 @@
       }
     },
     "execution_order": {
-      "const": ["core_publish", "core_initialize", "assets_publish", "amm_publish", "faucet_initialize", "amm_tusd_claim", "pool_initialize", "atomic_operational_handoff", "pool_seed"]
+      "const": ["core_publish", "core_initialize", "assets_publish", "amm_publish", "pool_launch"]
     },
     "packages": {
       "type": "object",
@@ -79,29 +79,28 @@
     "transactions": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["core_publish", "assets_publish", "amm_publish", "core_initialize", "faucet_initialize", "amm_tusd_claim", "pool_initialize", "atomic_operational_handoff", "pool_seed"],
+      "required": ["core_publish", "core_initialize", "assets_publish", "amm_publish", "pool_launch"],
       "properties": {
         "core_publish": { "$ref": "#/$defs/transaction_binding" },
         "assets_publish": { "$ref": "#/$defs/transaction_binding" },
-        "amm_publish": { "$ref": "#/$defs/transaction_binding" },
         "core_initialize": { "$ref": "#/$defs/transaction_binding" },
-        "faucet_initialize": { "$ref": "#/$defs/transaction_binding" },
-        "amm_tusd_claim": { "$ref": "#/$defs/transaction_binding" },
-        "pool_initialize": { "$ref": "#/$defs/transaction_binding" },
-        "atomic_operational_handoff": { "$ref": "#/$defs/transaction_binding" },
-        "pool_seed": { "$ref": "#/$defs/transaction_binding" }
+        "amm_publish": { "$ref": "#/$defs/transaction_binding" },
+        "pool_launch": { "$ref": "#/$defs/transaction_binding" }
       }
     },
     "contract_configuration": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["trfl_decimals", "trfl_fixed_supply_base_units", "initial_reflection_fee_bps", "maximum_reflection_fee_bps", "automatic_materialization", "supported_custody_adapters", "arbitrary_external_vaults_supported"],
+      "required": ["trfl_decimals", "trfl_fixed_supply_base_units", "initial_reflection_fee_bps", "maximum_reflection_fee_bps", "automatic_materialization", "lifecycle", "ownerless", "privileged_address", "supported_custody_adapters", "arbitrary_external_vaults_supported"],
       "properties": {
         "trfl_decimals": { "const": 6 },
         "trfl_fixed_supply_base_units": { "const": "1000000000000000" },
-        "initial_reflection_fee_bps": { "type": "integer", "minimum": 0, "maximum": 100 },
-        "maximum_reflection_fee_bps": { "const": 100 },
-        "automatic_materialization": { "const": false },
+        "initial_reflection_fee_bps": { "const": 100 },
+        "maximum_reflection_fee_bps": { "const": 500 },
+        "automatic_materialization": { "const": true },
+        "lifecycle": { "const": "LIVE" },
+        "ownerless": { "const": true },
+        "privileged_address": { "type": "null" },
         "supported_custody_adapters": { "const": 1 },
         "arbitrary_external_vaults_supported": { "const": false }
       }
@@ -118,26 +117,16 @@
         "project_url": { "type": "string", "pattern": "^https://" }
       }
     },
-    "operational_authority": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["address", "atomic_handoff_transaction", "reconciled_ledger_version"],
-      "properties": {
-        "address": { "$ref": "#/$defs/address" },
-        "atomic_handoff_transaction": { "$ref": "#/$defs/transaction_hash" },
-        "reconciled_ledger_version": { "$ref": "#/$defs/decimal" }
-      }
-    },
     "bootstrap_liquidity": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["beneficiary", "rfl_amount", "usd_amount", "minimum_lp_shares", "seed_transaction"],
+      "required": ["beneficiary", "rfl_amount", "usd_amount", "initial_lp_shares", "launch_transaction"],
       "properties": {
         "beneficiary": { "$ref": "#/$defs/address" },
-        "rfl_amount": { "$ref": "#/$defs/positive_decimal" },
-        "usd_amount": { "$ref": "#/$defs/positive_decimal" },
-        "minimum_lp_shares": { "$ref": "#/$defs/positive_decimal" },
-        "seed_transaction": { "$ref": "#/$defs/transaction_hash" }
+        "rfl_amount": { "const": "500000000" },
+        "usd_amount": { "const": "500000000" },
+        "initial_lp_shares": { "const": "500000000" },
+        "launch_transaction": { "$ref": "#/$defs/transaction_hash" }
       }
     },
     "objects": {
@@ -162,12 +151,11 @@
     "initialization": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["automatic_materialization", "core_transaction", "faucet_transaction", "pool_transaction", "finalized_ledger_version"],
+      "required": ["automatic_materialization", "core_transaction", "launch_transaction", "finalized_ledger_version"],
       "properties": {
-        "automatic_materialization": { "const": false },
+        "automatic_materialization": { "const": true },
         "core_transaction": { "$ref": "#/$defs/transaction_hash" },
-        "faucet_transaction": { "$ref": "#/$defs/transaction_hash" },
-        "pool_transaction": { "$ref": "#/$defs/transaction_hash" },
+        "launch_transaction": { "$ref": "#/$defs/transaction_hash" },
         "finalized_ledger_version": { "$ref": "#/$defs/decimal" }
       }
     },
@@ -179,7 +167,7 @@
       "properties": {
         "file": { "$ref": "#/$defs/local_path" },
         "sha256": { "$ref": "#/$defs/sha256" },
-        "mode": { "const": "claim-backed" }
+        "mode": { "const": "automatic-materialisation" }
       }
     },
     "review": {
@@ -224,12 +212,11 @@
     "roles": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["core_publisher", "assets_publisher", "amm_publisher", "operations", "bootstrap_lp"],
+      "required": ["core_publisher", "assets_publisher", "amm_publisher", "bootstrap_lp"],
       "properties": {
         "core_publisher": { "$ref": "#/$defs/address" },
         "assets_publisher": { "$ref": "#/$defs/address" },
         "amm_publisher": { "$ref": "#/$defs/address" },
-        "operations": { "$ref": "#/$defs/address" },
         "bootstrap_lp": { "$ref": "#/$defs/address" }
       }
     },

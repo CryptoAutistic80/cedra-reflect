@@ -6,10 +6,8 @@ import {
   CEDRA_COIN,
   Ed25519PublicKey,
   MoveVector,
-  TypeTagU128,
   TypeTagU64,
   TypeTagVector,
-  U128,
   U64,
   parseTypeTag,
   type EntryFunctionABI,
@@ -43,18 +41,13 @@ export const RELEASE_OPERATION_KEYS = [
   "core_initialize",
   "assets_publish",
   "amm_publish",
-  "faucet_initialize",
-  "amm_tusd_claim",
-  "pool_initialize",
-  "atomic_operational_handoff",
-  "pool_seed",
+  "pool_launch",
 ] as const;
 
 export const RELEASE_ROLE_KEYS = [
   "core_publisher",
   "assets_publisher",
   "amm_publisher",
-  "operations",
   "bootstrap_lp",
 ] as const;
 
@@ -86,7 +79,6 @@ const PROFILE_NAMES: Readonly<Record<ReleaseRoleKey, string>> = {
   core_publisher: "cedra-reflect-core-publisher",
   assets_publisher: "cedra-reflect-assets-publisher",
   amm_publisher: "cedra-reflect-amm-publisher",
-  operations: "cedra-reflect-operations",
   bootstrap_lp: "cedra-reflect-bootstrap-lp",
 };
 
@@ -101,12 +93,6 @@ export interface GasBudget {
   readonly approved_max_gas_amount: string;
   readonly approved_max_gas_unit_price: string;
   readonly approved_max_total_fee_base_units: string;
-}
-
-export interface SeedAmounts {
-  readonly rfl_amount: string;
-  readonly usd_amount: string;
-  readonly min_lp_shares: string;
 }
 
 export interface TransactionBuildRequest {
@@ -125,7 +111,6 @@ export interface TransactionBuildRequest {
   readonly profile_public_keys: PublicKeyMap;
   readonly transaction_controls: TransactionControls;
   readonly gas_budget: GasBudget;
-  readonly seed_amounts: SeedAmounts | null;
 }
 
 export interface RepositoryAssemblyState {
@@ -191,11 +176,7 @@ interface TransactionEvidence {
 type TransactionKind =
   | "package_publish"
   | "core_initialize"
-  | "faucet_initialize"
-  | "pool_initialize"
-  | "faucet_claim"
-  | "operational_handoff"
-  | "pool_seed";
+  | "pool_launch";
 
 interface PublishBinding {
   readonly package_key: "reflection_core" | "test_assets" | "test_amm";
@@ -300,7 +281,7 @@ function parsePublicKeys(value: unknown, label: string): PublicKeyMap {
     result[role] = stringValue(object[role], `${label}.${role}`, PUBLIC_KEY_PATTERN) as `ed25519-pub-0x${string}`;
   }
   if (new Set(Object.values(result)).size !== RELEASE_ROLE_KEYS.length) {
-    fail(`${label} must contain five distinct Ed25519 public keys`);
+    fail(`${label} must contain four distinct Ed25519 public keys`);
   }
   return result;
 }
@@ -363,7 +344,6 @@ function parseBuildRequest(value: unknown): TransactionBuildRequest {
     "profile_public_keys",
     "transaction_controls",
     "gas_budget",
-    "seed_amounts",
   ], "transaction build request");
   if (request.schema_version !== 1 || request.evidence_scope !== "testnet-transaction-build-request") {
     fail("transaction build request schema or evidence scope mismatch");
@@ -410,18 +390,6 @@ function parseBuildRequest(value: unknown): TransactionBuildRequest {
     fail("approved gas fields must exactly equal the explicit transaction maximums and their worst-case product");
   }
 
-  let seedAmounts: SeedAmounts | null = null;
-  if (operation === "pool_seed") {
-    const seed = exactObject(request.seed_amounts, ["rfl_amount", "usd_amount", "min_lp_shares"], "seed_amounts");
-    seedAmounts = {
-      rfl_amount: decimalValue(seed.rfl_amount, "seed_amounts.rfl_amount", MAX_U64, true),
-      usd_amount: decimalValue(seed.usd_amount, "seed_amounts.usd_amount", MAX_U64, true),
-      min_lp_shares: decimalValue(seed.min_lp_shares, "seed_amounts.min_lp_shares", MAX_U128, true),
-    };
-  } else if (request.seed_amounts !== null) {
-    fail("seed_amounts must be null for every operation except pool_seed");
-  }
-
   return {
     schema_version: 1,
     evidence_scope: "testnet-transaction-build-request",
@@ -438,7 +406,6 @@ function parseBuildRequest(value: unknown): TransactionBuildRequest {
     profile_public_keys: parsePublicKeys(request.profile_public_keys, "profile_public_keys"),
     transaction_controls: controls,
     gas_budget: budget,
-    seed_amounts: seedAmounts,
   };
 }
 
@@ -734,77 +701,23 @@ function operationShape(context: ValidatedAssemblyContext): {
     case "amm_publish":
       return publishOperation(context, "test_amm", "amm_publisher");
     case "core_initialize": {
-      const abi = localAbi(1, noParameters);
+      const abi = localAbi(1, [new TypeTagU64()]);
       const functionName = functionId(`${roles.core_publisher}::reflection_token::initialize`);
       return {
         transactionKind: "core_initialize", senderRole: "core_publisher", secondarySignerRoles: [], abi,
-        data: { function: functionName, typeArguments: [], functionArguments: [], abi },
-        payload: { type: "entry_function_payload", function: functionName, type_arguments: [], arguments: noArguments },
+        data: { function: functionName, typeArguments: [], functionArguments: [new U64(100n)], abi },
+        payload: { type: "entry_function_payload", function: functionName, type_arguments: [], arguments: ["100"] },
         publishBinding: null,
       };
     }
-    case "faucet_initialize": {
-      const abi = localAbi(2, noParameters);
-      const functionName = functionId(`${roles.assets_publisher}::test_faucet::initialize`);
-      return {
-        transactionKind: "faucet_initialize", senderRole: "core_publisher", secondarySignerRoles: ["assets_publisher"], abi,
-        data: { function: functionName, typeArguments: [], functionArguments: [], abi },
-        payload: { type: "entry_function_payload", function: functionName, type_arguments: [], arguments: noArguments },
-        publishBinding: null,
-      };
-    }
-    case "amm_tusd_claim": {
-      const abi = localAbi(1, noParameters);
-      const functionName = functionId(`${roles.assets_publisher}::test_faucet::claim_tusd`);
-      return {
-        transactionKind: "faucet_claim", senderRole: "amm_publisher", secondarySignerRoles: [], abi,
-        data: { function: functionName, typeArguments: [], functionArguments: [], abi },
-        payload: { type: "entry_function_payload", function: functionName, type_arguments: [], arguments: noArguments },
-        publishBinding: null,
-      };
-    }
-    case "pool_initialize": {
-      const abi = localAbi(3, noParameters);
-      const functionName = functionId(`${roles.amm_publisher}::pool::initialize`);
-      return {
-        transactionKind: "pool_initialize", senderRole: "core_publisher", secondarySignerRoles: ["assets_publisher", "amm_publisher"], abi,
-        data: { function: functionName, typeArguments: [], functionArguments: [], abi },
-        payload: { type: "entry_function_payload", function: functionName, type_arguments: [], arguments: noArguments },
-        publishBinding: null,
-      };
-    }
-    case "atomic_operational_handoff": {
+    case "pool_launch": {
       const abi = localAbi(4, noParameters);
-      const functionName = functionId(`${roles.amm_publisher}::pool::set_all_operational_admin`);
+      const functionName = functionId(`${roles.amm_publisher}::pool::launch`);
       return {
-        transactionKind: "operational_handoff", senderRole: "core_publisher",
-        secondarySignerRoles: ["assets_publisher", "amm_publisher", "operations"], abi,
+        transactionKind: "pool_launch", senderRole: "core_publisher",
+        secondarySignerRoles: ["assets_publisher", "amm_publisher", "bootstrap_lp"], abi,
         data: { function: functionName, typeArguments: [], functionArguments: [], abi },
         payload: { type: "entry_function_payload", function: functionName, type_arguments: [], arguments: noArguments },
-        publishBinding: null,
-      };
-    }
-    case "pool_seed": {
-      const seed = context.request.seed_amounts;
-      if (seed === null) {
-        fail("pool_seed requires seed_amounts");
-      }
-      const abi = localAbi(3, [new TypeTagU64(), new TypeTagU64(), new TypeTagU128()]);
-      const functionName = functionId(`${roles.amm_publisher}::pool::seed_liquidity`);
-      const argumentsEvidence = [seed.rfl_amount, seed.usd_amount, seed.min_lp_shares] as const;
-      return {
-        transactionKind: "pool_seed", senderRole: "core_publisher", secondarySignerRoles: ["amm_publisher", "bootstrap_lp"], abi,
-        data: {
-          function: functionName,
-          typeArguments: [],
-          functionArguments: [
-            new U64(BigInt(seed.rfl_amount)),
-            new U64(BigInt(seed.usd_amount)),
-            new U128(BigInt(seed.min_lp_shares)),
-          ],
-          abi,
-        },
-        payload: { type: "entry_function_payload", function: functionName, type_arguments: [], arguments: argumentsEvidence },
         publishBinding: null,
       };
     }

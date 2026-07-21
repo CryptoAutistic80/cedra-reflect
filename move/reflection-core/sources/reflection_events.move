@@ -4,7 +4,7 @@ module reflection_core::reflection_events {
     use cedra_framework::event;
 
     #[event]
-    struct ProtocolInitialized has drop, store {
+    struct TokenCreated has drop, store {
         version: u64,
         release_major: u64,
         release_minor: u64,
@@ -14,9 +14,23 @@ module reflection_core::reflection_events {
         metadata: address,
         reward_vault: address,
         distribution_vault: address,
-        automatic_materialization: bool,
-        initial_fee_bps: u64,
-        protocol_exclusion_slots: u64,
+        reflection_fee_bps: u64,
+        total_supply: u64,
+        decimals: u8,
+    }
+
+    #[event]
+    struct CoreLaunchSealed has drop, store {
+        reflection_fee_bps: u64,
+        metadata: address,
+        reward_vault: address,
+        distribution_vault: address,
+        pool_store: address,
+    }
+
+    #[event]
+    struct CorePoolClosed has drop, store {
+        pool_store: address,
     }
 
     #[event]
@@ -71,6 +85,7 @@ module reflection_core::reflection_events {
         account: address,
         amount: u64,
         total_claimed: u256,
+        trigger: u8,
     }
 
     #[event]
@@ -103,15 +118,6 @@ module reflection_core::reflection_events {
     }
 
     #[event]
-    struct CustodyEpochRouteOpened has drop, store {
-        adapter_id: u64,
-        epoch: u64,
-        reserve_store: address,
-        lp_reward_vault: address,
-        retired_residue_magnified: u256,
-    }
-
-    #[event]
     struct CustodySharesChanged has drop, store {
         added: bool,
         amount: u64,
@@ -129,32 +135,7 @@ module reflection_core::reflection_events {
     }
 
     #[event]
-    struct FeeConfigurationChanged has drop, store {
-        old_fee_bps: u64,
-        new_fee_bps: u64,
-    }
-
-    #[event]
-    struct PauseStateChanged has drop, store {
-        swaps_paused: bool,
-        claims_paused: bool,
-    }
-
-    #[event]
-    struct OperationalAdminChanged has drop, store {
-        old_operational_admin: address,
-        new_operational_admin: address,
-    }
-
-    #[event]
     struct ProtocolPrimaryStoreExcluded has drop, store {
-        account: address,
-        store: address,
-        remaining_slots: u64,
-    }
-
-    #[event]
-    struct OperationalPrimaryStoreExcluded has drop, store {
         account: address,
         store: address,
     }
@@ -162,7 +143,7 @@ module reflection_core::reflection_events {
     // Event constructors are package-only. Exposing them publicly would let an
     // unrelated module emit authentic-looking protocol events without making
     // the corresponding state transition.
-    public(package) fun protocol_initialized(
+    public(package) fun token_created(
         version: u64,
         release_major: u64,
         release_minor: u64,
@@ -172,11 +153,11 @@ module reflection_core::reflection_events {
         metadata: address,
         reward_vault: address,
         distribution_vault: address,
-        automatic_materialization: bool,
-        initial_fee_bps: u64,
-        protocol_exclusion_slots: u64,
+        reflection_fee_bps: u64,
+        total_supply: u64,
+        decimals: u8,
     ) {
-        event::emit(ProtocolInitialized {
+        event::emit(TokenCreated {
             version,
             release_major,
             release_minor,
@@ -186,10 +167,28 @@ module reflection_core::reflection_events {
             metadata,
             reward_vault,
             distribution_vault,
-            automatic_materialization,
-            initial_fee_bps,
-            protocol_exclusion_slots,
+            reflection_fee_bps,
+            total_supply,
+            decimals,
         });
+    }
+    public(package) fun core_launch_sealed(
+        reflection_fee_bps: u64,
+        metadata: address,
+        reward_vault: address,
+        distribution_vault: address,
+        pool_store: address,
+    ) {
+        event::emit(CoreLaunchSealed {
+            reflection_fee_bps,
+            metadata,
+            reward_vault,
+            distribution_vault,
+            pool_store,
+        });
+    }
+    public(package) fun core_pool_closed(pool_store: address) {
+        event::emit(CorePoolClosed { pool_store });
     }
     public(package) fun faucet_grant(recipient: address, amount: u64, operator: address) { event::emit(FaucetGrant { recipient, amount, operator }); }
     public(package) fun wallet_transfer(from: address, to: address, amount: u64) { event::emit(WalletTransfer { from, to, amount }); }
@@ -205,7 +204,7 @@ module reflection_core::reflection_events {
         event::emit(ReflectionFeeCollected { account, gross_amount, fee_amount, fee_bps, kind });
     }
     public(package) fun index_advanced(old_index: u256, new_index: u256, remainder: u256, fee_amount: u64, eligible_supply: u128) { event::emit(ReflectionIndexAdvanced { old_index, new_index, remainder, fee_amount, eligible_supply }); }
-    public(package) fun rewards_materialized(account: address, amount: u64, total_claimed: u256) { event::emit(RewardsMaterialized { account, amount, total_claimed }); }
+    public(package) fun rewards_materialized(account: address, amount: u64, total_claimed: u256, trigger: u8) { event::emit(RewardsMaterialized { account, amount, total_claimed, trigger }); }
     public(package) fun rewards_claimed(account: address, amount: u64, total_claimed: u256) { event::emit(RewardsClaimed { account, amount, total_claimed }); }
     public(package) fun position_created(account: address) { event::emit(PositionCreated { account }); }
     public(package) fun wallet_registered(
@@ -230,20 +229,6 @@ module reflection_core::reflection_events {
             lp_reward_vault,
         });
     }
-    public(package) fun custody_epoch_route_opened(
-        epoch: u64,
-        reserve_store: address,
-        lp_reward_vault: address,
-        retired_residue_magnified: u256,
-    ) {
-        event::emit(CustodyEpochRouteOpened {
-            adapter_id: 1,
-            epoch,
-            reserve_store,
-            lp_reward_vault,
-            retired_residue_magnified,
-        });
-    }
     public(package) fun custody_shares_changed(added: bool, amount: u64, custody_shares: u128, global_shares: u128) {
         event::emit(CustodySharesChanged { added, amount, custody_shares, global_shares });
     }
@@ -256,19 +241,10 @@ module reflection_core::reflection_events {
     ) {
         event::emit(CustodyRewardsRouted { reserve_store, lp_reward_vault, epoch, amount, total_routed });
     }
-    public(package) fun fee_changed(old_fee_bps: u64, new_fee_bps: u64) { event::emit(FeeConfigurationChanged { old_fee_bps, new_fee_bps }); }
-    public(package) fun pause_changed(swaps_paused: bool, claims_paused: bool) { event::emit(PauseStateChanged { swaps_paused, claims_paused }); }
-    public(package) fun operational_admin_changed(old_operational_admin: address, new_operational_admin: address) {
-        event::emit(OperationalAdminChanged { old_operational_admin, new_operational_admin });
-    }
     public(package) fun protocol_primary_store_excluded(
         account: address,
         store: address,
-        remaining_slots: u64,
     ) {
-        event::emit(ProtocolPrimaryStoreExcluded { account, store, remaining_slots });
-    }
-    public(package) fun operational_primary_store_excluded(account: address, store: address) {
-        event::emit(OperationalPrimaryStoreExcluded { account, store });
+        event::emit(ProtocolPrimaryStoreExcluded { account, store });
     }
 }

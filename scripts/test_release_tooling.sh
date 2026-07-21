@@ -300,7 +300,7 @@ PY
 import fs from "node:fs";
 import { Ed25519PublicKey } from "@cedra-labs/ts-sdk";
 const output = process.argv[2];
-const roles = ["core_publisher","assets_publisher","amm_publisher","operations","bootstrap_lp"];
+const roles = ["core_publisher","assets_publisher","amm_publisher","bootstrap_lp"];
 const profiles = {};
 for (let index = 0; index < roles.length; index += 1) {
   const keyHex = `0x${(index + 1).toString(16).padStart(2, "0").repeat(32)}`;
@@ -326,12 +326,11 @@ base = root / "base"
 provenance = base / "provenance"
 provenance.mkdir(parents=True)
 
-roles = ("core_publisher", "assets_publisher", "amm_publisher", "operations", "bootstrap_lp")
+roles = ("core_publisher", "assets_publisher", "amm_publisher", "bootstrap_lp")
 profile_names = {
     "core_publisher": "cedra-reflect-core-publisher",
     "assets_publisher": "cedra-reflect-assets-publisher",
     "amm_publisher": "cedra-reflect-amm-publisher",
-    "operations": "cedra-reflect-operations",
     "bootstrap_lp": "cedra-reflect-bootstrap-lp",
 }
 addresses = {role: "0x" + (public[role]["account"].lstrip("0") or "0") for role in roles}
@@ -470,7 +469,12 @@ local_build = {
 }
 write_json(provenance / "local-release-build.json", local_build)
 model_gate = {
-    "schema": "cedra-reflection-model-gate/v1",
+    "schema": "cedra-reflection-model-gate/v2",
+    "release": "testnet-v0.2.0-ownerless",
+    "materialization_mode": "automatic-interaction",
+    "automatic_materialization": True,
+    "lifecycle": "LIVE",
+    "pool_pending_rewards": 0,
     "requested_successful_operations": 1000000,
     "successful": 1000000,
     "rejected": 1,
@@ -513,6 +517,7 @@ named = {
     "reflection_core": addresses["core_publisher"],
     "test_assets": addresses["assets_publisher"],
     "test_amm": addresses["amm_publisher"],
+    "bootstrap_lp": addresses["bootstrap_lp"],
 }
 package_definitions = {
     "reflection_core": ("ReflectionCore", "Reflection.mv"),
@@ -803,12 +808,12 @@ else:
     raise AssertionError("hidden fee_payer_address was accepted")
 PY
 
-# Generate five public-only SDK fixtures and prove a mismatched account fails.
+# Generate four public-only SDK fixtures and prove a mismatched account fails.
 "$node_bin" --input-type=module - "$test_root/public-profile.json" <<'JS'
 import fs from "node:fs";
 import { Ed25519PublicKey } from "@cedra-labs/ts-sdk";
 const output = process.argv[2];
-const roles = ["core_publisher","assets_publisher","amm_publisher","operations","bootstrap_lp"];
+const roles = ["core_publisher","assets_publisher","amm_publisher","bootstrap_lp"];
 const profiles = {};
 for (let index = 0; index < roles.length; index += 1) {
   const keyHex = `0x${(index + 1).toString(16).padStart(2, "0").repeat(32)}`;
@@ -873,7 +878,7 @@ except module.EvidenceError:
 else:
     raise AssertionError("nonzero simulation signature was accepted")
 
-secondary_roles = ["assets_publisher", "amm_publisher"]
+secondary_roles = ["assets_publisher", "amm_publisher", "bootstrap_lp"]
 multi_tx = {
     "sender": profiles["core_publisher"]["address"],
     "secondary_signers": [profiles[role]["address"] for role in secondary_roles],
@@ -896,32 +901,34 @@ else:
     raise AssertionError("wrong ordered secondary simulation key was accepted")
 PY
 
-# Exercise real OpenSSH detached signatures, including the regression where two
-# allowed identities point at the same key.
-namespace=cedra-reflect-testnet-release-v1
+# Exercise a real OpenSSH detached signature for the single Testnet operator.
+namespace=cedra-reflect-testnet-release-v2
 printf '{"decision":"test-only"}\n' >"$test_root/approval-statement.json"
 ssh-keygen -q -t ed25519 -N '' -f "$test_root/key-1"
-ssh-keygen -q -t ed25519 -N '' -f "$test_root/key-2"
 ssh-keygen -Y sign -q -f "$test_root/key-1" -n "$namespace" "$test_root/approval-statement.json" >/dev/null 2>&1
-mv "$test_root/approval-statement.json.sig" "$test_root/approver-1.sig"
-ssh-keygen -Y sign -q -f "$test_root/key-2" -n "$namespace" "$test_root/approval-statement.json" >/dev/null 2>&1
-mv "$test_root/approval-statement.json.sig" "$test_root/approver-2.sig"
-printf 'approver-1 %s\napprover-2 %s\n' \
-  "$(awk '{print $1" "$2}' "$test_root/key-1.pub")" \
-  "$(awk '{print $1" "$2}' "$test_root/key-2.pub")" >"$test_root/allowed-signers"
+mv "$test_root/approval-statement.json.sig" "$test_root/operator.sig"
+printf 'operator %s\n' \
+  "$(awk '{print $1" "$2}' "$test_root/key-1.pub")" >"$test_root/allowed-signers"
 fingerprint_1="$(ssh-keygen -lf "$test_root/key-1.pub" -E sha256 | awk '{print $2}')"
-fingerprint_2="$(ssh-keygen -lf "$test_root/key-2.pub" -E sha256 | awk '{print $2}')"
 jq -n \
   --arg namespace "$namespace" \
   --arg statement_sha "$(sha256sum "$test_root/approval-statement.json" | cut -d ' ' -f 1)" \
   --arg trust_sha "$(sha256sum "$test_root/allowed-signers" | cut -d ' ' -f 1)" \
   --arg fingerprint_1 "$fingerprint_1" \
-  --arg fingerprint_2 "$fingerprint_2" \
-  --arg signature_1 "$(sha256sum "$test_root/approver-1.sig" | cut -d ' ' -f 1)" \
-  --arg signature_2 "$(sha256sum "$test_root/approver-2.sig" | cut -d ' ' -f 1)" \
-  '{signature_namespace:$namespace,statement_file:"approval-statement.json",statement_sha256:$statement_sha,trusted_allowed_signers_sha256:$trust_sha,approvals:[{identity:"approver-1",key_fingerprint:$fingerprint_1,signature_file:"approver-1.sig",signature_sha256:$signature_1},{identity:"approver-2",key_fingerprint:$fingerprint_2,signature_file:"approver-2.sig",signature_sha256:$signature_2}]}' \
+  --arg signature_1 "$(sha256sum "$test_root/operator.sig" | cut -d ' ' -f 1)" \
+  '{signature_namespace:$namespace,statement_file:"approval-statement.json",statement_sha256:$statement_sha,trusted_allowed_signers_sha256:$trust_sha,approvals:[{identity:"operator",key_fingerprint:$fingerprint_1,signature_file:"operator.sig",signature_sha256:$signature_1}]}' \
   >"$test_root/approval-envelope.json"
 bash "$repo_root/scripts/verify_detached_ssh_signatures.sh" "$test_root/approval-envelope.json" "$test_root/allowed-signers" >/dev/null
+
+# The Testnet policy is exactly one detached operator approval, not an
+# open-ended threshold. An envelope with a second approval fails closed.
+jq '.approvals += [.approvals[0]]' \
+  "$test_root/approval-envelope.json" >"$test_root/approval-envelope-two-operators.json"
+if bash "$repo_root/scripts/verify_detached_ssh_signatures.sh" \
+  "$test_root/approval-envelope-two-operators.json" "$test_root/allowed-signers" >/dev/null 2>&1; then
+  printf 'two-approval envelope was accepted by the single-operator Testnet policy\n' >&2
+  exit 1
+fi
 
 # Exported functions, a hostile PATH, and BASH_ENV must not replace any
 # verifier dependency. The genuine envelope still verifies and a forged
@@ -946,8 +953,7 @@ BASH_ENV="$test_root/malicious-bash-env" PATH="$malicious_path" \
   /usr/bin/bash "$repo_root/scripts/verify_detached_ssh_signatures.sh" \
   "$test_root/approval-envelope.json" "$test_root/allowed-signers" >/dev/null
 cp /etc/hosts "$test_root/forged-approval/approval-statement.json"
-cp /etc/passwd "$test_root/forged-approval/approver-1.sig"
-cp /etc/passwd "$test_root/forged-approval/approver-2.sig"
+cp /etc/passwd "$test_root/forged-approval/operator.sig"
 cp /etc/hosts "$test_root/forged-approval/allowed-signers"
 printf '{}\n' >"$test_root/forged-approval/approval-envelope.json"
 if BASH_ENV="$test_root/malicious-bash-env" PATH="$malicious_path" \
@@ -974,21 +980,6 @@ for entrypoint in \
     exit 1
   fi
 done
-
-ssh-keygen -Y sign -q -f "$test_root/key-1" -n "$namespace" "$test_root/approval-statement.json" >/dev/null 2>&1
-mv "$test_root/approval-statement.json.sig" "$test_root/approver-2-same-key.sig"
-printf 'approver-1 %s\napprover-2 %s\n' \
-  "$(awk '{print $1" "$2}' "$test_root/key-1.pub")" \
-  "$(awk '{print $1" "$2}' "$test_root/key-1.pub")" >"$test_root/allowed-signers-same-key"
-jq \
-  --arg trust_sha "$(sha256sum "$test_root/allowed-signers-same-key" | cut -d ' ' -f 1)" \
-  --arg signature_2 "$(sha256sum "$test_root/approver-2-same-key.sig" | cut -d ' ' -f 1)" \
-  '.trusted_allowed_signers_sha256=$trust_sha | .approvals[1].signature_file="approver-2-same-key.sig" | .approvals[1].signature_sha256=$signature_2' \
-  "$test_root/approval-envelope.json" >"$test_root/approval-envelope-same-key.json"
-if bash "$repo_root/scripts/verify_detached_ssh_signatures.sh" "$test_root/approval-envelope-same-key.json" "$test_root/allowed-signers-same-key" >/dev/null 2>&1; then
-  printf 'two identities backed by one OpenSSH key were accepted\n' >&2
-  exit 1
-fi
 
 # The production path has no ambient NODE_BIN escape hatch. A shell-only
 # preflight authenticates runtime, compiler, emitted JS, SDK, and all loaded
