@@ -19,12 +19,17 @@ core accounting, with its accrued rewards passed through to LP holders by a
 checkpointed LP-share index. The AMM's raw reserve remains the sole pricing
 reserve; reflections must never silently change `x * y`.
 
-**Current execution priority — contract-only:** complete and prove the full on-chain package —
-the reflection core, canonical AMM, LP shares, LP reward passthrough, and their
-Move tests. Frontend, wallet integration, live Testnet publication, release
-ceremony, indexer operation, and participant/load phases are deferred. The
-authoritative completion command for this scope is `make contract-verify`; it
-contains no wallet or network operation.
+**Current execution status — deployed contract:** the reflection core,
+canonical AMM, LP shares, and LP reward passthrough were published immutably to
+Cedra Testnet on July 21, 2026 from commit
+`89df1a041e1c62ce031e5e1b413f42c818d56dcf`. Dedicated CLI wallet profiles
+exercised faucet, transfer, repeated buy/sell cycles, wallet claims, liquidity
+add/remove, LP transfer/claims, pause separation, and authority rejection. The
+bounded live record and final reconciliation are in
+`ops/evidence/testnet-deployment-89df1a0.md`. Frontend, indexer operation, the
+large participant/load phases, and a fresh-deployment rehearsal remain
+deferred. `make contract-verify` remains the authoritative local source gate;
+it contains no wallet or network operation.
 
 **Review model — July 21, 2026:** this is a one-operator project. The operator
 and Codex perform the author-side implementation, audit, and verification.
@@ -124,7 +129,9 @@ recorded address; the keyless assembler later repeats that check with the
 reviewed Cedra SDK 2.2.8. That local evidence does not establish funding,
 account existence, private-key control, release authorization, or any finalized
 on-chain release state.
-Funding and publication are deferred outside the current contract-only scope.
+All five release roles are funded and finalized Testnet transactions prove
+control. Four holder profiles, including one repeated trader, are recorded in
+the deployment evidence; no private key is stored in this repository.
 
 ---
 
@@ -136,7 +143,7 @@ Funding and publication are deferred outside the current contract-only scope.
 | Multiple third-party DEX integrations | **One canonical reflection-aware AMM** |
 | Public liquidity provision | **Admin-seeded bootstrap, then controlled public LP positions** |
 | Permanent token supply ceremony | **Fixed supply per deployment, distributed through a test faucet** |
-| DAO or timelocked governance | **Controlled Testnet admin; deployment deferred** |
+| DAO or timelocked governance | **Controlled deployed Testnet operations admin** |
 | Multiple external audits | **Author-side review and property testing for the local contract; independent review recommended before mainnet/factory use** |
 | Permanent state assumption | **Deployment identity, snapshots, fresh-redeployment runbook** |
 | Full economic launch | **No-value test assets with persistent warnings** |
@@ -200,8 +207,8 @@ The first externally usable release should provide:
 - One clean initial state schema and an immutable deployment-identity record.
 
 The web interface and public dashboard are downstream consumers of this
-contract surface. They are deliberately deferred until the on-chain package and
-independent accounting model satisfy their local completion gates.
+contract surface. Their prerequisites now exist, but they remain deliberately
+deferred while the contract and live accounting evidence are the priority.
 
 Cedra already publishes a constant-product DEX guide and Move example with client integration. That can be used as scaffolding, but reflection-aware settlement and reserve accounting should be implemented specifically for this project rather than assumed to work automatically.
 
@@ -1607,8 +1614,9 @@ public accounting dashboard
 fresh-deployment recovery rehearsal
 ```
 
-The compatibility probe, accounting specification, and prior release evidence
-remain useful background. The current endpoint is the verified contract
-package. Funding, account-control proof, transaction construction, signing,
-submission, finalized Testnet evidence, UI, and public-pilot work are deferred
-until separately requested.
+The compatibility probe, accounting specification, and local release evidence
+remain useful background. The current endpoint is the verified and deployed
+contract package, with account-control, finalized transaction, four-holder
+CLI-wallet, and zero-discrepancy reconciliation evidence preserved. UI, large
+public-pilot loads, operational indexer evidence, and fresh-deployment recovery
+remain deferred until separately requested.

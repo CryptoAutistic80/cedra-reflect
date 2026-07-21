@@ -2,20 +2,22 @@
 
 > **TESTNET ASSET — NO MONETARY VALUE — STATE AND ADDRESSES MAY CHANGE**
 
-This repository is the source and evidence set for the planned Cedra Reflection
+This repository is the source and evidence set for the deployed Cedra Reflection
 Pilot Testnet: a production-engineering-quality, intentionally non-economic
 beta for a fixed-supply `tRFL` / `tUSD` reflection-token system. It is not a
 mainnet launch, token sale, investment product, or promise of value.
 
-## What the current repository proves locally
+## Deployed Testnet contract
 
 The source and deterministic tests implement one project-controlled constant-
 product AMM, a one percent reflection fee on supported swaps, untaxed ordinary
 transfers, excluded reward and distribution vaults, an O(1) global-index
 accounting model, canonical-LP reward passthrough, one clean initial contract
-schema, and an independent reconciliation implementation. This is local source
-and test evidence; it is not evidence that the release packages or pilot have
-been deployed.
+schema, and an independent reconciliation implementation. The exact source at
+commit `89df1a041e1c62ce031e5e1b413f42c818d56dcf` is deployed on Cedra Testnet
+across three immutable packages. The sanitized deployment, CLI-wallet exercise,
+transaction hashes, and final zero-discrepancy reconciliation are in
+[`ops/evidence/testnet-deployment-89df1a0.md`](ops/evidence/testnet-deployment-89df1a0.md).
 
 The source tree is organised to keep test-only distribution and synthetic
 liquidity separate from the reflection core:
@@ -43,10 +45,10 @@ it does not infer or apportion rewards among the vault's depositors. Custom and
 secondary stores fail closed, and no other custody or LP adapter is supported
 by this deployment.
 
-## Current deliverable: the contract
+## Contract verification boundary
 
-The current completion target is the on-chain package, not a frontend or a
-deployment ceremony. The contract is considered locally complete only when
+The current product priority is the on-chain package, not a frontend. The
+deployed contract's source is considered locally complete only when
 `make contract-verify` passes from the selected source tree. That gate compiles
 and strictly lints all three immutable packages, runs every Move unit and
 cross-package integration test, checks the independently implemented Python
@@ -61,11 +63,12 @@ review is therefore not a blocker for completing this local contract package.
 It remains recommended before reusing the design for a mainnet asset or a
 multi-token factory.
 
-## Deferred deployment boundary
+## Deployment boundary
 
-- Repository release scripts and generated profiles are outside the contract
-  completion gate. They are retained for a later, explicitly requested Testnet
-  deployment and do not affect on-chain accounting or contract test results.
+- Repository release scripts and generated profiles remain outside the local
+  contract completion gate. They were used for the explicitly authorized
+  Testnet deployment recorded in the public evidence file; they do not affect
+  on-chain accounting or contract test results.
 - Three package publishers and the destination operations account co-sign one
   atomic, evented handoff of routine fee, pause, faucet, shutdown, and limit
   controls. Individual package setters are recovery-only.
@@ -89,14 +92,15 @@ custody bindings, instance-qualified events, and indexer keys. The current
 canonical LP design can be reused only for adapters that prove beneficial
 ownership and checkpoint before every share mutation.
 
-The five generated public Testnet role candidates are recorded in
+The five deployed public Testnet roles are recorded in
 `ops/testnet-roles.candidate.json` and summarized in
 `CEDRA_TESTNET_PLAN.md`. Their keys remain outside this repository. Local
 public-profile capture verifies profile names and public-key/address derivation
 with OpenSSL SHA3-256. The keyless assembler separately revalidates the same
-bindings with the reviewed `@cedra-labs/ts-sdk` `2.2.8`; neither check
-establishes account existence, funding, private-key control, or release
-authorization. See `CHANGELOG.md` for the candidate history.
+bindings with the reviewed `@cedra-labs/ts-sdk` `2.2.8`; those checks alone did
+not establish account control. Finalized deployment transactions and the
+bounded functional exercise now provide separate live evidence. See
+`CHANGELOG.md` for the release history.
 
 ## Local verification
 
@@ -151,12 +155,10 @@ boundary; see `ops/RELEASE_EVIDENCE.md` for the mandatory preparation procedure.
 
 ## Pilot completion evidence
 
-The codebase can prove local arithmetic and implementation requirements. The
-isolated Testnet dispatchable-hook probe is already preserved as a bounded
-compatibility record. The following broader gates still require a live,
-operator-controlled Testnet deployment and are therefore tracked as evidence
-rather than faked in CI: 50,000 on-chain synthetic transactions, 10,000
-completed swaps, 1,000 distinct on-chain holders, one clean
-redeployment/restoration, and wallet-display verification. Independent human
-source/bytecode review is a separate pre-publication gate. See `ops/` for the
-required records and stop conditions.
+The isolated dispatchable-hook probe and the full three-package Testnet
+deployment are both preserved as bounded network evidence. The following
+broader public-pilot gates remain open and are not faked in CI: 50,000 on-chain
+synthetic transactions, 10,000 completed swaps, 1,000 distinct on-chain
+holders, one clean redeployment/restoration, and wallet-display verification.
+Independent human review remains recommended before mainnet or factory reuse.
+See `ops/` for the required records and stop conditions.

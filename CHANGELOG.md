@@ -1,8 +1,9 @@
 # Changelog
 
-All notable protocol changes are recorded here. This repository has not yet
-published the reflection-core, test-assets, or test-AMM packages to Cedra
-Testnet.
+All notable protocol changes are recorded here. The reflection-core,
+test-assets, and test-AMM packages were published immutably to Cedra Testnet on
+July 21, 2026 from source commit
+`89df1a041e1c62ce031e5e1b413f42c818d56dcf`.
 
 ## Unreleased — Testnet release candidate 0.1.0
 
@@ -33,6 +34,11 @@ Testnet.
 
 ### Evidence boundary
 
+- Added the finalized three-package Testnet deployment and CLI-wallet evidence
+  record, including package policy, transaction hashes, a four-holder repeated
+  buy/sell proof, LP historical-ownership checks, pause/authority failures,
+  exact fixed-supply conservation, and final core/LP vault reconciliation.
+
 - Added `make contract-verify` as the authoritative contract-only completion
   gate: strict Move compilation/lint, 118 Move tests, 60 Python model/surface
   tests, generated conformance checks, and one million randomized applied
@@ -40,9 +46,8 @@ Testnet.
 - Recorded the one-operator review model accurately. The operator and Codex
   perform author-side review; no external reviewer or independence claim is
   fabricated.
-- Local deterministic checks and the isolated hook-compatibility probe do not
-  prove that the three release packages are deployed.
-- Testnet funding, exact simulations, publication, initialization, and pilot
-  workload evidence are deferred outside the current contract-only scope.
+- Local deterministic checks remain distinct from the finalized Testnet
+  deployment. The live record proves a bounded functional exercise, not the
+  larger 50,000-transaction public-pilot load gates.
 - Independent review is recommended before mainnet or reflection-token-factory
   reuse, where the risk and architecture are materially broader.
