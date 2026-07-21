@@ -19,7 +19,6 @@
       "core_publisher": { "profile_name": "cedra-reflect-core-publisher", "address": "RECORD_CORE_PUBLISHER_ADDRESS", "public_key": "ed25519-pub-0xRECORD_64_HEX_CORE_PUBLIC_KEY" },
       "assets_publisher": { "profile_name": "cedra-reflect-assets-publisher", "address": "RECORD_ASSETS_PUBLISHER_ADDRESS", "public_key": "ed25519-pub-0xRECORD_64_HEX_ASSETS_PUBLIC_KEY" },
       "amm_publisher": { "profile_name": "cedra-reflect-amm-publisher", "address": "RECORD_AMM_PUBLISHER_ADDRESS", "public_key": "ed25519-pub-0xRECORD_64_HEX_AMM_PUBLIC_KEY" },
-      "operations": { "profile_name": "cedra-reflect-operations", "address": "RECORD_OPERATIONS_ADDRESS", "public_key": "ed25519-pub-0xRECORD_64_HEX_OPERATIONS_PUBLIC_KEY" },
       "bootstrap_lp": { "profile_name": "cedra-reflect-bootstrap-lp", "address": "RECORD_BOOTSTRAP_LP_ADDRESS", "public_key": "ed25519-pub-0xRECORD_64_HEX_BOOTSTRAP_LP_PUBLIC_KEY" }
     }
   },
@@ -50,7 +49,6 @@
     "core_publisher": "RECORD_CORE_PUBLISHER_ADDRESS",
     "assets_publisher": "RECORD_ASSETS_PUBLISHER_ADDRESS",
     "amm_publisher": "RECORD_AMM_PUBLISHER_ADDRESS",
-    "operations": "RECORD_OPERATIONS_ADDRESS",
     "bootstrap_lp": "RECORD_BOOTSTRAP_LP_ADDRESS"
   },
   "transaction_kind": "package_publish",

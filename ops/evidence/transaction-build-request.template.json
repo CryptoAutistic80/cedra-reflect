@@ -14,14 +14,12 @@
     "core_publisher": "0x14110b05c8b667577e2ffefab66b01fa2f48bca8091f51af33b1a6c6762773db",
     "assets_publisher": "0x445292601c73f8542d576908c67e8a28a861575bdc8841e02753651f56492f8f",
     "amm_publisher": "0x47f0e7670e63258035b0f71fea8a80d9e24ed118d5262a47a97a555bc6506721",
-    "operations": "0xb736430fcbb1b1f3d7dac953dcc11fa6cb033efcbc52a36816f1be32ed28ffa3",
     "bootstrap_lp": "0xb1cd21450f8b849a1235494c1646e3d338a332d286ba6aef79030d92e7b1f82"
   },
   "profile_public_keys": {
     "core_publisher": "ed25519-pub-0x9f3a93acde969a6efe38742bf855196197a0ef262ee7ed375167ae0046f320ef",
     "assets_publisher": "ed25519-pub-0xb64da69b737ed2ab43f562699322d8846929c1e3f36c6a9c467fe8f79c0b39c3",
     "amm_publisher": "ed25519-pub-0x3f1848a71954f47e9fcf5652e4926ebcf4a1528e6f7df474728d46841e8d8953",
-    "operations": "ed25519-pub-0xae496b78fd706679e128cdb8f215693ef7cc92814065ddd64c5bd7a2d7e53051",
     "bootstrap_lp": "ed25519-pub-0x11f469f3b0d06d997ed05ebab39017e4ab3bdb64eb4aaa5ac508af31f35b4c0e"
   },
   "transaction_controls": {
@@ -34,6 +32,5 @@
     "approved_max_gas_amount": "RECORD_APPROVED_MAX_GAS_AMOUNT",
     "approved_max_gas_unit_price": "RECORD_APPROVED_MAX_GAS_UNIT_PRICE",
     "approved_max_total_fee_base_units": "RECORD_APPROVED_WORST_CASE_FEE"
-  },
-  "seed_amounts": null
+  }
 }

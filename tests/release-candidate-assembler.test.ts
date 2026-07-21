@@ -172,18 +172,15 @@ function validateBuiltBcs(built: BuiltReleaseCandidate): void {
       JSON.stringify(built.transactionEvidence.payload.arguments),
       "Publish BCS uses typed MoveVector metadata and ordered module bytes",
     );
-  } else if (built.context.request.operation_key === "pool_seed") {
-    equal(entry.args.length, 3, "Seed BCS has exactly three typed amount arguments");
-    const widths = [64, 64, 128] as const;
-    const amounts = entry.args.map((argument, index) => {
-      const decoder = new Deserializer(argumentBytes(argument));
-      const amount = widths[index] === 128 ? decoder.deserializeU128() : decoder.deserializeU64();
-      decoder.assertFinished();
-      return amount.toString();
-    });
-    equal(JSON.stringify(amounts), JSON.stringify(built.transactionEvidence.payload.arguments), "Seed BCS preserves u64/u64/u128 values");
+  } else if (built.context.request.operation_key === "core_initialize") {
+    equal(entry.args.length, 1, "Core initialization BCS has one immutable fee argument");
+    const decoder = new Deserializer(argumentBytes(entry.args[0]));
+    const fee = decoder.deserializeU64();
+    decoder.assertFinished();
+    equal(fee, 100n, "Core initialization fixes the v0.2 creation fee at 100 bps");
+    equal(JSON.stringify(built.transactionEvidence.payload.arguments), '["100"]', "Fee evidence matches the typed payload");
   } else {
-    equal(entry.args.length, 0, "Signer-only bootstrap entry has no hidden payload arguments");
+    equal(entry.args.length, 0, "Four-signer pool launch has no hidden payload arguments");
   }
 }
 
@@ -206,7 +203,6 @@ function makeFixture(): Fixture {
     core_publisher: "cedra-reflect-core-publisher",
     assets_publisher: "cedra-reflect-assets-publisher",
     amm_publisher: "cedra-reflect-amm-publisher",
-    operations: "cedra-reflect-operations",
     bootstrap_lp: "cedra-reflect-bootstrap-lp",
   };
   const profiles = {} as Record<ReleaseRoleKey, unknown>;
@@ -307,9 +303,6 @@ function requestFor(fixture: Fixture, operation: ReleaseOperationKey): Record<st
       approved_max_gas_unit_price: "100",
       approved_max_total_fee_base_units: "20000000",
     },
-    seed_amounts: operation === "pool_seed"
-      ? { rfl_amount: "1000000", usd_amount: "2000000", min_lp_shares: "1000" }
-      : null,
   };
 }
 
@@ -511,11 +504,7 @@ const expectedSigners: Record<ReleaseOperationKey, readonly ReleaseRoleKey[]> = 
   core_initialize: ["core_publisher"],
   assets_publish: ["assets_publisher"],
   amm_publish: ["amm_publisher"],
-  faucet_initialize: ["core_publisher", "assets_publisher"],
-  amm_tusd_claim: ["amm_publisher"],
-  pool_initialize: ["core_publisher", "assets_publisher", "amm_publisher"],
-  atomic_operational_handoff: ["core_publisher", "assets_publisher", "amm_publisher", "operations"],
-  pool_seed: ["core_publisher", "amm_publisher", "bootstrap_lp"],
+  pool_launch: ["core_publisher", "assets_publisher", "amm_publisher", "bootstrap_lp"],
 };
 
 const fixture = makeFixture();
@@ -643,15 +632,6 @@ test("candidate assembler rejects request extras, digest changes, zero gas, and 
   }
 });
 
-test("candidate assembler permits seed amounts only for pool_seed", async () => {
-  const unexpectedSeed = requestFor(fixture, "core_publish");
-  unexpectedSeed.seed_amounts = { rfl_amount: "1", usd_amount: "1", min_lp_shares: "1" };
-  await rejects(async () => contextFor(fixture, unexpectedSeed), Error);
-  const missingSeed = requestFor(fixture, "pool_seed");
-  missingSeed.seed_amounts = null;
-  await rejects(async () => contextFor(fixture, missingSeed), Error);
-});
-
 test("candidate assembler rejects expired absolute transaction controls", async () => {
   const request = requestFor(fixture, "core_initialize");
   request.transaction_controls = {
@@ -696,7 +676,7 @@ test("candidate assembler rejects simulation authenticators with changed keys or
   }), NOW), Error);
 
   const multi = await buildReleaseCandidate(
-    contextFor(fixture, requestFor(fixture, "pool_initialize")),
+    contextFor(fixture, requestFor(fixture, "pool_launch")),
     buildPort(),
   );
   await rejects(async () => simulateReleaseCandidate(multi, simulationPort(multi, (response) => {

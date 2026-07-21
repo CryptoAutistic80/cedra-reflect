@@ -5,9 +5,9 @@
   "network": "cedra-testnet",
   "chain_id": "2",
   "api_url": "https://testnet.cedra.dev/v1",
-  "deployment_id": "reflection-pilot-001",
-  "release": "testnet-v0.1.0",
-  "event_schema_version": 1,
+  "deployment_id": "reflection-pilot-002",
+  "release": "testnet-v0.2.0",
+  "event_schema_version": 2,
   "no_value_notice": "TESTNET ASSET — NO MONETARY VALUE — STATE AND ADDRESSES MAY CHANGE",
   "framework_commit": "01e6ceafae19b900772b343a5af8ae236401e0a8",
   "application_commit": "RECORD_GIT_COMMIT_AFTER_REVIEW",
@@ -15,7 +15,6 @@
     "core_publisher": "0x14110b05c8b667577e2ffefab66b01fa2f48bca8091f51af33b1a6c6762773db",
     "assets_publisher": "0x445292601c73f8542d576908c67e8a28a861575bdc8841e02753651f56492f8f",
     "amm_publisher": "0x47f0e7670e63258035b0f71fea8a80d9e24ed118d5262a47a97a555bc6506721",
-    "operations": "0xb736430fcbb1b1f3d7dac953dcc11fa6cb033efcbc52a36816f1be32ed28ffa3",
     "bootstrap_lp": "0xb1cd21450f8b849a1235494c1646e3d338a332d286ba6aef79030d92e7b1f82"
   },
   "provenance": {
@@ -40,10 +39,10 @@
     }
   },
   "approval_policy": {
-    "signature_namespace": "cedra-reflect-testnet-release-v1",
+    "signature_namespace": "cedra-reflect-testnet-release-v2",
     "trusted_allowed_signers_sha256": "RECORD_64_HEX_EXTERNAL_ALLOWED_SIGNERS_TRUST_ANCHOR_DIGEST",
-    "required_distinct_identities": 2,
-    "required_distinct_signing_keys": 2
+    "required_distinct_identities": 1,
+    "required_distinct_signing_keys": 1
   },
   "external_execution_boundary": {
     "repository_reads_private_keys": false,
@@ -57,11 +56,7 @@
     "core_initialize",
     "assets_publish",
     "amm_publish",
-    "faucet_initialize",
-    "amm_tusd_claim",
-    "pool_initialize",
-    "atomic_operational_handoff",
-    "pool_seed"
+    "pool_launch"
   ],
   "packages": {
     "reflection_core": {
@@ -119,20 +114,19 @@
   "transactions": {
     "core_publish": {"file": "transactions/core-publish/transaction-evidence.json", "sha256": "RECORD_64_HEX_CORE_PUBLISH_EVIDENCE_DIGEST", "transaction_hash": "RECORD_CORE_PUBLISH_TRANSACTION"},
     "assets_publish": {"file": "transactions/assets-publish/transaction-evidence.json", "sha256": "RECORD_64_HEX_ASSETS_PUBLISH_EVIDENCE_DIGEST", "transaction_hash": "RECORD_ASSETS_PUBLISH_TRANSACTION"},
-    "amm_publish": {"file": "transactions/amm-publish/transaction-evidence.json", "sha256": "RECORD_64_HEX_AMM_PUBLISH_EVIDENCE_DIGEST", "transaction_hash": "RECORD_AMM_PUBLISH_TRANSACTION"},
     "core_initialize": {"file": "transactions/core-initialize/transaction-evidence.json", "sha256": "RECORD_64_HEX_CORE_INITIALIZE_EVIDENCE_DIGEST", "transaction_hash": "RECORD_CORE_INITIALIZE_TRANSACTION"},
-    "faucet_initialize": {"file": "transactions/faucet-initialize/transaction-evidence.json", "sha256": "RECORD_64_HEX_FAUCET_INITIALIZE_EVIDENCE_DIGEST", "transaction_hash": "RECORD_FAUCET_INITIALIZE_TRANSACTION"},
-    "amm_tusd_claim": {"file": "transactions/amm-tusd-claim/transaction-evidence.json", "sha256": "RECORD_64_HEX_AMM_TUSD_CLAIM_EVIDENCE_DIGEST", "transaction_hash": "RECORD_AMM_TUSD_CLAIM_TRANSACTION"},
-    "pool_initialize": {"file": "transactions/pool-initialize/transaction-evidence.json", "sha256": "RECORD_64_HEX_POOL_INITIALIZE_EVIDENCE_DIGEST", "transaction_hash": "RECORD_POOL_INITIALIZE_TRANSACTION"},
-    "atomic_operational_handoff": {"file": "transactions/atomic-operational-handoff/transaction-evidence.json", "sha256": "RECORD_64_HEX_ATOMIC_HANDOFF_EVIDENCE_DIGEST", "transaction_hash": "RECORD_ATOMIC_HANDOFF_TRANSACTION"},
-    "pool_seed": {"file": "transactions/pool-seed/transaction-evidence.json", "sha256": "RECORD_64_HEX_POOL_SEED_EVIDENCE_DIGEST", "transaction_hash": "RECORD_POOL_SEED_TRANSACTION"}
+    "amm_publish": {"file": "transactions/amm-publish/transaction-evidence.json", "sha256": "RECORD_64_HEX_AMM_PUBLISH_EVIDENCE_DIGEST", "transaction_hash": "RECORD_AMM_PUBLISH_TRANSACTION"},
+    "pool_launch": {"file": "transactions/pool-launch/transaction-evidence.json", "sha256": "RECORD_64_HEX_POOL_LAUNCH_EVIDENCE_DIGEST", "transaction_hash": "RECORD_POOL_LAUNCH_TRANSACTION"}
   },
   "contract_configuration": {
     "trfl_decimals": 6,
     "trfl_fixed_supply_base_units": "1000000000000000",
     "initial_reflection_fee_bps": 100,
-    "maximum_reflection_fee_bps": 100,
-    "automatic_materialization": false,
+    "maximum_reflection_fee_bps": 500,
+    "automatic_materialization": true,
+    "lifecycle": "LIVE",
+    "ownerless": true,
+    "privileged_address": null,
     "supported_custody_adapters": 1,
     "arbitrary_external_vaults_supported": false
   },
@@ -143,17 +137,12 @@
     "tusd_icon_sha256": "1f13c0dd2c856711cc72dae8f74d92e616ef2f67ab1fadee977c10805b817caa",
     "project_url": "https://github.com/CryptoAutistic80/cedra-reflect"
   },
-  "operational_authority": {
-    "address": "0xb736430fcbb1b1f3d7dac953dcc11fa6cb033efcbc52a36816f1be32ed28ffa3",
-    "atomic_handoff_transaction": "RECORD_ATOMIC_HANDOFF_TRANSACTION",
-    "reconciled_ledger_version": "RECORD_HANDOFF_RECONCILIATION_LEDGER_VERSION"
-  },
   "bootstrap_liquidity": {
     "beneficiary": "0xb1cd21450f8b849a1235494c1646e3d338a332d286ba6aef79030d92e7b1f82",
-    "rfl_amount": "RECORD_POSITIVE_DECIMAL_RFL_AMOUNT",
-    "usd_amount": "RECORD_POSITIVE_DECIMAL_USD_AMOUNT",
-    "minimum_lp_shares": "RECORD_POSITIVE_DECIMAL_MINIMUM_LP_SHARES",
-    "seed_transaction": "RECORD_POOL_SEED_TRANSACTION"
+    "rfl_amount": "500000000",
+    "usd_amount": "500000000",
+    "initial_lp_shares": "500000000",
+    "launch_transaction": "RECORD_POOL_LAUNCH_TRANSACTION"
   },
   "objects": {
     "token_metadata": "RECORD_TRFL_METADATA_ADDRESS",
@@ -170,14 +159,13 @@
     "mock_usd_metadata": "RECORD_TUSD_METADATA_ADDRESS"
   },
   "initialization": {
-    "automatic_materialization": false,
+    "automatic_materialization": true,
     "core_transaction": "RECORD_CORE_INITIALIZE_TRANSACTION",
-    "faucet_transaction": "RECORD_FAUCET_INITIALIZE_TRANSACTION",
-    "pool_transaction": "RECORD_POOL_INITIALIZE_TRANSACTION",
-    "finalized_ledger_version": "RECORD_POOL_INITIALIZE_LEDGER_VERSION"
+    "launch_transaction": "RECORD_POOL_LAUNCH_TRANSACTION",
+    "finalized_ledger_version": "RECORD_POOL_LAUNCH_LEDGER_VERSION"
   },
   "initial_reconciliation_snapshot": {"file": "reconciliation/initial-snapshot.json", "sha256": "RECORD_64_HEX_RECONCILIATION_SNAPSHOT_DIGEST"},
-  "hook_probe": {"mode": "claim-backed", "file": "hook-probe-testnet.json", "sha256": "RECORD_64_HEX_HOOK_PROBE_DIGEST"},
+  "hook_probe": {"mode": "automatic-materialisation", "file": "hook-probe-testnet.json", "sha256": "RECORD_64_HEX_HOOK_PROBE_DIGEST"},
   "review": {
     "independent_review": {"file": "independent-review.json", "sha256": "RECORD_64_HEX_INDEPENDENT_REVIEW_DIGEST"},
     "unresolved_critical_findings": 0,

@@ -19,8 +19,7 @@
     "roles",
     "profile_public_keys",
     "transaction_controls",
-    "gas_budget",
-    "seed_amounts"
+    "gas_budget"
   ],
   "properties": {
     "schema_version": { "const": 1 },
@@ -36,11 +35,7 @@
         "core_initialize",
         "assets_publish",
         "amm_publish",
-        "faucet_initialize",
-        "amm_tusd_claim",
-        "pool_initialize",
-        "atomic_operational_handoff",
-        "pool_seed"
+        "pool_launch"
       ]
     },
     "application_commit": { "$ref": "#/$defs/commit" },
@@ -68,24 +63,8 @@
         "approved_max_gas_unit_price": { "$ref": "#/$defs/positive_decimal" },
         "approved_max_total_fee_base_units": { "$ref": "#/$defs/positive_decimal" }
       }
-    },
-    "seed_amounts": {
-      "oneOf": [
-        { "type": "null" },
-        { "$ref": "#/$defs/seed_amounts" }
-      ]
     }
   },
-  "allOf": [
-    {
-      "if": {
-        "properties": { "operation_key": { "const": "pool_seed" } },
-        "required": ["operation_key"]
-      },
-      "then": { "properties": { "seed_amounts": { "$ref": "#/$defs/seed_amounts" } } },
-      "else": { "properties": { "seed_amounts": { "type": "null" } } }
-    }
-  ],
   "$defs": {
     "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
     "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
@@ -100,35 +79,23 @@
     "roles": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["core_publisher", "assets_publisher", "amm_publisher", "operations", "bootstrap_lp"],
+      "required": ["core_publisher", "assets_publisher", "amm_publisher", "bootstrap_lp"],
       "properties": {
         "core_publisher": { "$ref": "#/$defs/address" },
         "assets_publisher": { "$ref": "#/$defs/address" },
         "amm_publisher": { "$ref": "#/$defs/address" },
-        "operations": { "$ref": "#/$defs/address" },
         "bootstrap_lp": { "$ref": "#/$defs/address" }
       }
     },
     "public_keys": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["core_publisher", "assets_publisher", "amm_publisher", "operations", "bootstrap_lp"],
+      "required": ["core_publisher", "assets_publisher", "amm_publisher", "bootstrap_lp"],
       "properties": {
         "core_publisher": { "$ref": "#/$defs/public_key" },
         "assets_publisher": { "$ref": "#/$defs/public_key" },
         "amm_publisher": { "$ref": "#/$defs/public_key" },
-        "operations": { "$ref": "#/$defs/public_key" },
         "bootstrap_lp": { "$ref": "#/$defs/public_key" }
-      }
-    },
-    "seed_amounts": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["rfl_amount", "usd_amount", "min_lp_shares"],
-      "properties": {
-        "rfl_amount": { "$ref": "#/$defs/positive_decimal" },
-        "usd_amount": { "$ref": "#/$defs/positive_decimal" },
-        "min_lp_shares": { "$ref": "#/$defs/positive_decimal" }
       }
     }
   }

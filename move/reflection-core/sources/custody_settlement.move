@@ -44,4 +44,14 @@ module reflection_core::custody_settlement {
     ) {
         reflection_token::payout_lp_reward(cap, claimant, epoch, lp_reward_vault, amount)
     }
+
+    public fun pay_lp_claim_to(
+        cap: &CustodySettlementCapability,
+        recipient: address,
+        epoch: u64,
+        lp_reward_vault: Object<FungibleStore>,
+        amount: u64,
+    ) {
+        reflection_token::payout_lp_reward_to(cap, recipient, epoch, lp_reward_vault, amount)
+    }
 }

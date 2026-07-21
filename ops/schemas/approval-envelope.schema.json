@@ -9,7 +9,7 @@
     "schema_version": { "const": 1 },
     "evidence_scope": { "const": "detached-transaction-approval-envelope" },
     "status": { "const": "signed" },
-    "signature_namespace": { "const": "cedra-reflect-testnet-release-v1" },
+    "signature_namespace": { "const": "cedra-reflect-testnet-release-v2" },
     "candidate_file": { "const": "transaction-candidate.json" },
     "candidate_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
     "statement_file": { "const": "approval-statement.json" },
@@ -20,8 +20,8 @@
     "trusted_allowed_signers_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
     "approvals": {
       "type": "array",
-      "minItems": 2,
-      "maxItems": 2,
+      "minItems": 1,
+      "maxItems": 1,
       "items": {
         "type": "object",
         "additionalProperties": false,

@@ -39,9 +39,9 @@ def main() -> int:
         return 64
 
     result = run_randomized_workload(config)
-    if result.model.automatic_materialization:
+    if not result.model.automatic_materialization:
         print(
-            "model gate is not claim-backed; refusing incompatible evidence",
+            "model gate is not ownerless automatic v0.2; refusing incompatible evidence",
             file=sys.stderr,
         )
         return 66
@@ -64,10 +64,14 @@ def main() -> int:
         report = result.report(provenance)
 
     if (
-        report.get("materialization_mode") != "claim-backed"
-        or report.get("automatic_materialization") is not False
+        report.get("schema") != "cedra-reflection-model-gate/v2"
+        or report.get("release") != "testnet-v0.2.0-ownerless"
+        or report.get("materialization_mode") != "automatic-interaction"
+        or report.get("automatic_materialization") is not True
+        or report.get("lifecycle") != "LIVE"
+        or result.model.pool_pending_rewards() != 0
     ):
-        print("model-gate report is not bound to claim-backed mode", file=sys.stderr)
+        print("model-gate report is not bound to ownerless automatic v0.2", file=sys.stderr)
         return 67
 
     if report_path is not None:

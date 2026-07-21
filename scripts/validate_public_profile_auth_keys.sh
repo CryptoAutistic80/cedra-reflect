@@ -15,7 +15,7 @@ profile="$1"
   exit 66
 }
 
-for role in core_publisher assets_publisher amm_publisher operations bootstrap_lp; do
+for role in core_publisher assets_publisher amm_publisher bootstrap_lp; do
   public_key="$(/usr/bin/jq -er --arg role "$role" '.profiles[$role].public_key | select(test("^ed25519-pub-0x[0-9a-f]{64}$"))' "$profile")"
   account="$(/usr/bin/jq -er --arg role "$role" '.profiles[$role].account | select(test("^[0-9a-f]{64}$"))' "$profile")"
   public_key_hex="${public_key#ed25519-pub-0x}"

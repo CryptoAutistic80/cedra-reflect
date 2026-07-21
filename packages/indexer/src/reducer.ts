@@ -757,6 +757,89 @@ export function reduceEventGroup(
           };
           break;
 
+        case "TokenCreated":
+          if (context.next.packageVersion !== "uninitialized") {
+            context.alerts.push(problem(event, "IDENTIFIER_REUSE", "Token creation appeared more than once."));
+          }
+          if (
+            event.eventSchema !== "v0.2"
+            || event.packageVersion !== "testnet-v0.2.0"
+            || event.networkLabel !== "cedra-testnet"
+            || event.reflectionFeeBps > 500n
+            || event.totalSupply !== 1_000_000_000_000_000n
+            || event.decimals !== 6n
+          ) {
+            context.alerts.push(problem(event, "EVENT_DATA", "v0.2 TokenCreated identity or immutable creation parameters are invalid."));
+          }
+          context.next = {
+            ...context.next,
+            deploymentId: event.deploymentId,
+            networkLabel: event.networkLabel,
+            tokenMetadata: event.tokenMetadata,
+            protocolExclusionSlots: 0n,
+            protocolExclusionsRemaining: 0n,
+            automaticMaterialization: true,
+            feeBps: event.reflectionFeeBps,
+            packageVersion: event.packageVersion,
+            lifecycle: "CONFIGURING",
+            rewardVault: event.rewardVault,
+            distributionVault: event.distributionVault,
+          };
+          break;
+
+        case "LaunchSealed":
+          if (
+            context.next.packageVersion !== "testnet-v0.2.0"
+            || context.next.lifecycle !== "CONFIGURING"
+            || event.reflectionFeeBps !== context.next.feeBps
+            || event.reflectionFeeBps > 500n
+            || event.ammFeeBps !== 30n
+            || event.maximumReserveBps !== 2_000n
+            || event.maximumGrossSwap !== 100_000_000_000n
+            || event.maximumRflContribution !== 100_000_000_000n
+            || event.maximumTusdContribution !== 100_000_000_000n
+            || event.maximumNonFinalWithdrawalShareBps !== 10_000n
+            || event.faucetTrflGrant !== 1_000_000_000n
+            || event.faucetTusdGrant !== 1_000_000_000n
+            || event.faucetCooldownSeconds !== 3_600n
+            || event.seedRfl !== 500_000_000n
+            || event.seedUsd !== 500_000_000n
+            || event.initialLpShares <= 0n
+          ) {
+            context.alerts.push(problem(event, "EVENT_DATA", "v0.2 LaunchSealed disagrees with the fixed launch envelope."));
+          }
+          context.next = {
+            ...context.next,
+            lifecycle: "LIVE",
+            deploymentReady: true,
+            faucetTrflGrant: event.faucetTrflGrant,
+            faucetTusdGrant: event.faucetTusdGrant,
+            faucetCooldownSeconds: event.faucetCooldownSeconds,
+            pool: {
+              ...context.next.pool,
+              ammFeeBps: event.ammFeeBps,
+              maximumReserveBps: event.maximumReserveBps,
+              maximumGrossSwap: event.maximumGrossSwap,
+              maximumRflContribution: event.maximumRflContribution,
+              maximumTusdContribution: event.maximumTusdContribution,
+              maximumNonFinalWithdrawalShareBps: event.maximumNonFinalWithdrawalShareBps,
+            },
+          };
+          break;
+
+        case "PoolClosed":
+          if (
+            context.next.packageVersion !== "testnet-v0.2.0"
+            || context.next.lifecycle !== "LIVE"
+            || event.epoch !== 1n
+            || event.rflReserveAfter !== context.next.pool.trflReserve
+            || event.usdReserveAfter !== context.next.pool.tusdReserve
+          ) {
+            context.alerts.push(problem(event, "EVENT_DATA", "v0.2 PoolClosed is out of lifecycle order or disagrees with replayed terminal reserves."));
+          }
+          context.next = { ...context.next, lifecycle: "CLOSED" };
+          break;
+
         case "ProtocolPrimaryStoreExcluded": {
           const stores = new Map(context.next.protocolExcludedStores);
           if (
@@ -1009,8 +1092,9 @@ export function reduceEventGroup(
             sellWalletDebited = true;
           }
           const expectedFee = (event.grossAmount * event.feeBps) / BPS_DENOMINATOR;
+          const maximumFeeBps = context.next.packageVersion === "testnet-v0.2.0" ? 500n : 100n;
           if (
-            event.feeBps > 100n
+            event.feeBps > maximumFeeBps
             || event.feeBps !== context.next.feeBps
             || event.feeAmount !== expectedFee
             || event.swapTxHash !== event.txHash
@@ -1581,6 +1665,13 @@ export function reduceEventGroup(
         case "LiquiditySeeded":
         case "LiquidityAdded":
         case "LiquidityRemoved": {
+          if (
+            context.next.packageVersion === "testnet-v0.2.0"
+            && event.type === "LiquiditySeeded"
+            && (event.epoch !== 1n || context.next.lifecycle !== "LIVE" || context.next.pool.seeded)
+          ) {
+            context.alerts.push(problem(event, "EVENT_DATA", "v0.2 permits only the launch transaction's first and only liquidity seed."));
+          }
           const oneSidedRemoval = event.type === "LiquidityRemoved"
             && ((event.trflAmount === 0n) !== (event.tusdAmount === 0n));
           const invalidAmounts = event.lpShares <= 0n
@@ -1633,17 +1724,25 @@ export function reduceEventGroup(
         }
 
         case "FeeConfigurationChanged":
-          if (event.oldFeeBps !== context.next.feeBps || event.newFeeBps > 100n) {
+          if (context.next.packageVersion === "testnet-v0.2.0") {
+            context.alerts.push(problem(event, "EVENT_DATA", "v0.2 does not permit fee changes after creation."));
+          } else if (event.oldFeeBps !== context.next.feeBps || event.newFeeBps > 100n) {
             context.alerts.push(problem(event, "EVENT_DATA", "Fee configuration does not continue replayed state or exceeds 100 bps."));
           }
           context.next = { ...context.next, feeBps: event.newFeeBps };
           break;
 
         case "FaucetPauseChanged":
+          if (context.next.packageVersion === "testnet-v0.2.0") {
+            context.alerts.push(problem(event, "EVENT_DATA", "v0.2 has no faucet pause authority."));
+          }
           context.next = { ...context.next, faucetPaused: event.paused };
           break;
 
         case "SwapLimitsChanged":
+          if (context.next.packageVersion === "testnet-v0.2.0") {
+            context.alerts.push(problem(event, "EVENT_DATA", "v0.2 swap limits are immutable and have no configuration event."));
+          }
           context.next = {
             ...context.next,
             pool: {
@@ -1656,6 +1755,9 @@ export function reduceEventGroup(
           break;
 
         case "LiquidityLimitsChanged":
+          if (context.next.packageVersion === "testnet-v0.2.0") {
+            context.alerts.push(problem(event, "EVENT_DATA", "v0.2 liquidity limits are immutable and have no configuration event."));
+          }
           if (
             event.maximumRflContribution <= 0n
             || event.maximumTusdContribution <= 0n
@@ -1680,10 +1782,16 @@ export function reduceEventGroup(
           break;
 
         case "PauseStateChanged":
+          if (context.next.packageVersion === "testnet-v0.2.0") {
+            context.alerts.push(problem(event, "EVENT_DATA", "v0.2 has no core pause authority."));
+          }
           context.next = { ...context.next, swapsPaused: event.swapsPaused, claimsPaused: event.claimsPaused };
           break;
 
         case "PoolPauseChanged":
+          if (context.next.packageVersion === "testnet-v0.2.0") {
+            context.alerts.push(problem(event, "EVENT_DATA", "v0.2 has no pool pause or shutdown authority."));
+          }
           context.next = {
             ...context.next,
             pool: {
@@ -1697,6 +1805,9 @@ export function reduceEventGroup(
           break;
 
         case "OperationalAdminChanged": {
+          if (context.next.packageVersion === "testnet-v0.2.0") {
+            context.alerts.push(problem(event, "EVENT_DATA", "v0.2 has no operational administrator or authority handoff."));
+          }
           const key = event.scope === "reflection-core"
             ? "reflectionCore"
             : event.scope === "test-assets"

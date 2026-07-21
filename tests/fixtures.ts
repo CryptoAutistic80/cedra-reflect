@@ -43,7 +43,9 @@ export function portfolioFixture(): PortfolioSnapshot {
 
 export function protocolFixture(): ProtocolSnapshot {
   return {
-    automaticMaterialization: false,
+    lifecycle: "LIVE",
+    reflectionFeeBps: 100n,
+    automaticMaterialization: true,
     eligibleHolders: 1n,
     eligibleSupply: 1_000_000n,
     rewardVaultBalance: 10n,
@@ -53,6 +55,7 @@ export function protocolFixture(): ProtocolSnapshot {
     currentIndex: 10n,
     indexRemainder: 0n,
     pool: {
+      lifecycle: "LIVE",
       trflReserve: 100_990n,
       tusdReserve: 99_020n,
       swapsPaused: false,
@@ -65,7 +68,7 @@ export function protocolFixture(): ProtocolSnapshot {
     },
     claimsPaused: false,
     faucetPaused: false,
-    packageVersion: "testnet-v0.1.0",
+    packageVersion: "testnet-v0.2.0",
     ledgerVersion: 10n,
   };
 }

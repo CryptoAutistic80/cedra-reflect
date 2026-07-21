@@ -15,10 +15,14 @@ class EvidenceTemplateTests(unittest.TestCase):
     def test_release_manifest_covers_every_package_authority_and_state_identity(self) -> None:
         manifest = self.load_json("ops/release-manifest.template.json")
         self.assertEqual(manifest["schema_version"], 2)
-        self.assertEqual(manifest["event_schema_version"], 1)
+        self.assertEqual(manifest["event_schema_version"], 2)
         self.assertEqual(manifest["network"], "cedra-testnet")
         self.assertEqual(manifest["chain_id"], "2")
-        self.assertEqual(manifest["release"], "testnet-v0.1.0")
+        self.assertEqual(manifest["release"], "testnet-v0.2.0")
+        self.assertEqual(
+            set(manifest["roles"]),
+            {"core_publisher", "assets_publisher", "amm_publisher", "bootstrap_lp"},
+        )
         self.assertEqual(
             set(manifest["packages"]),
             {"reflection_core", "test_assets", "test_amm"},
@@ -48,21 +52,19 @@ class EvidenceTemplateTests(unittest.TestCase):
 
         configuration = manifest["contract_configuration"]
         self.assertEqual(configuration["trfl_fixed_supply_base_units"], "1000000000000000")
-        self.assertEqual(configuration["maximum_reflection_fee_bps"], 100)
-        self.assertFalse(configuration["automatic_materialization"])
+        self.assertEqual(configuration["initial_reflection_fee_bps"], 100)
+        self.assertEqual(configuration["maximum_reflection_fee_bps"], 500)
+        self.assertTrue(configuration["automatic_materialization"])
+        self.assertEqual(configuration["lifecycle"], "LIVE")
+        self.assertTrue(configuration["ownerless"])
+        self.assertIsNone(configuration["privileged_address"])
         self.assertFalse(configuration["arbitrary_external_vaults_supported"])
         for symbol in ("trfl", "tusd"):
             asset = ROOT / "assets" / f"{symbol}-testnet.svg"
             digest = hashlib.sha256(asset.read_bytes()).hexdigest()
             self.assertEqual(manifest["metadata"][f"{symbol}_icon_sha256"], digest)
 
-        self.assertTrue(
-            {
-                "address",
-                "atomic_handoff_transaction",
-                "reconciled_ledger_version",
-            }.issubset(manifest["operational_authority"])
-        )
+        self.assertNotIn("operational_authority", manifest)
         self.assertTrue(
             {
                 "token_metadata",
@@ -80,26 +82,41 @@ class EvidenceTemplateTests(unittest.TestCase):
             }.issubset(manifest["objects"])
         )
         self.assertEqual(manifest["objects"]["lp_share_representation"], "account-bound-table")
-        self.assertFalse(manifest["initialization"]["automatic_materialization"])
+        self.assertEqual(
+            manifest["bootstrap_liquidity"],
+            {
+                "beneficiary": manifest["roles"]["bootstrap_lp"],
+                "rfl_amount": "500000000",
+                "usd_amount": "500000000",
+                "initial_lp_shares": "500000000",
+                "launch_transaction": manifest["transactions"]["pool_launch"]["transaction_hash"],
+            },
+        )
+        self.assertTrue(manifest["initialization"]["automatic_materialization"])
         self.assertIn("core_transaction", manifest["initialization"])
+        self.assertEqual(
+            manifest["initialization"]["launch_transaction"],
+            manifest["transactions"]["pool_launch"]["transaction_hash"],
+        )
         self.assertEqual(
             set(manifest["hook_probe"]),
             {"file", "sha256", "mode"},
         )
-        self.assertEqual(manifest["approval_policy"]["required_distinct_identities"], 2)
-        self.assertEqual(manifest["approval_policy"]["required_distinct_signing_keys"], 2)
+        self.assertEqual(manifest["hook_probe"]["mode"], "automatic-materialisation")
+        self.assertEqual(manifest["approval_policy"]["required_distinct_identities"], 1)
+        self.assertEqual(manifest["approval_policy"]["required_distinct_signing_keys"], 1)
+        approval_envelope = self.load_json(
+            "ops/evidence/transaction-approval-envelope.template.json"
+        )
+        self.assertEqual(len(approval_envelope["approvals"]), 1)
         expected_operations = {
             "core_publish",
             "core_initialize",
             "assets_publish",
             "amm_publish",
-            "faucet_initialize",
-            "amm_tusd_claim",
-            "pool_initialize",
-            "atomic_operational_handoff",
-            "pool_seed",
+            "pool_launch",
         }
-        self.assertEqual(len(manifest["execution_order"]), 9)
+        self.assertEqual(len(manifest["execution_order"]), 5)
         self.assertEqual(set(manifest["execution_order"]), expected_operations)
         self.assertEqual(set(manifest["transactions"]), expected_operations)
         self.assertFalse(manifest["external_execution_boundary"]["repository_signs_transactions"])
@@ -107,6 +124,18 @@ class EvidenceTemplateTests(unittest.TestCase):
         self.assertFalse(manifest["external_execution_boundary"]["repository_reads_private_keys"])
         self.assertEqual(manifest["review"]["unresolved_critical_findings"], 0)
         self.assertEqual(manifest["review"]["unresolved_high_findings"], 0)
+
+    def test_transaction_templates_use_only_the_ownerless_v02_roles(self) -> None:
+        expected_roles = {"core_publisher", "assets_publisher", "amm_publisher", "bootstrap_lp"}
+
+        build_request = self.load_json("ops/evidence/transaction-build-request.template.json")
+        self.assertEqual(set(build_request["roles"]), expected_roles)
+        self.assertEqual(set(build_request["profile_public_keys"]), expected_roles)
+        self.assertNotIn("seed_amounts", build_request)
+
+        transaction = self.load_json("ops/evidence/transaction-evidence.template.json")
+        self.assertEqual(set(transaction["roles"]), expected_roles)
+        self.assertEqual(set(transaction["public_profile_binding"]["profiles"]), expected_roles)
 
     def test_hook_probe_template_has_one_complete_slot_for_h1_through_h8(self) -> None:
         report = self.load_json("ops/evidence/hook-probe.template.json")
@@ -132,6 +161,7 @@ class EvidenceTemplateTests(unittest.TestCase):
             )
             self.assertTrue(entry["evidence_references"])
         self.assertEqual(len(report["approved_by"]), 2)
+        self.assertEqual(report["mode_decision"], "automatic-materialisation")
 
     def test_finalized_hook_probe_record_is_complete_and_claim_backed(self) -> None:
         report = self.load_json("ops/evidence/hook-probe-testnet.json")

@@ -170,9 +170,19 @@ class ReflectionModel:
         max_gross_swap: int = DEFAULT_MAX_GROSS_SWAP,
         admin: str = "admin",
         extra_exclusions: Iterable[str] = (),
+        _maximum_reflection_fee_bps: int = 100,
     ) -> None:
         self._require_token_amount(fixed_supply, "fixed_supply", allow_zero=False)
-        self._require_bps(fee_bps, "fee_bps", maximum=100)
+        self._require_bps(
+            _maximum_reflection_fee_bps,
+            "maximum_reflection_fee_bps",
+            maximum=BPS_DENOMINATOR,
+        )
+        self._require_bps(
+            fee_bps,
+            "fee_bps",
+            maximum=_maximum_reflection_fee_bps,
+        )
         self._require_bps(amm_fee_bps, "amm_fee_bps", maximum=100)
         self._require_bps(
             max_reserve_bps,
@@ -192,6 +202,7 @@ class ReflectionModel:
         self.admin = admin
         self.fixed_supply = fixed_supply
         self.fee_bps = fee_bps
+        self.maximum_reflection_fee_bps = _maximum_reflection_fee_bps
         self.amm_fee_bps = amm_fee_bps
         self._automatic_materialization = automatic_materialization
         self.max_reserve_bps = max_reserve_bps
@@ -390,7 +401,11 @@ class ReflectionModel:
 
     def set_fee_bps(self, actor: str, fee_bps: int) -> None:
         self._require_admin(actor)
-        self._require_bps(fee_bps, "fee_bps", maximum=100)
+        self._require_bps(
+            fee_bps,
+            "fee_bps",
+            maximum=self.maximum_reflection_fee_bps,
+        )
         self.fee_bps = fee_bps
         self._event("FeeConfigurationChanged", fee_bps=fee_bps)
 
@@ -1059,8 +1074,8 @@ class ReflectionModel:
 
     def assert_fast_invariants(self) -> None:
         """O(epochs) checks suitable for every randomized operation."""
-        if not 0 <= self.fee_bps <= 100:
-            raise AssertionError("reflection fee is outside the 0-100 bps policy")
+        if not 0 <= self.fee_bps <= self.maximum_reflection_fee_bps:
+            raise AssertionError("reflection fee is outside its creation-bound policy")
         if not 0 <= self.amm_fee_bps <= 100:
             raise AssertionError("AMM fee is outside the 0-100 bps policy")
         if not 0 < self.max_reserve_bps <= BPS_DENOMINATOR:
@@ -1166,7 +1181,7 @@ class ReflectionModel:
             if sum(epoch.pending(owner) for owner in epoch.positions) > epoch.aggregate_liability():
                 raise AssertionError("individual LP pending exceeds aggregate liability")
             for owner, position in epoch.positions.items():
-                if owner not in self.registered_wallets:
+                if not self._lp_owner_is_valid(owner):
                     raise AssertionError("LP share owner is not a registered wallet")
                 if position.shares < 0 or position.claimed < 0 or epoch.pending(owner) < 0:
                     raise AssertionError("invalid LP position")
@@ -1217,6 +1232,10 @@ class ReflectionModel:
             raise AccountingError("protocol and excluded stores cannot register as wallets")
         if self.raw_balance(account) != 0:
             raise PoolBypassError("unregistered custody already holds tRFL")
+
+    def _lp_owner_is_valid(self, owner: str) -> bool:
+        """Legacy v0.1 LP positions require prior wallet registration."""
+        return owner in self.registered_wallets
 
     def _require_registered_wallet(self, account: str) -> None:
         if account not in self.registered_wallets:
@@ -1304,7 +1323,14 @@ class ReflectionModel:
         if shortfall > self.pending(account):
             raise AccountingError("insufficient effective tRFL")
 
-    def _materialize(self, account: str, amount: int, *, event_name: str) -> None:
+    def _materialize(
+        self,
+        account: str,
+        amount: int,
+        *,
+        event_name: str,
+        trigger: Optional[int] = None,
+    ) -> None:
         if amount > self.pending(account) or amount > self.reward_vault_balance:
             raise AccountingError("materialisation exceeds backed pending rewards")
         next_account_materialized = self._require_u256_sum(
@@ -1321,7 +1347,14 @@ class ReflectionModel:
         self._credit_wallet(account, amount)
         self.materialized[account] = next_account_materialized
         self.lifetime_materialized = next_lifetime_materialized
-        self._event(event_name, account=account, amount=amount)
+        fields: dict[str, Any] = {
+            "account": account,
+            "amount": amount,
+            "total_claimed": next_account_materialized,
+        }
+        if trigger is not None:
+            fields["trigger"] = trigger
+        self._event(event_name, **fields)
 
     def _advance_index(self, fee: int) -> None:
         if fee == 0:
@@ -1744,6 +1777,7 @@ class ReflectionModel:
         materialized_backup = {
             key: (key in self.materialized, self.materialized.get(key, 0)) for key in account_keys
         }
+        registered_wallets_backup = set(self.registered_wallets)
         epoch_scalar_names = (
             "status",
             "index",
@@ -1781,6 +1815,8 @@ class ReflectionModel:
             self._restore_dictionary_entries(self.quote, quote_backup)
             self._restore_dictionary_entries(self.correction, correction_backup)
             self._restore_dictionary_entries(self.materialized, materialized_backup)
+            self.registered_wallets.clear()
+            self.registered_wallets.update(registered_wallets_backup)
             for epoch_id, (scalars, positions) in epoch_backup.items():
                 epoch = self.lp_epoch(epoch_id)
                 for name, value in scalars.items():

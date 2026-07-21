@@ -19,20 +19,20 @@ trusted_allowed_signers="$(/usr/bin/readlink -f "$2")"
 }
 envelope_directory="$(/usr/bin/dirname "$envelope")"
 /usr/bin/jq -e '
-  .signature_namespace == "cedra-reflect-testnet-release-v1"
+  .signature_namespace == "cedra-reflect-testnet-release-v2"
   and (.statement_file | type == "string" and test("^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"))
   and (.statement_sha256 | type == "string" and test("^[0-9a-f]{64}$"))
   and (.trusted_allowed_signers_sha256 | type == "string" and test("^[0-9a-f]{64}$"))
-  and (.approvals | type == "array" and length == 2)
+  and (.approvals | type == "array" and length == 1)
   and all(.approvals[];
     (keys | sort) == (["identity", "key_fingerprint", "signature_file", "signature_sha256"] | sort)
     and (.identity | type == "string" and test("^[A-Za-z0-9][A-Za-z0-9@._+-]{0,127}$"))
     and (.key_fingerprint | type == "string" and test("^SHA256:[A-Za-z0-9+/=]{43,44}$"))
     and (.signature_file | type == "string" and test("^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"))
     and (.signature_sha256 | type == "string" and test("^[0-9a-f]{64}$")))
-  and ([.approvals[].identity] | unique | length == 2)
-  and ([.approvals[].key_fingerprint] | unique | length == 2)
-  and ([.approvals[].signature_file] | unique | length == 2)
+  and ([.approvals[].identity] | unique | length == 1)
+  and ([.approvals[].key_fingerprint] | unique | length == 1)
+  and ([.approvals[].signature_file] | unique | length == 1)
 ' "$envelope" >/dev/null || {
   /usr/bin/printf 'detached signature envelope identity/key/file structure is invalid\n' >&2
   exit 65
@@ -50,7 +50,7 @@ statement_file="$envelope_directory/$statement_name"
 }
 namespace="$(/usr/bin/jq -r '.signature_namespace' "$envelope")"
 verified_fingerprints=()
-for index in 0 1; do
+for index in 0; do
   identity="$(/usr/bin/jq -r ".approvals[$index].identity" "$envelope")"
   expected_fingerprint="$(/usr/bin/jq -r ".approvals[$index].key_fingerprint" "$envelope")"
   signature_name="$(/usr/bin/jq -r ".approvals[$index].signature_file" "$envelope")"
@@ -75,9 +75,5 @@ for index in 0 1; do
   }
   verified_fingerprints+=("$verified_fingerprint")
 done
-[[ "${verified_fingerprints[0]}" != "${verified_fingerprints[1]}" ]] || {
-  /usr/bin/printf 'two approval identities resolved to the same signing key fingerprint\n' >&2
-  exit 65
-}
 
-/usr/bin/printf 'two distinct identities and two distinct OpenSSH signing-key fingerprints verified\n'
+/usr/bin/printf 'one detached operator identity and OpenSSH signing-key fingerprint verified\n'

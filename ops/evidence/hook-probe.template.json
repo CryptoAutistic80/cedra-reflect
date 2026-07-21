@@ -97,7 +97,7 @@
       "evidence_references": ["RECORD_WALLET_EVIDENCE"]
     }
   ],
-  "mode_decision": "automatic-materialisation|claim-backed|blocked",
+  "mode_decision": "automatic-materialisation",
   "decision_rationale": "Evidence-based conclusion referencing H1-H8.",
   "approved_by": ["RELEASE_APPROVER_1", "RELEASE_APPROVER_2"]
 }

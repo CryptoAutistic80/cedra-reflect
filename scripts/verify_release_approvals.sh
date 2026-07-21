@@ -114,5 +114,5 @@ clean_release_env=(
   "$repo_root/scripts/verify_detached_ssh_signatures.sh" \
   "$envelope" "$trusted_allowed_signers" >/dev/null
 
-/usr/bin/printf 'two distinct detached release approvals from distinct signing keys verified against trust anchor SHA-256 %s\n' \
+/usr/bin/printf 'one detached operator release approval verified against trust anchor SHA-256 %s\n' \
   "$(/usr/bin/sha256sum "$trusted_allowed_signers" | /usr/bin/cut -d ' ' -f 1)"

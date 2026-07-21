@@ -15,15 +15,11 @@ export interface DeployedProtocolAddresses extends ProtocolAddresses {
 interface EntryShape {
   readonly functionId: string;
   readonly argumentKinds: readonly MoveArgumentKind[];
-  readonly secondarySignerCount?: number;
-  readonly primarySignerPackage?: keyof ProtocolModuleAddresses;
-  readonly fixedSecondarySignerPackages?: readonly (keyof ProtocolModuleAddresses)[];
 }
 
-type MoveArgumentKind = "u64" | "u128" | "address" | "bool";
+type MoveArgumentKind = "u64" | "u128" | "address";
 const U64_MAX = (1n << 64n) - 1n;
 const U128_MAX = (1n << 128n) - 1n;
-const BPS_DENOMINATOR = 10_000n;
 
 const ENTRY_SHAPES: Readonly<Record<TransactionDraft["kind"], readonly EntryShape[]>> = {
   faucet_claim: [
@@ -53,44 +49,6 @@ const ENTRY_SHAPES: Readonly<Record<TransactionDraft["kind"], readonly EntryShap
   checkpoint_lp_rewards: [
     { functionId: "test_amm::pool::checkpoint_lp_rewards", argumentKinds: [] },
   ],
-  configure_liquidity_limits: [
-    { functionId: "test_amm::pool::configure_liquidity_limits", argumentKinds: ["u64", "u64", "u64"] },
-  ],
-  set_faucet_paused: [
-    { functionId: "test_assets::test_faucet::set_paused", argumentKinds: ["bool"] },
-  ],
-  set_operational_admin: [
-    { functionId: "reflection_core::reflection_token::set_operational_admin", argumentKinds: [], secondarySignerCount: 1 },
-    { functionId: "test_assets::test_faucet::set_operational_admin", argumentKinds: [], secondarySignerCount: 1 },
-    { functionId: "test_amm::pool::set_operational_admin", argumentKinds: [], secondarySignerCount: 1 },
-  ],
-  set_all_operational_admin: [
-    {
-      functionId: "test_amm::pool::set_all_operational_admin",
-      argumentKinds: [],
-      secondarySignerCount: 3,
-      primarySignerPackage: "reflectionCore",
-      fixedSecondarySignerPackages: ["testAssets", "testAmm"],
-    },
-  ],
-  seed_liquidity: [
-    {
-      functionId: "test_amm::pool::seed_liquidity",
-      argumentKinds: ["u64", "u64", "u128"],
-      secondarySignerCount: 2,
-      primarySignerPackage: "reflectionCore",
-      fixedSecondarySignerPackages: ["testAmm"],
-    },
-  ],
-  reseed_liquidity: [
-    {
-      functionId: "test_amm::pool::reseed_liquidity",
-      argumentKinds: ["u64", "u64", "u128"],
-      secondarySignerCount: 2,
-      primarySignerPackage: "reflectionCore",
-      fixedSecondarySignerPackages: ["testAmm"],
-    },
-  ],
 };
 
 function knownEntryShape(draft: TransactionDraft): EntryShape {
@@ -116,7 +74,7 @@ function knownEntryShape(draft: TransactionDraft): EntryShape {
   const match = shapes.find((shape) => (
     shape.functionId === candidate.functionId
     && shape.argumentKinds.length === candidate.arguments!.length
-    && (shape.secondarySignerCount ?? 0) === candidate.secondarySignerAddresses!.length
+    && candidate.secondarySignerAddresses!.length === 0
   ));
   if (match === undefined) {
     throw new TypeError(`Draft kind ${draft.kind} does not match a supported entry-function shape`);
@@ -137,10 +95,6 @@ export function assertCedraTransactionDraft(draft: TransactionDraft): void {
 function assertMoveArgument(value: unknown, kind: MoveArgumentKind, index: number): void {
   if (kind === "address") {
     canonicalAddressKey(value);
-    return;
-  }
-  if (kind === "bool") {
-    if (typeof value !== "boolean") throw new TypeError(`Move argument ${index.toString()} must be a boolean`);
     return;
   }
   const maximum = kind === "u64" ? U64_MAX : U128_MAX;
@@ -179,20 +133,6 @@ function assertEntrySemantics(draft: TransactionDraft, shape: EntryShape): void 
     case "test_amm::pool::claim_lp_rewards":
       assertPositiveArgument(draft, 0, "LP epoch");
       break;
-    case "test_amm::pool::configure_liquidity_limits": {
-      assertPositiveArgument(draft, 0, "maximum tRFL contribution");
-      assertPositiveArgument(draft, 1, "maximum tUSD contribution");
-      const bps = draft.arguments[2];
-      if (typeof bps !== "bigint" || bps <= 0n || bps > BPS_DENOMINATOR) {
-        throw new RangeError("maximum withdrawal share must be between 1 and 10,000 basis points");
-      }
-      break;
-    }
-    case "test_amm::pool::seed_liquidity":
-    case "test_amm::pool::reseed_liquidity":
-      assertPositiveArgument(draft, 0, "bootstrap tRFL amount");
-      assertPositiveArgument(draft, 1, "bootstrap tUSD amount");
-      break;
     default:
       break;
   }
@@ -221,49 +161,6 @@ export function encodeCedraEntryFunction(
     );
   }
   return encodePayload(draft, modules);
-}
-
-export interface EncodedCedraMultiAgentEntry {
-  /** Exact Cedra primary signer derived from the reviewed Move ABI. */
-  readonly senderAddress: Address;
-  readonly data: InputEntryFunctionData;
-  /** Cedra authenticator order; changing this order changes the transaction. */
-  readonly secondarySignerAddresses: readonly Address[];
-}
-
-/**
- * Encodes both the Move payload and the exact ordered secondary-signer list.
- * The result is suitable for `CedraReleaseClient.buildMultiAgent`; it never
- * loads keys, signs, or submits.
- */
-export function encodeCedraMultiAgentEntryFunction(
-  draft: TransactionDraft,
-  modules: ProtocolModuleAddresses,
-): EncodedCedraMultiAgentEntry {
-  const shape = knownEntryShape(draft);
-  if (draft.secondarySignerAddresses.length === 0) {
-    throw new TypeError("A single-signer draft cannot be encoded as a multi-agent entry.");
-  }
-  const data = encodePayload(draft, modules);
-  const senderAddress = shape.primarySignerPackage === undefined
-    ? publisherForFunction(draft.functionId, modules)
-    : modules[shape.primarySignerPackage];
-  const fixedPackages = shape.fixedSecondarySignerPackages ?? [];
-  for (let index = 0; index < fixedPackages.length; index += 1) {
-    const role = fixedPackages[index]!;
-    if (canonicalAddressKey(draft.secondarySignerAddresses[index]!) !== canonicalAddressKey(modules[role])) {
-      throw new TypeError(`Secondary signer ${index.toString()} must be the finalized ${role} publisher`);
-    }
-  }
-  const signerKeys = [senderAddress, ...draft.secondarySignerAddresses].map(canonicalAddressKey);
-  if (new Set(signerKeys).size !== signerKeys.length) {
-    throw new TypeError("Every Cedra multi-agent signer must have a distinct canonical address");
-  }
-  return {
-    senderAddress,
-    data,
-    secondarySignerAddresses: [...draft.secondarySignerAddresses],
-  };
 }
 
 function canonicalAddressKey(address: unknown): string {

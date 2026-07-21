@@ -14,6 +14,7 @@ import type {
   PortfolioSnapshot,
   ProtocolAddresses,
   ProtocolSnapshot,
+  ProtocolLifecycle,
   SwapQuote,
 } from "./types.js";
 import { CEDRA_TESTNET_CHAIN_ID } from "./types.js";
@@ -108,7 +109,7 @@ function objectAddress(value: unknown, functionId: string): Address {
   throw new MalformedMoveViewError(functionId, "expected an object address");
 }
 
-function unsigned(value: unknown, bits: 64 | 128 | 256, functionId: string): bigint {
+function unsigned(value: unknown, bits: 8 | 64 | 128 | 256, functionId: string): bigint {
   let parsed: bigint;
   if (typeof value === "bigint") {
     parsed = value;
@@ -119,7 +120,7 @@ function unsigned(value: unknown, bits: 64 | 128 | 256, functionId: string): big
   } else {
     throw new MalformedMoveViewError(functionId, `expected a decimal u${bits}`);
   }
-  const maximum = bits === 64 ? U64_MAX : bits === 128 ? U128_MAX : U256_MAX;
+  const maximum = bits === 8 ? 255n : bits === 64 ? U64_MAX : bits === 128 ? U128_MAX : U256_MAX;
   if (parsed < 0n || parsed > maximum) {
     throw new MalformedMoveViewError(functionId, `value is outside u${bits}`);
   }
@@ -131,6 +132,14 @@ function boolean(value: unknown, functionId: string): boolean {
     throw new MalformedMoveViewError(functionId, "expected a boolean");
   }
   return value;
+}
+
+function lifecycle(value: unknown, functionId: string): ProtocolLifecycle {
+  const code = unsigned(value, 8, functionId);
+  if (code === 0n) return "CONFIGURING";
+  if (code === 1n) return "LIVE";
+  if (code === 2n) return "CLOSED";
+  throw new MalformedMoveViewError(functionId, "expected lifecycle code 0, 1, or 2");
 }
 
 function utf8Vector(value: unknown, functionId: string): string {
@@ -283,18 +292,27 @@ export class FinalizedCedraReadAdapter implements CedraReadAdapter {
   public async getProtocol(): Promise<ProtocolSnapshot> {
     const identity = await this.pinAndValidateIdentity();
     const core = this.manifest.packages.reflectionCore;
-    const assets = this.manifest.packages.testAssets;
-    const [automatic, holders, global, vaultBalance, liability, pauses, faucetPaused, pool] = await Promise.all([
+    const [automatic, lifecycleRaw, feeBpsRaw, holders, global, vaultBalance, liability, pool] = await Promise.all([
       this.scalar(identity.version, core, "reflection_token", "automatic_materialization_enabled", []),
+      this.scalar(identity.version, core, "reflection_token", "launch_state", []),
+      this.scalar(identity.version, core, "reflection_token", "reflection_fee_bps", []),
       this.scalar(identity.version, core, "reflection_token", "registered_wallet_count", []),
       this.tuple(identity.version, core, "reflection_token", "global_accounting", [], 6),
       this.scalar(identity.version, core, "reflection_token", "reward_vault_balance", []),
       this.scalar(identity.version, core, "reflection_token", "aggregate_indexed_liability", []),
-      this.tuple(identity.version, core, "reflection_token", "pauses", [], 2),
-      this.scalar(identity.version, assets, "test_faucet", "paused", []),
       this.readPoolAt(identity.version),
     ]);
+    const protocolLifecycle = lifecycle(lifecycleRaw, `${core}::reflection_token::launch_state`);
+    const reflectionFeeBps = unsigned(feeBpsRaw, 64, `${core}::reflection_token::reflection_fee_bps`);
+    if (reflectionFeeBps > 500n) {
+      throw new MalformedMoveViewError(`${core}::reflection_token::reflection_fee_bps`, "fee exceeds the immutable v0.2 creation bound");
+    }
+    if (pool.lifecycle !== protocolLifecycle) {
+      throw new MalformedMoveViewError(`${core}::reflection_token::launch_state`, "core and pool lifecycles disagree");
+    }
     return detachedDeepFreeze({
+      lifecycle: protocolLifecycle,
+      reflectionFeeBps,
       automaticMaterialization: boolean(automatic, `${core}::reflection_token::automatic_materialization_enabled`),
       eligibleHolders: unsigned(holders, 64, `${core}::reflection_token::registered_wallet_count`),
       eligibleSupply: unsigned(global[2], 128, `${core}::reflection_token::global_accounting`),
@@ -305,8 +323,8 @@ export class FinalizedCedraReadAdapter implements CedraReadAdapter {
       currentIndex: unsigned(global[0], 256, `${core}::reflection_token::global_accounting`),
       indexRemainder: unsigned(global[1], 256, `${core}::reflection_token::global_accounting`),
       pool,
-      claimsPaused: boolean(pauses[1], `${core}::reflection_token::pauses`),
-      faucetPaused: boolean(faucetPaused, `${assets}::test_faucet::paused`),
+      claimsPaused: false,
+      faucetPaused: false,
       packageVersion: identity.packageVersion,
       ledgerVersion: identity.version,
     });
@@ -348,10 +366,9 @@ export class FinalizedCedraReadAdapter implements CedraReadAdapter {
     const identity = await this.pinAndValidateIdentity();
     const assets = this.manifest.packages.testAssets;
     const core = this.manifest.packages.reflectionCore;
-    const [configuration, lastClaim, paused, distributionBalance] = await Promise.all([
+    const [configuration, lastClaim, distributionBalance] = await Promise.all([
       this.tuple(identity.version, assets, "test_faucet", "configuration", [], 3),
       this.tuple(identity.version, assets, "test_faucet", "last_claim", [canonicalAccount, asset === "tRFL"], 2),
-      this.scalar(identity.version, assets, "test_faucet", "paused", []),
       asset === "tRFL"
         ? this.scalar(identity.version, core, "reflection_token", "distribution_vault_balance", [])
         : Promise.resolve(U64_MAX),
@@ -367,15 +384,13 @@ export class FinalizedCedraReadAdapter implements CedraReadAdapter {
         "previous claim plus cooldown exceeds the u64 timestamp domain",
       );
     }
-    const isPaused = boolean(paused, `${assets}::test_faucet::paused`);
     const hasInventory = unsigned(distributionBalance, 64, `${core}::reflection_token::distribution_vault_balance`) >= grantAmount;
     return detachedDeepFreeze({
       asset,
       account: canonicalAccount,
       grantAmount,
       cooldownEndsAtUnixSeconds,
-      canClaim: !isPaused
-        && (asset === "tUSD" || hasInventory)
+      canClaim: (asset === "tUSD" || hasInventory)
         && (!hasClaimed || (
           identity.timestampUnixSeconds >= previousClaim
           && identity.timestampUnixSeconds >= cooldownEndsAtUnixSeconds
@@ -419,7 +434,7 @@ export class FinalizedCedraReadAdapter implements CedraReadAdapter {
       ),
       this.tuple(identity.version, amm, "pool", "reserves_view", [], 2),
       this.tuple(identity.version, amm, "pool", "limits", [], 3),
-      this.scalar(identity.version, core, "reflection_token", "fee_bps", []),
+      this.scalar(identity.version, core, "reflection_token", "reflection_fee_bps", []),
     ]);
     const functionId = `${amm}::pool::${input.direction === "sell" ? "quote_sell" : "quote_buy"}`;
     const firstOutput = unsigned(quote[0], 64, functionId);
@@ -428,13 +443,13 @@ export class FinalizedCedraReadAdapter implements CedraReadAdapter {
     const reflectionFeeBps = unsigned(
       feeBpsRaw,
       64,
-      `${core}::reflection_token::fee_bps`,
+      `${core}::reflection_token::reflection_fee_bps`,
     );
     const ammFeeBps = unsigned(limits[0], 64, `${amm}::pool::limits`);
     const maximumReserveBps = unsigned(limits[1], 64, `${amm}::pool::limits`);
     const maximumGrossSwap = unsigned(limits[2], 64, `${amm}::pool::limits`);
     if (
-      reflectionFeeBps > 100n
+      reflectionFeeBps > 500n
       || ammFeeBps > 100n
       || maximumReserveBps === 0n
       || maximumReserveBps > BPS_DENOMINATOR
@@ -614,21 +629,13 @@ export class FinalizedCedraReadAdapter implements CedraReadAdapter {
 
   private async readPoolAt(ledgerVersion: bigint): Promise<PoolSnapshot> {
     const amm = this.manifest.packages.testAmm;
-    const core = this.manifest.packages.reflectionCore;
-    const [reserves, limits, liquidity, pause, corePause] = await Promise.all([
+    const [reserves, limits, liquidity, lifecycleRaw] = await Promise.all([
       this.tuple(ledgerVersion, amm, "pool", "reserves_view", [], 2),
       this.tuple(ledgerVersion, amm, "pool", "limits", [], 3),
       this.tuple(ledgerVersion, amm, "pool", "liquidity_limits", [], 3),
-      this.tuple(ledgerVersion, amm, "pool", "pause_state", [], 5),
-      this.tuple(ledgerVersion, core, "reflection_token", "pauses", [], 2),
+      this.scalar(ledgerVersion, amm, "pool", "lifecycle", []),
     ]);
-    const poolPaused = boolean(pause[0], `${amm}::pool::pause_state`);
-    boolean(pause[1], `${amm}::pool::pause_state`);
-    boolean(pause[2], `${amm}::pool::pause_state`);
-    const shutdownMode = boolean(pause[3], `${amm}::pool::pause_state`);
-    const seeded = boolean(pause[4], `${amm}::pool::pause_state`);
-    const coreSwapsPaused = boolean(corePause[0], `${core}::reflection_token::pauses`);
-    boolean(corePause[1], `${core}::reflection_token::pauses`);
+    const poolLifecycle = lifecycle(lifecycleRaw, `${amm}::pool::lifecycle`);
     const ammFeeBps = unsigned(limits[0], 64, `${amm}::pool::limits`);
     const maximumReserveBps = unsigned(limits[1], 64, `${amm}::pool::limits`);
     const maximumGrossSwap = unsigned(limits[2], 64, `${amm}::pool::limits`);
@@ -648,9 +655,10 @@ export class FinalizedCedraReadAdapter implements CedraReadAdapter {
       throw new MalformedMoveViewError(`${amm}::pool::limits`, "pool limit state is outside the immutable contract policy");
     }
     return {
+      lifecycle: poolLifecycle,
       trflReserve: unsigned(reserves[0], 64, `${amm}::pool::reserves_view`),
       tusdReserve: unsigned(reserves[1], 64, `${amm}::pool::reserves_view`),
-      swapsPaused: poolPaused || shutdownMode || coreSwapsPaused || !seeded,
+      swapsPaused: poolLifecycle !== "LIVE",
       maximumGrossSwap,
       maximumReserveBps,
       maximumRflContribution,

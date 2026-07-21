@@ -12,7 +12,22 @@ export type AssetSymbol = "tRFL" | "tUSD" | "CED";
 
 export type SwapDirection = "buy" | "sell";
 
-export type OperationalAdminScope = "reflection-core" | "test-assets" | "test-amm";
+export type ProtocolLifecycle = "CONFIGURING" | "LIVE" | "CLOSED";
+
+export const MATERIALIZATION_TRIGGERS = {
+  manual: 0,
+  send: 1,
+  receive: 2,
+  buyPre: 3,
+  buyPost: 4,
+  sellPre: 5,
+  sellPost: 6,
+  liquidityIn: 7,
+  liquidityOut: 8,
+  lpPayout: 9,
+  faucet: 10,
+} as const;
+export type MaterializationTrigger = typeof MATERIALIZATION_TRIGGERS[keyof typeof MATERIALIZATION_TRIGGERS];
 
 export interface ProtocolAddresses {
   readonly tokenMetadata: Address;
@@ -26,7 +41,7 @@ export interface ProtocolConfiguration {
   readonly networkLabel: "cedra-testnet" | "local";
   readonly deploymentId: string;
   readonly addresses: ProtocolAddresses;
-  readonly feeBps: bigint;
+  readonly reflectionFeeBps: bigint;
   readonly ammFeeBps: bigint;
   readonly version: string;
 }
@@ -45,6 +60,8 @@ export interface PortfolioSnapshot {
 export interface PoolSnapshot {
   readonly trflReserve: bigint;
   readonly tusdReserve: bigint;
+  readonly lifecycle?: ProtocolLifecycle;
+  /** Compatibility status for v0.1 consumers; v0.2 has no pause control. */
   readonly swapsPaused: boolean;
   readonly maximumGrossSwap: bigint;
   readonly maximumReserveBps: bigint;
@@ -65,6 +82,10 @@ export interface LpEpochTerminalDustSnapshot {
 }
 
 export interface ProtocolSnapshot {
+  /** Present for v0.2 snapshots; absent only on explicitly legacy v0.1 fixtures. */
+  readonly lifecycle?: ProtocolLifecycle;
+  /** Immutable creation-time rate in v0.2; absent only on legacy v0.1 fixtures. */
+  readonly reflectionFeeBps?: bigint;
   readonly automaticMaterialization: boolean;
   readonly eligibleHolders: bigint;
   readonly eligibleSupply: bigint;
@@ -75,7 +96,9 @@ export interface ProtocolSnapshot {
   readonly currentIndex: bigint;
   readonly indexRemainder: bigint;
   readonly pool: PoolSnapshot;
+  /** Compatibility status for v0.1 consumers; always false in v0.2. */
   readonly claimsPaused: boolean;
+  /** Compatibility status for v0.1 consumers; always false in v0.2. */
   readonly faucetPaused: boolean;
   readonly packageVersion: string;
   readonly ledgerVersion: bigint;
@@ -138,13 +161,7 @@ export interface TransactionDraft {
     | "remove_liquidity"
     | "transfer_lp_shares"
     | "claim_lp_rewards"
-    | "checkpoint_lp_rewards"
-    | "configure_liquidity_limits"
-    | "set_faucet_paused"
-    | "set_operational_admin"
-    | "set_all_operational_admin"
-    | "seed_liquidity"
-    | "reseed_liquidity";
+    | "checkpoint_lp_rewards";
   readonly functionId: string;
   readonly arguments: readonly EntryArgument[];
   /**

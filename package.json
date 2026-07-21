@@ -1,6 +1,6 @@
 {
   "name": "reflection-pilot-testnet",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "Offline-first client, dashboard, and accounting witness for the Cedra Reflection Pilot Testnet.",

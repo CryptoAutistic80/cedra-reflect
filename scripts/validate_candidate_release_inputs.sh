@@ -54,7 +54,7 @@ validator="$repo_root/scripts/validate_release_evidence.sh"
 exact_roles="$(/usr/bin/jq -cS '.roles' "$exact_artifacts")"
 profile_roles="$(/usr/bin/jq -cS '.profiles | with_entries(.value = ("0x" + .value.account | ascii_downcase | sub("^0x0+"; "0x")))' "$public_profile")"
 [[ "$exact_roles" == "$profile_roles" ]] || {
-  /usr/bin/printf 'public profile addresses differ from the exact-address five-role map\n' >&2
+  /usr/bin/printf 'public profile addresses differ from the exact-address four-role map\n' >&2
   exit 65
 }
 [[ "$(/usr/bin/jq -r '.public_role_candidate_binding.sha256' "$exact_artifacts")" == "$(/usr/bin/jq -r '.public_role_candidate_sha256' "$public_profile")" ]] || {

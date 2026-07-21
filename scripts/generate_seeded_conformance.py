@@ -26,7 +26,17 @@ PYTHON_ROOT = ROOT / "python"
 if str(PYTHON_ROOT) not in sys.path:
     sys.path.insert(0, str(PYTHON_ROOT))
 
-from reflection_model import AccountingError, ReflectionModel  # noqa: E402
+from reflection_model import (  # noqa: E402
+    AccountingError,
+    OwnerlessReflectionModel,
+    ReflectionModel,
+    V02_BOOTSTRAP_LP,
+    V02_FAUCET_ACTOR,
+    V02_FAUCET_GRANT,
+    V02_FAUCET_TUSD_GRANT,
+    V02_INITIAL_RFL_LIQUIDITY,
+    V02_INITIAL_TUSD_LIQUIDITY,
+)
 
 
 GENERATED_OPERATION_COUNT = 64
@@ -1375,6 +1385,114 @@ def check_or_write(path: Path, expected: str, check: bool) -> bool:
     return True
 
 
+def ownerless_witness_values() -> dict[str, int]:
+    """Execute the exact v0.2 sequence encoded by the generated Move test."""
+
+    model = OwnerlessReflectionModel()
+    model.seed_pool(
+        "creator",
+        V02_INITIAL_RFL_LIQUIDITY,
+        V02_INITIAL_TUSD_LIQUIDITY,
+        beneficiary=V02_BOOTSTRAP_LP,
+    )
+    model.seal_launch("creator")
+    for account in ("alice", "bob", "carol", "dave"):
+        model.faucet_grant(V02_FAUCET_ACTOR, account, V02_FAUCET_GRANT)
+    for account in ("alice", "bob"):
+        model.faucet_grant_tusd(V02_FAUCET_ACTOR, account, V02_FAUCET_TUSD_GRANT)
+
+    one = 1_000_000
+    model.sell("alice", 7 * one)
+    model.buy("alice", 5 * one)
+    model.transfer("bob", "carol", 11 * one)
+    model.add_liquidity("bob", 10 * one, 10 * one, min_lp_shares=1)
+    model.sell("alice", 9 * one)
+    bob_shares = model.lp_shares(1, "bob")
+    model.transfer_lp_shares("bob", "dave", bob_shares // 3)
+    model.buy("alice", 6 * one)
+    model.remove_liquidity(
+        "bob",
+        model.lp_shares(1, "bob") // 2,
+        min_rfl_output=1,
+        min_usd_output=1,
+    )
+    model.assert_invariants()
+    assert model.pool_pending_rewards() == 0
+    return {
+        "alice_raw": model.raw_balance("alice"),
+        "alice_pending": model.pending("alice"),
+        "bob_raw": model.raw_balance("bob"),
+        "bob_pending": model.pending("bob"),
+        "carol_raw": model.raw_balance("carol"),
+        "carol_pending": model.pending("carol"),
+        "carol_effective": model.effective_balance("carol"),
+        "dave_raw": model.raw_balance("dave"),
+        "dave_pending": model.pending("dave"),
+        "dave_effective": model.effective_balance("dave"),
+        "bob_lp_pending": model.lp_pending(1, "bob"),
+        "bob_lp_shares": model.lp_shares(1, "bob"),
+        "dave_lp_shares": model.lp_shares(1, "dave"),
+        "dave_lp_pending": model.lp_pending(1, "dave"),
+        "reserve_rfl": model.pool_rfl_reserve,
+        "reserve_usd": model.pool_usd_reserve,
+    }
+
+
+def move_number(value: int) -> str:
+    return f"{value:_}"
+
+
+def ownerless_assertion_block(values: dict[str, int]) -> str:
+    return "\n".join(
+        [
+            "        // BEGIN GENERATED MODEL ASSERTIONS",
+            "        // Exact values are emitted by the independent Python v0.2 model for",
+            "        // the deterministic operation sequence above.",
+            "        assert!(reflection_token::reflection_fee_bps() == 100, 1);",
+            "        assert!(reflection_token::pool_pending_rewards() == 0, 2);",
+            f"        assert!(reflection_token::raw_balance(signer::address_of(alice)) == {move_number(values['alice_raw'])}, 3);",
+            f"        assert!(reflection_token::pending_rewards(signer::address_of(alice)) == {move_number(values['alice_pending'])}, 4);",
+            f"        assert!(reflection_token::raw_balance(signer::address_of(bob)) == {move_number(values['bob_raw'])}, 5);",
+            f"        assert!(reflection_token::pending_rewards(signer::address_of(bob)) == {move_number(values['bob_pending'])}, 6);",
+            f"        assert!(reflection_token::raw_balance(signer::address_of(carol)) == {move_number(values['carol_raw'])}, 7);",
+            f"        assert!(reflection_token::pending_rewards(signer::address_of(carol)) == {move_number(values['carol_pending'])}, 8);",
+            f"        assert!(reflection_token::effective_balance(signer::address_of(carol)) == {move_number(values['carol_effective'])}, 9);",
+            f"        assert!(reflection_token::raw_balance(signer::address_of(dave)) == {move_number(values['dave_raw'])}, 10);",
+            f"        assert!(reflection_token::pending_rewards(signer::address_of(dave)) == {move_number(values['dave_pending'])}, 11);",
+            f"        assert!(reflection_token::effective_balance(signer::address_of(dave)) == {move_number(values['dave_effective'])}, 12);",
+            f"        assert!(pool::pending_lp_rewards(1, signer::address_of(bob)) == {move_number(values['bob_lp_pending'])}, 13);",
+            f"        assert!(pool::lp_shares(1, signer::address_of(bob)) == {move_number(values['bob_lp_shares'])}, 14);",
+            f"        assert!(pool::lp_shares(1, signer::address_of(dave)) == {move_number(values['dave_lp_shares'])}, 15);",
+            f"        assert!(pool::pending_lp_rewards(1, signer::address_of(dave)) == {move_number(values['dave_lp_pending'])}, 16);",
+            "        let (reserve_rfl, reserve_usd) = pool::reserves_view();",
+            "        let (custody_shares, _, _) = reflection_token::custody_accounting();",
+            f"        assert!(reserve_rfl == {move_number(values['reserve_rfl'])} && reserve_usd == {move_number(values['reserve_usd'])}, 17);",
+            "        assert!((reserve_rfl as u128) == custody_shares, 18);",
+            "        // END GENERATED MODEL ASSERTIONS",
+        ]
+    )
+
+
+def check_or_update_ownerless_move_witness(check: bool) -> bool:
+    source = MOVE_PATH.read_text(encoding="utf-8")
+    begin = "        // BEGIN GENERATED MODEL ASSERTIONS"
+    end = "        // END GENERATED MODEL ASSERTIONS"
+    if source.count(begin) != 1 or source.count(end) != 1:
+        print(f"missing unique v0.2 witness markers: {MOVE_PATH.relative_to(ROOT)}", file=sys.stderr)
+        return False
+    prefix, remainder = source.split(begin, 1)
+    _, suffix = remainder.split(end, 1)
+    expected = prefix + ownerless_assertion_block(ownerless_witness_values()) + suffix
+    if source == expected:
+        return True
+    if check:
+        print(f"stale generated conformance artifact: {MOVE_PATH.relative_to(ROOT)}", file=sys.stderr)
+        return False
+    MOVE_PATH.write_text(expected, encoding="utf-8")
+    print(f"generated {MOVE_PATH.relative_to(ROOT)}")
+    return True
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--check", action="store_true", help="fail instead of rewriting stale artifacts")
@@ -1404,13 +1522,10 @@ def main() -> int:
             args.check,
         )
     )
-    results.append(
-        check_or_write(
-            MOVE_PATH,
-            render_move(vectors, arithmetic, lifecycle),
-            args.check,
-        )
-    )
+    # The JSON files above are retained as immutable v0.1 replay fixtures.
+    # The release freshness gate now binds the independent automatic v0.2
+    # oracle to the exact values asserted by the Move integration witness.
+    results.append(check_or_update_ownerless_move_witness(args.check))
     return 0 if all(results) else 1
 
 

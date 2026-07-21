@@ -1,11 +1,59 @@
 # Changelog
 
-All notable protocol changes are recorded here. The reflection-core,
-test-assets, and test-AMM packages were published immutably to Cedra Testnet on
-July 21, 2026 from source commit
-`89df1a041e1c62ce031e5e1b413f42c818d56dcf`.
+All notable protocol changes are recorded here. v0.1 and v0.2 are distinct
+immutable deployments and their events, balances, and evidence must never be
+merged.
 
-## Unreleased — Testnet release candidate 0.1.0
+## Unreleased — Testnet release candidate 0.2.0
+
+### Changed
+
+- Replaced claim-backed v0.1 with a fresh automatic-materialization design;
+  there is no migration or in-place upgrade.
+- The reflection fee is selected once during core initialization, accepts
+  0–500 basis points, and has no mutation surface. The v0.2 Testnet instance
+  selects 100 basis points.
+- Wallet send, receive, buy, sell, and liquidity paths materialize all whole
+  pending rewards before relevant weights change. The derived balance remains
+  `raw + pending` for passive holders.
+- Every successful swap automatically checkpoints canonical pool rewards into
+  LP accounting. LP mint, burn, and transfer automatically pay affected
+  positions before changing shares.
+- Final LP withdrawal returns exact reserves and closes the pool permanently.
+
+### Removed
+
+- Removed every fee/configuration setter, pause domain, operational-admin role,
+  authority rotation, shutdown, reseed, later epoch, and recovery entry point.
+- Removed arbitrary seed amounts and split initialization transactions in
+  favor of the source-bound four-signer `pool::launch` transaction.
+- Removed obsolete SDK transaction builders for v0.1 administrative actions.
+  Remaining TypeScript is optional read/reconciliation and deterministic
+  release verification only.
+
+### Security
+
+- Setup capabilities can be issued and bound only while `CONFIGURING`; atomic
+  launch seals them inside source-bound immutable modules.
+- Exact primary-store and custody binding prevents incoming wallets, bought
+  tokens, transferred LP shares, or liquidity changes from capturing historical
+  rewards.
+- Publisher addresses are provenance only after launch. No creator pause,
+  blacklist, mint, sweep, or configuration authority remains.
+
+### Evidence boundary
+
+- v0.2 requires fresh local verification and fresh Testnet deployment evidence.
+  No v0.1 local count, live transaction, wallet result, or reconciliation is
+  evidence that v0.2 passed.
+- The 50,000-transaction, 10,000-swap, 1,000-holder, and 100-LP-position gates
+  remain required before v0.2 is declared canonical.
+
+## 0.1.0 — Historical immutable Testnet deployment
+
+The v0.1 reflection-core, test-assets, and test-AMM packages were published
+immutably to Cedra Testnet on July 21, 2026 from source commit
+`89df1a041e1c62ce031e5e1b413f42c818d56dcf`.
 
 ### Added
 

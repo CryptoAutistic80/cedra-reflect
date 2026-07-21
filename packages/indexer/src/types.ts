@@ -1,6 +1,8 @@
 import type {
   Address,
   CedraTestnetChainId,
+  MaterializationTrigger,
+  ProtocolLifecycle,
   SwapDirection,
 } from "../../protocol-sdk/src/types.js";
 
@@ -35,6 +37,55 @@ export interface ProtocolInitializedEvent extends EventBase {
   readonly rewardVault: Address;
   readonly distributionVault: Address;
   readonly protocolExclusionSlots: bigint;
+}
+
+/** v0.2 creation event. ProtocolInitialized is retained only for v0.1 replay. */
+export interface TokenCreatedEvent extends EventBase {
+  readonly type: "TokenCreated";
+  readonly eventSchema: "v0.2";
+  readonly deploymentId: string;
+  readonly networkLabel: string;
+  readonly tokenMetadata: Address;
+  readonly rewardVault: Address;
+  readonly distributionVault: Address;
+  readonly reflectionFeeBps: bigint;
+  readonly totalSupply: bigint;
+  readonly decimals: bigint;
+  readonly packageVersion: string;
+}
+
+export interface LaunchSealedEvent extends EventBase {
+  readonly type: "LaunchSealed";
+  readonly eventSchema: "v0.2";
+  readonly reflectionFeeBps: bigint;
+  readonly ammFeeBps: bigint;
+  readonly maximumReserveBps: bigint;
+  readonly maximumGrossSwap: bigint;
+  readonly maximumRflContribution: bigint;
+  readonly maximumTusdContribution: bigint;
+  readonly maximumNonFinalWithdrawalShareBps: bigint;
+  readonly faucetTrflGrant: bigint;
+  readonly faucetTusdGrant: bigint;
+  readonly faucetCooldownSeconds: bigint;
+  readonly bootstrap: Address;
+  readonly rflReserve: Address;
+  readonly usdReserve: Address;
+  readonly lpRewardVault: Address;
+  readonly seedRfl: bigint;
+  readonly seedUsd: bigint;
+  readonly initialLpShares: bigint;
+}
+
+export interface PoolClosedEvent extends EventBase {
+  readonly type: "PoolClosed";
+  readonly eventSchema: "v0.2";
+  readonly provider: Address;
+  readonly epoch: bigint;
+  readonly lpShares: bigint;
+  readonly rflOutput: bigint;
+  readonly usdOutput: bigint;
+  readonly rflReserveAfter: bigint;
+  readonly usdReserveAfter: bigint;
 }
 
 export interface ProtocolPrimaryStoreExcludedEvent extends EventBase {
@@ -145,6 +196,8 @@ export interface RewardsMaterializedEvent extends EventBase {
   readonly account: Address;
   readonly amount: bigint;
   readonly totalClaimed: bigint;
+  /** Always present in v0.2; absent only in legacy v0.1 fixtures. */
+  readonly trigger?: MaterializationTrigger;
 }
 
 export interface RewardsClaimedEvent extends EventBase {
@@ -354,6 +407,9 @@ export interface LpEpochTerminalDustClassifiedEvent extends EventBase {
 
 export type ProtocolEvent =
   | ProtocolInitializedEvent
+  | TokenCreatedEvent
+  | LaunchSealedEvent
+  | PoolClosedEvent
   | ProtocolPrimaryStoreExcludedEvent
   | OperationalPrimaryStoreExcludedEvent
   | PositionCreatedEvent
@@ -491,6 +547,8 @@ export interface ProtocolProjection {
   readonly lifetimeMaterialized: bigint;
   readonly lifetimeCustodyRouted: bigint;
   readonly packageVersion: string;
+  /** Present after v0.2 TokenCreated replay; absent on legacy v0.1 snapshots. */
+  readonly lifecycle?: ProtocolLifecycle;
   readonly swapsPaused: boolean;
   readonly claimsPaused: boolean;
   readonly faucetPaused: boolean;
@@ -565,6 +623,9 @@ export interface ObservedAccountingSnapshot {
   /** Accounts independently confirmed through `wallet_is_registered(account)`. */
   readonly registeredWalletAccounts: readonly Address[];
   readonly automaticMaterialization: boolean;
+  /** Present on v0.2 views; absent only for legacy v0.1 reconciliation fixtures. */
+  readonly lifecycle?: ProtocolLifecycle;
+  readonly reflectionFeeBps?: bigint;
   readonly rewardVault: Address;
   readonly rewardVaultBalance: bigint;
   readonly reflectionLiability: bigint;
@@ -612,9 +673,10 @@ export interface ObservedAccountingSnapshot {
   readonly lpClaimsPaused: boolean;
   readonly shutdownMode: boolean;
   readonly poolSeeded: boolean;
-  readonly coreOperationalAdmin: Address;
-  readonly faucetOperationalAdmin: Address;
-  readonly ammOperationalAdmin: Address;
+  /** Legacy v0.1-only views; absent in ownerless v0.2. */
+  readonly coreOperationalAdmin?: Address;
+  readonly faucetOperationalAdmin?: Address;
+  readonly ammOperationalAdmin?: Address;
 }
 
 export interface CriticalAlert {

@@ -24,7 +24,6 @@ module test_amm::lp_rewards {
     const E_ZERO_DENOMINATOR_QUARANTINE: u64 = 10;
     const E_EPOCH_NOT_EMPTY: u64 = 11;
     const E_VAULT_ACCOUNTING: u64 = 12;
-    const E_EPOCH_ALREADY_ACTIVE: u64 = 13;
     const E_PENDING_AT_POSITION_EXIT: u64 = 14;
     const E_INVALID_POSITION_RESIDUE: u64 = 15;
     const E_EPOCH_TERMINAL_ACCOUNTING: u64 = 16;
@@ -65,12 +64,7 @@ module test_amm::lp_rewards {
 
     struct LpEpochRegistry has key {
         active_epoch: u64,
-        next_epoch: u64,
         epochs: Table<u64, LpEpoch>,
-        /// Conservative O(1) role-neutrality guard. Once an address has held
-        /// LP shares it can never become this deployment's operational admin,
-        /// even after shares and whole-unit claims reach zero.
-        historical_lp_participants: Table<address, bool>,
     }
 
     #[event]
@@ -148,9 +142,7 @@ module test_amm::lp_rewards {
         table::add(&mut epochs, 1, new_epoch(1, state_id, first_reward_vault));
         move_to(amm_admin, LpEpochRegistry {
             active_epoch: 1,
-            next_epoch: 2,
             epochs,
-            historical_lp_participants: table::new<address, bool>(),
         });
         event::emit(LpEpochOpened {
             epoch: 1,
@@ -158,29 +150,6 @@ module test_amm::lp_rewards {
             reward_vault: object::object_address(&first_reward_vault),
         });
         LpAccountingCapability { nonce: 1 }
-    }
-
-    public(package) fun open_epoch(
-        cap: &LpAccountingCapability,
-        amm_admin: &signer,
-        reward_vault: Object<FungibleStore>,
-    ): u64 acquires LpEpochRegistry {
-        assert_cap(cap);
-        assert!(signer::address_of(amm_admin) == @test_amm, E_WRONG_AMM_ADDRESS);
-        let registry = borrow_global_mut<LpEpochRegistry>(@test_amm);
-        assert!(registry.active_epoch == 0, E_EPOCH_ALREADY_ACTIVE);
-        let epoch = registry.next_epoch;
-        let state_constructor = object::create_object(@test_amm);
-        let state_id = object::address_from_constructor_ref(&state_constructor);
-        registry.next_epoch = epoch + 1;
-        registry.active_epoch = epoch;
-        table::add(&mut registry.epochs, epoch, new_epoch(epoch, state_id, reward_vault));
-        event::emit(LpEpochOpened {
-            epoch,
-            state_id,
-            reward_vault: object::object_address(&reward_vault),
-        });
-        epoch
     }
 
     /// Accounts for tRFL already moved into the active epoch's frozen vault.
@@ -229,7 +198,6 @@ module test_amm::lp_rewards {
         assert_cap(cap);
         assert!(amount > 0, E_ZERO_AMOUNT);
         let registry = borrow_global_mut<LpEpochRegistry>(@test_amm);
-        mark_lp_participant(registry, owner);
         let epoch_id = registry.active_epoch;
         assert!(epoch_id > 0, E_NO_ACTIVE_EPOCH);
         let epoch = table::borrow_mut(&mut registry.epochs, epoch_id);
@@ -285,8 +253,6 @@ module test_amm::lp_rewards {
         assert_cap(cap);
         assert!(amount > 0, E_ZERO_AMOUNT);
         let registry = borrow_global_mut<LpEpochRegistry>(@test_amm);
-        mark_lp_participant(registry, sender);
-        mark_lp_participant(registry, recipient);
         let epoch_id = registry.active_epoch;
         assert!(epoch_id > 0, E_NO_ACTIVE_EPOCH);
         let epoch = table::borrow_mut(&mut registry.epochs, epoch_id);
@@ -467,13 +433,6 @@ module test_amm::lp_rewards {
     }
 
     #[view]
-    public fun has_ever_held_lp(owner: address): bool acquires LpEpochRegistry {
-        let registry = borrow_global<LpEpochRegistry>(@test_amm);
-        table::contains(&registry.historical_lp_participants, owner)
-            && *table::borrow(&registry.historical_lp_participants, owner)
-    }
-
-    #[view]
     public fun epoch_aggregate_correction(epoch_id: u64): (bool, u256) acquires LpEpochRegistry {
         let epoch = table::borrow(&borrow_global<LpEpochRegistry>(@test_amm).epochs, epoch_id);
         reflection_math::parts(epoch.aggregate_correction)
@@ -562,12 +521,6 @@ module test_amm::lp_rewards {
                 correction: reflection_math::zero(),
                 claimed: 0,
             });
-        };
-    }
-
-    fun mark_lp_participant(registry: &mut LpEpochRegistry, owner: address) {
-        if (!table::contains(&registry.historical_lp_participants, owner)) {
-            table::add(&mut registry.historical_lp_participants, owner, true);
         };
     }
 

@@ -100,4 +100,4 @@ trust="$snapshot_root/inputs/sdk-trust"
 /usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C LANG=C \
   /usr/bin/python3 -I "$repo_root/scripts/render_approval_statement_secure.py" \
   "$repo_root" "$candidate" "$exact_artifacts" "$public_profile" "$output"
-/usr/bin/printf 'sign with: /usr/bin/ssh-keygen -Y sign -n cedra-reflect-testnet-release-v1 -f APPROVER_PRIVATE_KEY %s\n' "$output"
+/usr/bin/printf 'sign with: /usr/bin/ssh-keygen -Y sign -n cedra-reflect-testnet-release-v2 -f APPROVER_PRIVATE_KEY %s\n' "$output"

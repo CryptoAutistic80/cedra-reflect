@@ -20,6 +20,15 @@ from pathlib import Path
 from typing import Any, Final, Mapping, Optional
 
 from .model import AccountingError, ReflectionModel
+from .ownerless import (
+    OwnerlessReflectionModel,
+    V02_BOOTSTRAP_LP,
+    V02_FAUCET_ACTOR,
+    V02_FAUCET_GRANT,
+    V02_FAUCET_TUSD_GRANT,
+    V02_INITIAL_RFL_LIQUIDITY,
+    V02_INITIAL_TUSD_LIQUIDITY,
+)
 
 
 DEFAULT_SEED: Final = "cedra-trfl-wallet-custody-lp-2026-07-20"
@@ -117,7 +126,7 @@ class WorkloadResult:
 
     config: WorkloadConfig
     counters: WorkloadCounters
-    model: ReflectionModel = field(repr=False)
+    model: OwnerlessReflectionModel = field(repr=False)
     runtime_seconds: float
     final_state_digest: str
     emitted_events: int
@@ -126,8 +135,10 @@ class WorkloadResult:
     def report(self, provenance: GitProvenance) -> dict[str, Any]:
         self.counters.assert_consistent()
         return {
-            "schema": "cedra-reflection-model-gate/v1",
-            "materialization_mode": "claim-backed",
+            "schema": "cedra-reflection-model-gate/v2",
+            "release": self.model.release_identity,
+            "lifecycle": self.model.lifecycle,
+            "materialization_mode": "automatic-interaction",
             "automatic_materialization": self.model.automatic_materialization,
             "seed": self.config.seed,
             "requested_successful_operations": self.config.successful_operations,
@@ -171,36 +182,36 @@ def config_from_environment() -> WorkloadConfig:
     )
 
 
-def build_random_model(holder_count: int) -> tuple[ReflectionModel, list[str]]:
+def build_random_model(holder_count: int) -> tuple[OwnerlessReflectionModel, list[str]]:
     """Create the deterministic funded state used by the quantitative gate."""
 
     if holder_count < 3:
         raise ValueError("holder_count must be at least three")
-    required_supply = 8_000_000 + holder_count * 30_000
-    model = ReflectionModel(
-        fixed_supply=required_supply,
-        fee_bps=100,
-        amm_fee_bps=30,
-        automatic_materialization=False,
+    model = OwnerlessReflectionModel(
+        reflection_fee_bps=100,
     )
+    model.seed_pool(
+        "creator",
+        V02_INITIAL_RFL_LIQUIDITY,
+        V02_INITIAL_TUSD_LIQUIDITY,
+        beneficiary=V02_BOOTSTRAP_LP,
+    )
+    model.seal_launch("creator")
     holders = [f"holder-{number:04d}" for number in range(holder_count)]
     for holder in holders:
-        model.faucet_grant("admin", holder, 30_000)
-        model.mint_quote("admin", holder, 100_000)
-    model.mint_quote("admin", "admin", 3_000_000)
-    model.seed_pool(
-        "admin",
-        5_000_000,
-        2_000_000,
-        beneficiary=holders[0],
-        min_lp_shares=1,
+        model.faucet_grant(V02_FAUCET_ACTOR, holder, V02_FAUCET_GRANT)
+        model.faucet_grant_tusd(V02_FAUCET_ACTOR, holder, V02_FAUCET_TUSD_GRANT)
+    model.transfer_lp_shares(
+        V02_BOOTSTRAP_LP,
+        holders[0],
+        model.lp_shares(1, V02_BOOTSTRAP_LP) // 2,
     )
     model.assert_invariants()
     return model, holders
 
 
 def _attempt_random_operation(
-    model: ReflectionModel,
+    model: OwnerlessReflectionModel,
     holders: list[str],
     rng: random.Random,
 ) -> tuple[str, str]:
@@ -221,29 +232,27 @@ def _attempt_random_operation(
         operation = "sell"
     elif kind < 60:
         operation = "buy"
-    elif kind < 68:
+    elif kind < 70:
         operation = "claim"
-    elif kind < 73:
-        operation = "checkpoint_pool"
-    elif kind < 80:
+    elif kind < 78:
         operation = "add_liquidity"
-    elif kind < 86:
+    elif kind < 85:
         operation = "transfer_lp_shares"
     elif kind < 91:
         operation = "claim_lp"
-    elif kind < 96:
+    elif kind < 97:
         operation = "remove_liquidity"
     else:
-        operation = "set_fee_bps"
+        operation = "faucet_tusd"
 
     try:
         if operation == "transfer":
-            available = model.raw_balance(first)
+            available = model.effective_balance(first)
             if not available:
                 return operation, NOOP
             model.transfer(first, second, rng.randint(1, min(available, 2_000)))
         elif operation == "sell":
-            available = model.raw_balance(first)
+            available = model.effective_balance(first)
             if not available:
                 return operation, NOOP
             model.sell(first, rng.randint(1, min(available, 2_000)))
@@ -257,9 +266,6 @@ def _attempt_random_operation(
             if not pending:
                 return operation, NOOP
             model.claim(first, rng.randint(1, pending))
-        elif operation == "checkpoint_pool":
-            if model.checkpoint_pool() == 0:
-                return operation, NOOP
         elif operation == "add_liquidity":
             if not model.raw_balance(first) or not model.quote_balance(first):
                 return operation, NOOP
@@ -285,12 +291,12 @@ def _attempt_random_operation(
                 return operation, NOOP
             model.remove_liquidity(first, rng.randint(1, min(owned, total - 1)))
         else:
-            # Choosing a distinct value makes this an actual configuration
-            # transition, rather than an event-only successful call.
-            fee_bps = rng.randrange(101)
-            if fee_bps == model.fee_bps:
-                fee_bps = (fee_bps + 1) % 101
-            model.set_fee_bps("admin", fee_bps)
+            model.advance_time(model.faucet_cooldown_seconds)
+            model.faucet_grant_tusd(
+                V02_FAUCET_ACTOR,
+                first,
+                V02_FAUCET_TUSD_GRANT,
+            )
     except AccountingError:
         # Expected arithmetic/precondition failures remain observable in the
         # gate result instead of being silently treated as completed work.
@@ -422,6 +428,35 @@ def accounting_state_digest(model: ReflectionModel) -> str:
         "next_epoch": model.next_epoch,
         "lp_epochs": epochs,
     }
+    if isinstance(model, OwnerlessReflectionModel):
+        for legacy_field in (
+            "admin",
+            "swaps_paused",
+            "claims_paused",
+            "pool_paused",
+            "liquidity_paused",
+            "lp_claims_paused",
+            "shutdown_mode",
+            "next_epoch",
+        ):
+            payload.pop(legacy_field, None)
+        payload.update(
+            {
+                "release": model.release_identity,
+                "deployment_id": model.deployment_id,
+                "network_label": model.network_label,
+                "creator_provenance": model.creator,
+                "lifecycle": model.lifecycle,
+                "reflection_fee_bps": model.reflection_fee_bps,
+                "decimals": model.decimals,
+                "bootstrap": V02_BOOTSTRAP_LP,
+                "initial_rfl_liquidity": V02_INITIAL_RFL_LIQUIDITY,
+                "initial_tusd_liquidity": V02_INITIAL_TUSD_LIQUIDITY,
+                "clock_seconds": model.clock_seconds,
+                "last_trfl_claim": dict(sorted(model.last_trfl_claim.items())),
+                "last_tusd_claim": dict(sorted(model.last_tusd_claim.items())),
+            }
+        )
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
     return hashlib.sha256(encoded).hexdigest()
 

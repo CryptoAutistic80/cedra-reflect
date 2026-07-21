@@ -1,9 +1,15 @@
 # Release candidate assembler
 
 This package is the keyless boundary between reviewed release artifacts and an
-external Cedra signing ceremony. It builds and simulates exactly one of the nine
+external Cedra signing ceremony. It builds and simulates exactly one of the five
 ordered Testnet release operations; it cannot read private keys, sign, submit,
 fund, or fetch a remote ABI.
+
+The v0.2 operation set is `core_publish`, `core_initialize`, `assets_publish`,
+`amm_publish`, and `pool_launch`. Core initialization carries the reviewed
+immutable reflection fee `100`; pool launch is a four-signer operation with no
+payload arguments, ordered as core publisher, assets publisher, AMM publisher,
+and bootstrap LP.
 
 The command-line entry point is:
 

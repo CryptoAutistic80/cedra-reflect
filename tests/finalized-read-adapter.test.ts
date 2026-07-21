@@ -22,7 +22,7 @@ const manifest: FinalizedProtocolManifest = {
   networkLabel: "cedra-testnet",
   chainId: 2,
   deploymentId: "reflection-pilot-001",
-  packageVersion: "testnet-v0.1.0",
+  packageVersion: "testnet-v0.2.0",
   finalizedLedgerVersion: 4_000n,
   packages: {
     reflectionCore: CORE,
@@ -51,16 +51,17 @@ function baseResponses(): Map<string, unknown[]> {
     [`${CORE}::reflection_registry::state_object`, [CORE]],
     [`${CORE}::reflection_registry::deployment_id`, [utf8Hex("reflection-pilot-001")]],
     [`${CORE}::reflection_registry::network_label`, [utf8Hex("cedra-testnet")]],
-    [`${CORE}::reflection_registry::release_version`, ["0", "1", "0"]],
+    [`${CORE}::reflection_registry::release_version`, ["0", "2", "0"]],
     [`${CORE}::reflection_token::metadata`, [{ inner: TOKEN }]],
     [`${CORE}::reflection_token::reward_vault`, [REWARD]],
     [`${CORE}::reflection_token::distribution_vault`, [{ inner: DISTRIBUTION }]],
     [`${ASSETS}::mock_usd::metadata`, [TUSD]],
     [`${ASSETS}::mock_usd::pool_reserve`, [USD_RESERVE]],
-    [`${CORE}::reflection_token::fee_bps`, ["100"]],
+    [`${CORE}::reflection_token::reflection_fee_bps`, ["100"]],
+    [`${CORE}::reflection_token::launch_state`, ["1"]],
     [`${AMM}::pool::rfl_reserve_store`, [{ inner: RFL_RESERVE }]],
     [`${AMM}::pool::usd_reserve_store`, [{ inner: USD_RESERVE }]],
-    [`${CORE}::reflection_token::automatic_materialization_enabled`, [false]],
+    [`${CORE}::reflection_token::automatic_materialization_enabled`, [true]],
     [`${CORE}::reflection_token::registered_wallet_count`, ["2"]],
     [`${CORE}::reflection_token::global_accounting`, ["10", "2", "3000", "4", "50", "60"]],
     [`${CORE}::reflection_token::reward_vault_balance`, ["70"]],
@@ -78,6 +79,7 @@ function baseResponses(): Map<string, unknown[]> {
     [`${AMM}::pool::reserves_view`, ["100000", "200000"]],
     [`${AMM}::pool::limits`, ["30", "1000", "5000"]],
     [`${AMM}::pool::liquidity_limits`, ["6000", "7000", "2500"]],
+    [`${AMM}::pool::lifecycle`, ["1"]],
     [`${AMM}::pool::pause_state`, [false, false, false, false, true]],
     [`${AMM}::pool::quote_sell`, ["1954", "10", "3"]],
     [`${AMM}::pool::quote_buy`, ["492", "4", "3"]],
@@ -148,6 +150,8 @@ test("finalized adapter pins an entire protocol snapshot to one ledger version",
   equal(protocol.pool.ledgerVersion, 4_242n, "Nested pool snapshot uses the same selected ledger version");
   equal(protocol.eligibleSupply, 3_000n, "Global eligible supply is parsed without number coercion");
   equal(protocol.reflectionLiability, 80n, "u256 reflection liability remains a bigint");
+  equal(protocol.lifecycle, "LIVE", "Protocol snapshot exposes the immutable lifecycle");
+  equal(protocol.reflectionFeeBps, 100n, "Protocol snapshot exposes the immutable creation fee");
   equal(Object.isFrozen(protocol), true, "Finalized protocol result is frozen at its root");
   equal(Object.isFrozen(protocol.pool), true, "Finalized protocol result is frozen through nested pool state");
   equal(fake.ledgerReads, 1, "One ledger header pins the multi-view read");
@@ -267,22 +271,16 @@ test("finalized adapter binds both AMM reserves and the tUSD capability to the m
   );
 });
 
-test("finalized adapter aggregates core pause, AMM pause, shutdown, and seed state", async () => {
-  for (const [pause, description] of [
-    [[true, false], "core pause"],
-    [[false, false], "AMM shutdown"],
-    [[false, false], "unseeded pool"],
+test("finalized adapter maps the ownerless pool lifecycle to availability", async () => {
+  for (const [code, expected, description] of [
+    ["0", true, "configuring"],
+    ["1", false, "live"],
+    ["2", true, "closed"],
   ] as const) {
     const fake = new FakeFinalizedClient();
-    fake.responses.set(`${CORE}::reflection_token::pauses`, [...pause]);
-    if (description === "AMM shutdown") {
-      fake.responses.set(`${AMM}::pool::pause_state`, [false, false, false, true, true]);
-    }
-    if (description === "unseeded pool") {
-      fake.responses.set(`${AMM}::pool::pause_state`, [false, false, false, false, false]);
-    }
+    fake.responses.set(`${AMM}::pool::lifecycle`, [code]);
     const pool = await new FinalizedCedraReadAdapter(fake, manifest).getPool();
-    equal(pool.swapsPaused, true, `${description} makes swaps unavailable`);
+    equal(pool.swapsPaused, expected, `${description} lifecycle maps to the expected swap availability`);
   }
 });
 

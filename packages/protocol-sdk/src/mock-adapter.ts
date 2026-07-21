@@ -69,7 +69,8 @@ export class MockCedraReadAdapter implements CedraReadAdapter {
     const pool = this.state.protocol.pool;
     // A sell pays reflection from tRFL input; a buy pays it from the tRFL
     // output. The tUSD buy input reaches the pool unchanged before AMM fee.
-    const inputReflection = input.direction === "sell" ? reflectionFee(input.grossAmount) : 0n;
+    const feeBps = this.state.protocol.reflectionFeeBps ?? 100n;
+    const inputReflection = input.direction === "sell" ? reflectionFee(input.grossAmount, feeBps) : 0n;
     const reserveInput = input.grossAmount - inputReflection;
     const invariantInput = (reserveInput * (10_000n - 30n)) / 10_000n;
     const ammFee = reserveInput - invariantInput;
@@ -77,7 +78,7 @@ export class MockCedraReadAdapter implements CedraReadAdapter {
     const outputReserve = input.direction === "sell" ? pool.tusdReserve : pool.trflReserve;
     const grossPoolOutput = (invariantInput * outputReserve) / (inputReserve + invariantInput);
     const netUserReceipt = input.direction === "buy"
-      ? grossPoolOutput - reflectionFee(grossPoolOutput)
+      ? grossPoolOutput - reflectionFee(grossPoolOutput, feeBps)
       : grossPoolOutput;
     const minimumNetUserReceipt = (netUserReceipt * (10_000n - input.slippageBps)) / 10_000n;
     const priceImpactBps = inputReserve === 0n
@@ -87,7 +88,7 @@ export class MockCedraReadAdapter implements CedraReadAdapter {
       direction: input.direction,
       grossAmount: input.grossAmount,
       slippageBps: input.slippageBps,
-      reflectionFee: input.direction === "buy" ? reflectionFee(grossPoolOutput) : inputReflection,
+      reflectionFee: input.direction === "buy" ? reflectionFee(grossPoolOutput, feeBps) : inputReflection,
       ammFee,
       netReserveInput: reserveInput,
       grossPoolOutput,
@@ -102,7 +103,7 @@ export class MockCedraReadAdapter implements CedraReadAdapter {
         packageVersion: this.state.protocol.packageVersion,
         inputReserve,
         outputReserve,
-        reflectionFeeBps: 100n,
+        reflectionFeeBps: feeBps,
         ammFeeBps: 30n,
         maximumGrossSwap: pool.maximumGrossSwap,
         maximumReserveBps: pool.maximumReserveBps,

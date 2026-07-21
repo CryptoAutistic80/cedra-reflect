@@ -118,6 +118,34 @@ export function assertProtocolEventMoveDomains(event: ProtocolEvent): void {
       assertMoveUnsigned(event.initialIndex, 256, "initial reflection index");
       assertMoveUnsigned(event.protocolExclusionSlots, 64, "protocol exclusion slots");
       return;
+    case "TokenCreated":
+      assertMoveUnsigned(event.reflectionFeeBps, 64, "immutable reflection fee bps");
+      assertMoveUnsigned(event.totalSupply, 64, "fixed token supply");
+      assertMoveUnsigned(event.decimals, 8, "token decimals");
+      return;
+    case "LaunchSealed":
+      assertMoveUnsigned(event.reflectionFeeBps, 64, "launch reflection fee bps");
+      assertMoveUnsigned(event.ammFeeBps, 64, "launch AMM fee bps");
+      assertMoveUnsigned(event.maximumReserveBps, 64, "launch maximum reserve bps");
+      assertMoveUnsigned(event.maximumGrossSwap, 64, "launch maximum gross swap");
+      assertMoveUnsigned(event.maximumRflContribution, 64, "launch maximum tRFL liquidity");
+      assertMoveUnsigned(event.maximumTusdContribution, 64, "launch maximum tUSD liquidity");
+      assertMoveUnsigned(event.maximumNonFinalWithdrawalShareBps, 64, "launch maximum withdrawal share bps");
+      assertMoveUnsigned(event.faucetTrflGrant, 64, "launch faucet tRFL grant");
+      assertMoveUnsigned(event.faucetTusdGrant, 64, "launch faucet tUSD grant");
+      assertMoveUnsigned(event.faucetCooldownSeconds, 64, "launch faucet cooldown");
+      assertMoveUnsigned(event.seedRfl, 64, "launch tRFL seed");
+      assertMoveUnsigned(event.seedUsd, 64, "launch tUSD seed");
+      assertMoveUnsigned(event.initialLpShares, 128, "launch initial LP shares");
+      return;
+    case "PoolClosed":
+      assertMoveUnsigned(event.epoch, 64, "closed pool epoch");
+      assertMoveUnsigned(event.lpShares, 128, "closed pool LP shares");
+      assertMoveUnsigned(event.rflOutput, 64, "closed pool tRFL output");
+      assertMoveUnsigned(event.usdOutput, 64, "closed pool tUSD output");
+      assertMoveUnsigned(event.rflReserveAfter, 64, "closed pool tRFL reserve");
+      assertMoveUnsigned(event.usdReserveAfter, 64, "closed pool tUSD reserve");
+      return;
     case "ProtocolPrimaryStoreExcluded":
       assertMoveUnsigned(event.remainingSlots, 64, "remaining exclusion slots");
       return;
@@ -165,6 +193,10 @@ export function assertProtocolEventMoveDomains(event: ProtocolEvent): void {
       assertMoveUnsigned(event.eligibleSupply, 128, "indexed eligible supply");
       return;
     case "RewardsMaterialized":
+      if (event.trigger !== undefined) assertMoveUnsigned(BigInt(event.trigger), 8, "materialization trigger");
+      assertMoveUnsigned(event.amount, 64, `${event.type} amount`);
+      assertMoveUnsigned(event.totalClaimed, 256, `${event.type} total claimed`);
+      return;
     case "RewardsClaimed":
       assertMoveUnsigned(event.amount, 64, `${event.type} amount`);
       assertMoveUnsigned(event.totalClaimed, 256, `${event.type} total claimed`);

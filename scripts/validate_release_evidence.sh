@@ -134,7 +134,11 @@ validate_clean_full_verification() {
     return 1
   }
   /usr/bin/jq -e --arg commit "$(/usr/bin/jq -r '.application_commit' "$evidence_file")" '
-    .schema == "cedra-reflection-model-gate/v1"
+    .schema == "cedra-reflection-model-gate/v2"
+    and .release == "testnet-v0.2.0-ownerless"
+    and .materialization_mode == "automatic-interaction"
+    and .automatic_materialization == true
+    and .lifecycle == "LIVE"
     and .requested_successful_operations >= 1000000
     and .successful == .requested_successful_operations
     and .attempts == (.successful + .rejected + .no_op)
@@ -211,7 +215,7 @@ validate_exact_address_build() {
       and .transaction_bcs_size_bytes == null
       and .normal_transaction_size_limit_bytes == 65536
       and .within_normal_transaction_size_limit == null
-      and (.named_addresses | exact_keys(["reflection_core", "test_amm", "test_assets"]))
+      and (.named_addresses | exact_keys(["bootstrap_lp", "reflection_core", "test_amm", "test_assets"]))
       and all(.named_addresses[]; address);
     exact_keys(["application_commit", "application_tree", "approval_blockers", "approval_eligible", "evidence_boundaries", "evidence_scope", "framework", "generated_at", "local_build_eligible_for_human_review", "named_addresses", "network", "packages", "public_role_candidate_binding", "release_source_sha256", "roles", "schema_version", "toolchain", "verification_binding", "working_tree_clean"])
     and .schema_version == 3
@@ -230,15 +234,16 @@ validate_exact_address_build() {
     and (.toolchain.cedra_cli_path | type == "string" and startswith("/"))
     and (.toolchain.cedra_cli_sha256 | sha256)
     and (.toolchain.cedra_cli_version | type == "string" and length > 0)
-    and (.named_addresses | exact_keys(["reflection_core", "test_amm", "test_assets"]))
+    and (.named_addresses | exact_keys(["bootstrap_lp", "reflection_core", "test_amm", "test_assets"]))
     and all(.named_addresses[]; address)
-    and ([.named_addresses[]] | unique | length == 3)
-    and (.roles | exact_keys(["amm_publisher", "assets_publisher", "bootstrap_lp", "core_publisher", "operations"]))
+    and ([.named_addresses[]] | unique | length == 4)
+    and (.roles | exact_keys(["amm_publisher", "assets_publisher", "bootstrap_lp", "core_publisher"]))
     and all(.roles[]; address)
-    and ([.roles[]] | unique | length == 5)
+    and ([.roles[]] | unique | length == 4)
     and .roles.core_publisher == .named_addresses.reflection_core
     and .roles.assets_publisher == .named_addresses.test_assets
     and .roles.amm_publisher == .named_addresses.test_amm
+    and .roles.bootstrap_lp == .named_addresses.bootstrap_lp
     and (.verification_binding == null or (.verification_binding | binding))
     and (.public_role_candidate_binding == null or (.public_role_candidate_binding | role_binding))
     and (.local_build_eligible_for_human_review | type == "boolean")
@@ -406,7 +411,7 @@ validate_exact_address_build() {
     /usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C LANG=C \
       /usr/bin/bash --noprofile --norc "$repo_root/scripts/validate_release_evidence.sh" "$role_file" >/dev/null
     local bound_roles
-    bound_roles="$(/usr/bin/jq -c '{core_publisher:.roles.core_publisher.address,assets_publisher:.roles.assets_publisher.address,amm_publisher:.roles.amm_publisher.address,operations:.roles.operations.address,bootstrap_lp:.roles.bootstrap_lp.address} | with_entries(.value |= (ascii_downcase | sub("^0x0+"; "0x")))' "$role_file")"
+    bound_roles="$(/usr/bin/jq -c '{core_publisher:.roles.core_publisher.address,assets_publisher:.roles.assets_publisher.address,amm_publisher:.roles.amm_publisher.address,bootstrap_lp:.roles.bootstrap_lp.address} | with_entries(.value |= (ascii_downcase | sub("^0x0+"; "0x")))' "$role_file")"
     [[ "$bound_roles" == "$(/usr/bin/jq -c '.roles' "$evidence_file")" ]] || {
       /usr/bin/printf 'exact-address role map does not match its bound public role candidate\n' >&2
       return 1
@@ -433,10 +438,10 @@ validate_public_role_candidate() {
     and .on_chain_status == "not-checked"
     and .release_approval_status == "candidate-only"
     and .contains_private_key_material == false
-    and (.roles | exact_keys(["amm_publisher", "assets_publisher", "bootstrap_lp", "core_publisher", "operations"]))
+    and (.roles | exact_keys(["amm_publisher", "assets_publisher", "bootstrap_lp", "core_publisher"]))
     and all(.roles[]; role)
-    and ([.roles[].address] | unique | length == 5)
-    and ([.roles[].profile_name] | unique | length == 5)
+    and ([.roles[].address] | unique | length == 4)
+    and ([.roles[].profile_name] | unique | length == 4)
     and (.evidence_boundaries | exact_keys(["accounts_funded", "accounts_observed_on_chain", "profile_state_read_by_release_tooling", "release_authorized"]))
     and (.evidence_boundaries == {
       profile_state_read_by_release_tooling:false,
@@ -474,14 +479,13 @@ validate_public_profile_preflight() {
     and (.toolchain.cedra_cli_path | type == "string" and startswith("/"))
     and (.toolchain.cedra_cli_sha256 | sha256)
     and (.toolchain.cedra_cli_version | type == "string" and length > 0)
-    and (.profiles | exact_keys(["amm_publisher", "assets_publisher", "bootstrap_lp", "core_publisher", "operations"]))
+    and (.profiles | exact_keys(["amm_publisher", "assets_publisher", "bootstrap_lp", "core_publisher"]))
     and (.profiles.core_publisher | profile("cedra-reflect-core-publisher"))
     and (.profiles.assets_publisher | profile("cedra-reflect-assets-publisher"))
     and (.profiles.amm_publisher | profile("cedra-reflect-amm-publisher"))
-    and (.profiles.operations | profile("cedra-reflect-operations"))
     and (.profiles.bootstrap_lp | profile("cedra-reflect-bootstrap-lp"))
-    and ([.profiles[].account] | unique | length == 5)
-    and ([.profiles[].public_key] | unique | length == 5)
+    and ([.profiles[].account] | unique | length == 4)
+    and ([.profiles[].public_key] | unique | length == 4)
     and (.authentication_key_validation | exact_keys(["all_profile_authentication_keys_match", "derivation_method", "derivation_tool"]))
     and .authentication_key_validation.derivation_method == "sha3-256(ed25519_public_key_bytes || 0x00)"
     and .authentication_key_validation.derivation_tool == "OpenSSL dgst -sha3-256"

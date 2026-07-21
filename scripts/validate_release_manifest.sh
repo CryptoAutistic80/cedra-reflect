@@ -68,7 +68,7 @@ manifest_directory="$(/usr/bin/dirname "$manifest")"
   def no_placeholders:
     [.. | strings | select(test("RECORD_|RFC3339_TIMESTAMP|draft-template-not-valid|PENDING_"))] | length == 0;
 
-  exact_keys(["api_url", "application_commit", "approval_policy", "bootstrap_liquidity", "chain_id", "contract_configuration", "deployment_id", "event_schema_version", "evidence_scope", "execution_order", "external_execution_boundary", "framework_commit", "hook_probe", "initial_reconciliation_snapshot", "initialization", "metadata", "network", "no_value_notice", "objects", "operational_authority", "packages", "provenance", "release", "review", "roles", "schema_version", "status", "transactions"])
+  exact_keys(["api_url", "application_commit", "approval_policy", "bootstrap_liquidity", "chain_id", "contract_configuration", "deployment_id", "event_schema_version", "evidence_scope", "execution_order", "external_execution_boundary", "framework_commit", "hook_probe", "initial_reconciliation_snapshot", "initialization", "metadata", "network", "no_value_notice", "objects", "packages", "provenance", "release", "review", "roles", "schema_version", "status", "transactions"])
   and .schema_version == 2
   and .evidence_scope == "finalized-testnet-release-manifest"
   and .status == "finalized"
@@ -76,14 +76,14 @@ manifest_directory="$(/usr/bin/dirname "$manifest")"
   and .chain_id == "2"
   and .api_url == "https://testnet.cedra.dev/v1"
   and (.deployment_id | type == "string" and test("^[A-Za-z0-9._-]{1,80}$"))
-  and (.release | type == "string" and test("^testnet-v[0-9]+\\.[0-9]+\\.[0-9]+([+-][A-Za-z0-9.-]+)?$"))
-  and .event_schema_version == 1
+  and .release == "testnet-v0.2.0"
+  and .event_schema_version == 2
   and .no_value_notice == "TESTNET ASSET — NO MONETARY VALUE — STATE AND ADDRESSES MAY CHANGE"
   and (.framework_commit | commit)
   and (.application_commit | commit)
-  and (.roles | exact_keys(["amm_publisher", "assets_publisher", "bootstrap_lp", "core_publisher", "operations"]))
+  and (.roles | exact_keys(["amm_publisher", "assets_publisher", "bootstrap_lp", "core_publisher"]))
   and all(.roles[]; address)
-  and ([.roles[]] | unique | length == 5)
+  and ([.roles[]] | unique | length == 4)
   and (.provenance | exact_keys(["application_tree", "clean_verification_record", "exact_address_artifacts", "public_profile_preflight", "public_role_candidate", "release_source_sha256", "working_tree_clean"]))
   and (.provenance.application_tree | commit)
   and .provenance.working_tree_clean == true
@@ -93,10 +93,10 @@ manifest_directory="$(/usr/bin/dirname "$manifest")"
   and (.provenance.clean_verification_record | binding)
   and (.provenance.exact_address_artifacts | binding)
   and (.approval_policy | exact_keys(["required_distinct_identities", "required_distinct_signing_keys", "signature_namespace", "trusted_allowed_signers_sha256"]))
-  and .approval_policy.signature_namespace == "cedra-reflect-testnet-release-v1"
+  and .approval_policy.signature_namespace == "cedra-reflect-testnet-release-v2"
   and (.approval_policy.trusted_allowed_signers_sha256 | sha256)
-  and .approval_policy.required_distinct_identities == 2
-  and .approval_policy.required_distinct_signing_keys == 2
+  and .approval_policy.required_distinct_identities == 1
+  and .approval_policy.required_distinct_signing_keys == 1
   and .external_execution_boundary == {
     repository_reads_private_keys:false,
     repository_signs_transactions:false,
@@ -104,25 +104,27 @@ manifest_directory="$(/usr/bin/dirname "$manifest")"
     approved_candidate_may_be_rebuilt:false,
     external_signing_and_submission_ceremony_required:true
   }
-  and .execution_order == ["core_publish", "core_initialize", "assets_publish", "amm_publish", "faucet_initialize", "amm_tusd_claim", "pool_initialize", "atomic_operational_handoff", "pool_seed"]
+  and .execution_order == ["core_publish", "core_initialize", "assets_publish", "amm_publish", "pool_launch"]
   and (.packages | exact_keys(["reflection_core", "test_amm", "test_assets"]))
   and all(.packages[]; package)
   and .packages.reflection_core.publisher == .roles.core_publisher
   and .packages.test_assets.publisher == .roles.assets_publisher
   and .packages.test_amm.publisher == .roles.amm_publisher
-  and (.transactions | exact_keys(["amm_publish", "amm_tusd_claim", "assets_publish", "atomic_operational_handoff", "core_initialize", "core_publish", "faucet_initialize", "pool_initialize", "pool_seed"]))
+  and (.transactions | exact_keys(["amm_publish", "assets_publish", "core_initialize", "core_publish", "pool_launch"]))
   and all(.transactions[]; transaction_binding)
-  and ([.transactions[].transaction_hash] | unique | length == 9)
+  and ([.transactions[].transaction_hash] | unique | length == 5)
   and .packages.reflection_core.publish_transaction == .transactions.core_publish.transaction_hash
   and .packages.test_assets.publish_transaction == .transactions.assets_publish.transaction_hash
   and .packages.test_amm.publish_transaction == .transactions.amm_publish.transaction_hash
-  and (.contract_configuration | exact_keys(["arbitrary_external_vaults_supported", "automatic_materialization", "initial_reflection_fee_bps", "maximum_reflection_fee_bps", "supported_custody_adapters", "trfl_decimals", "trfl_fixed_supply_base_units"]))
+  and (.contract_configuration | exact_keys(["arbitrary_external_vaults_supported", "automatic_materialization", "initial_reflection_fee_bps", "lifecycle", "maximum_reflection_fee_bps", "ownerless", "privileged_address", "supported_custody_adapters", "trfl_decimals", "trfl_fixed_supply_base_units"]))
   and .contract_configuration.trfl_decimals == 6
   and .contract_configuration.trfl_fixed_supply_base_units == "1000000000000000"
-  and (.contract_configuration.initial_reflection_fee_bps | type == "number" and floor == . and . >= 0 and . <= 100)
-  and .contract_configuration.maximum_reflection_fee_bps == 100
-  and .contract_configuration.initial_reflection_fee_bps <= .contract_configuration.maximum_reflection_fee_bps
-  and .contract_configuration.automatic_materialization == false
+  and .contract_configuration.initial_reflection_fee_bps == 100
+  and .contract_configuration.maximum_reflection_fee_bps == 500
+  and .contract_configuration.automatic_materialization == true
+  and .contract_configuration.lifecycle == "LIVE"
+  and .contract_configuration.ownerless == true
+  and .contract_configuration.privileged_address == null
   and .contract_configuration.supported_custody_adapters == 1
   and .contract_configuration.arbitrary_external_vaults_supported == false
   and (.metadata | exact_keys(["project_url", "trfl_icon_sha256", "trfl_icon_url", "tusd_icon_sha256", "tusd_icon_url"]))
@@ -131,29 +133,24 @@ manifest_directory="$(/usr/bin/dirname "$manifest")"
   and (.metadata.tusd_icon_url | startswith("https://"))
   and (.metadata.trfl_icon_sha256 | sha256)
   and (.metadata.tusd_icon_sha256 | sha256)
-  and (.operational_authority | exact_keys(["address", "atomic_handoff_transaction", "reconciled_ledger_version"]))
-  and .operational_authority.address == .roles.operations
-  and .operational_authority.atomic_handoff_transaction == .transactions.atomic_operational_handoff.transaction_hash
-  and (.operational_authority.reconciled_ledger_version | decimal)
-  and (.bootstrap_liquidity | exact_keys(["beneficiary", "minimum_lp_shares", "rfl_amount", "seed_transaction", "usd_amount"]))
+  and (.bootstrap_liquidity | exact_keys(["beneficiary", "initial_lp_shares", "launch_transaction", "rfl_amount", "usd_amount"]))
   and .bootstrap_liquidity.beneficiary == .roles.bootstrap_lp
-  and (.bootstrap_liquidity.rfl_amount | positive_decimal)
-  and (.bootstrap_liquidity.usd_amount | positive_decimal)
-  and (.bootstrap_liquidity.minimum_lp_shares | positive_decimal)
-  and .bootstrap_liquidity.seed_transaction == .transactions.pool_seed.transaction_hash
+  and .bootstrap_liquidity.rfl_amount == "500000000"
+  and .bootstrap_liquidity.usd_amount == "500000000"
+  and .bootstrap_liquidity.initial_lp_shares == "500000000"
+  and .bootstrap_liquidity.launch_transaction == .transactions.pool_launch.transaction_hash
   and (.objects | exact_keys(["active_lp_epoch", "active_lp_state", "distribution_vault", "lp_epoch_registry", "lp_reward_vault", "lp_share_representation", "mock_usd_metadata", "pool", "pool_custody_store", "pool_quote_reserve_store", "reward_vault", "token_metadata"]))
   and .objects.lp_share_representation == "account-bound-table"
   and (.objects.active_lp_epoch | decimal)
   and all(.objects | to_entries[] | select(.key != "active_lp_epoch" and .key != "lp_share_representation") | .value; address)
-  and (.initialization | exact_keys(["automatic_materialization", "core_transaction", "faucet_transaction", "finalized_ledger_version", "pool_transaction"]))
-  and .initialization.automatic_materialization == false
+  and (.initialization | exact_keys(["automatic_materialization", "core_transaction", "finalized_ledger_version", "launch_transaction"]))
+  and .initialization.automatic_materialization == true
   and .initialization.core_transaction == .transactions.core_initialize.transaction_hash
-  and .initialization.faucet_transaction == .transactions.faucet_initialize.transaction_hash
-  and .initialization.pool_transaction == .transactions.pool_initialize.transaction_hash
+  and .initialization.launch_transaction == .transactions.pool_launch.transaction_hash
   and (.initialization.finalized_ledger_version | decimal)
   and (.initial_reconciliation_snapshot | binding)
   and (.hook_probe | exact_keys(["file", "mode", "sha256"]))
-  and .hook_probe.mode == "claim-backed"
+  and .hook_probe.mode == "automatic-materialisation"
   and ({file:.hook_probe.file,sha256:.hook_probe.sha256} | binding)
   and (.review | exact_keys(["independent_review", "unresolved_critical_findings", "unresolved_high_findings"]))
   and (.review.independent_review | binding)
@@ -218,10 +215,10 @@ independent_review="$(resolve_binding '.review.independent_review' 'independent 
   /usr/bin/bash --noprofile --norc -p "$evidence_validator" "$exact_artifacts" >/dev/null
 
 manifest_roles="$(/usr/bin/jq -cS '.roles' "$manifest")"
-candidate_roles="$(/usr/bin/jq -cS '{core_publisher:.roles.core_publisher.address,assets_publisher:.roles.assets_publisher.address,amm_publisher:.roles.amm_publisher.address,operations:.roles.operations.address,bootstrap_lp:.roles.bootstrap_lp.address} | with_entries(.value |= (ascii_downcase | sub("^0x0+"; "0x")))' "$role_candidate")"
+candidate_roles="$(/usr/bin/jq -cS '{core_publisher:.roles.core_publisher.address,assets_publisher:.roles.assets_publisher.address,amm_publisher:.roles.amm_publisher.address,bootstrap_lp:.roles.bootstrap_lp.address} | with_entries(.value |= (ascii_downcase | sub("^0x0+"; "0x")))' "$role_candidate")"
 profile_roles="$(/usr/bin/jq -cS '.profiles | with_entries(.value = ("0x" + .value.account | ascii_downcase | sub("^0x0+"; "0x")))' "$profile_preflight")"
 [[ "$manifest_roles" == "$candidate_roles" && "$manifest_roles" == "$profile_roles" ]] || {
-  /usr/bin/printf 'five-role addresses differ across manifest, role candidate, and public profiles\n' >&2
+  /usr/bin/printf 'four-role addresses differ across manifest, role candidate, and public profiles\n' >&2
   exit 65
 }
 [[ "$(/usr/bin/jq -r '.public_role_candidate_sha256' "$profile_preflight")" == "$(/usr/bin/sha256sum "$role_candidate" | /usr/bin/cut -d ' ' -f 1)" ]] || {
@@ -247,7 +244,7 @@ profile_roles="$(/usr/bin/jq -cS '.profiles | with_entries(.value = ("0x" + .val
 }
 
 declare -A transaction_files
-for operation in core_publish core_initialize assets_publish amm_publish faucet_initialize amm_tusd_claim pool_initialize atomic_operational_handoff pool_seed; do
+for operation in core_publish core_initialize assets_publish amm_publish pool_launch; do
   transaction_files[$operation]="$(resolve_binding ".transactions.$operation" "$operation transaction")"
   /usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C LANG=C \
     EXACT_ADDRESS_ARTIFACTS_FILE="$exact_artifacts" \
@@ -278,14 +275,51 @@ for operation in core_publish core_initialize assets_publish amm_publish faucet_
       and .transaction_hash == $txhash
       and .roles == $roles
       and .approval.authenticated == true
-      and (.approval.signatures | length == 2)
-      and ([.approval.signatures[].identity] | unique | length == 2)
-      and ([.approval.signatures[].key_fingerprint] | unique | length == 2)
+      and (.approval.signatures | length == 1)
+      and ([.approval.signatures[].identity] | unique | length == 1)
+      and ([.approval.signatures[].key_fingerprint] | unique | length == 1)
     ' "${transaction_files[$operation]}" >/dev/null || {
       /usr/bin/printf 'transaction evidence does not cross-bind release manifest for %s\n' "$operation" >&2
       exit 65
     }
 done
+
+/usr/bin/jq -e \
+  --arg sender "$(/usr/bin/jq -r '.roles.core_publisher' "$manifest")" \
+  --arg function "$(/usr/bin/jq -r '.roles.core_publisher' "$manifest")::reflection_token::initialize" '
+    .collection.sender == $sender
+    and .collection.secondary_signers == []
+    and .collection.payload == {
+      type:"entry_function_payload",
+      function:$function,
+      type_arguments:[],
+      arguments:["100"]
+    }
+  ' "${transaction_files[core_initialize]}" >/dev/null || {
+  /usr/bin/printf 'core initialization evidence differs from the fixed ownerless v0.2 initialization\n' >&2
+  exit 65
+}
+
+/usr/bin/jq -e \
+  --arg sender "$(/usr/bin/jq -r '.roles.core_publisher' "$manifest")" \
+  --arg assets "$(/usr/bin/jq -r '.roles.assets_publisher' "$manifest")" \
+  --arg amm "$(/usr/bin/jq -r '.roles.amm_publisher' "$manifest")" \
+  --arg bootstrap "$(/usr/bin/jq -r '.roles.bootstrap_lp' "$manifest")" \
+  --arg function "$(/usr/bin/jq -r '.roles.amm_publisher' "$manifest")::pool::launch" \
+  --arg finalized_ledger "$(/usr/bin/jq -r '.initialization.finalized_ledger_version' "$manifest")" '
+    .collection.sender == $sender
+    and .collection.secondary_signers == [$assets,$amm,$bootstrap]
+    and .collection.payload == {
+      type:"entry_function_payload",
+      function:$function,
+      type_arguments:[],
+      arguments:[]
+    }
+    and .collection.ledger_version == $finalized_ledger
+  ' "${transaction_files[pool_launch]}" >/dev/null || {
+  /usr/bin/printf 'pool launch evidence differs from the fixed ownerless v0.2 launch\n' >&2
+  exit 65
+}
 
 for mapping in 'reflection_core:core_publish:ReflectionCore' 'test_assets:assets_publish:TestAssets' 'test_amm:amm_publish:TestAmm'; do
   IFS=: builtin read -r package operation package_name <<<"$mapping"
@@ -328,20 +362,11 @@ for mapping in 'reflection_core:core_publish:ReflectionCore' 'test_assets:assets
     }
 done
 
-/usr/bin/jq -e \
-  --arg rfl "$(/usr/bin/jq -r '.bootstrap_liquidity.rfl_amount' "$manifest")" \
-  --arg usd "$(/usr/bin/jq -r '.bootstrap_liquidity.usd_amount' "$manifest")" \
-  --arg min_lp "$(/usr/bin/jq -r '.bootstrap_liquidity.minimum_lp_shares' "$manifest")" \
-  '.collection.payload.arguments == [$rfl,$usd,$min_lp]' "${transaction_files[pool_seed]}" >/dev/null || {
-  /usr/bin/printf 'bootstrap liquidity amounts differ from the approved/finalized seed transaction\n' >&2
-  exit 65
-}
-
 [[ -s "$snapshot" && -s "$hook_probe" && -s "$independent_review" ]] || {
   /usr/bin/printf 'release-level reconciliation, hook, or independent-review evidence is empty\n' >&2
   exit 65
 }
 
 /usr/bin/printf 'valid cryptographically cross-bound finalized Testnet release manifest: %s\n' "$manifest"
-/usr/bin/printf 'all nine finalized transactions retain their exact BCS candidate, simulation, two distinct-key approvals, and raw Testnet responses\n'
+/usr/bin/printf 'all five finalized transactions retain their exact BCS candidate, simulation, single-operator approval, and raw Testnet responses\n'
 /usr/bin/printf 'custom release/package source digests remain separate from the verified embedded/on-chain PackageMetadata.source_digest values\n'
