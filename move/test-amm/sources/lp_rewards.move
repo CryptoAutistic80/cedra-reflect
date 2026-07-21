@@ -25,6 +25,9 @@ module test_amm::lp_rewards {
     const E_EPOCH_NOT_EMPTY: u64 = 11;
     const E_VAULT_ACCOUNTING: u64 = 12;
     const E_EPOCH_ALREADY_ACTIVE: u64 = 13;
+    const E_PENDING_AT_POSITION_EXIT: u64 = 14;
+    const E_INVALID_POSITION_RESIDUE: u64 = 15;
+    const E_EPOCH_TERMINAL_ACCOUNTING: u64 = 16;
 
     const STATUS_ACTIVE: u8 = 1;
     const STATUS_CLAIM_ONLY: u8 = 2;
@@ -48,6 +51,12 @@ module test_amm::lp_rewards {
         aggregate_correction: SignedU256,
         unallocated_rewards: u128,
         rounding_reserve: u128,
+        /// Immutable physical base units left in this epoch's frozen vault
+        /// once it becomes claim-only. Zero while the epoch is active.
+        terminal_rounding_reserve: u128,
+        /// Sum of discarded sub-base-unit corrections. This is magnified by
+        /// `reflection_math::magnitude()` and is never itself a token amount.
+        retired_residue_magnified: u256,
         lifetime_received: u256,
         lifetime_claimed: u256,
         quarantined: bool,
@@ -58,6 +67,10 @@ module test_amm::lp_rewards {
         active_epoch: u64,
         next_epoch: u64,
         epochs: Table<u64, LpEpoch>,
+        /// Conservative O(1) role-neutrality guard. Once an address has held
+        /// LP shares it can never become this deployment's operational admin,
+        /// even after shares and whole-unit claims reach zero.
+        historical_lp_participants: Table<address, bool>,
     }
 
     #[event]
@@ -108,6 +121,23 @@ module test_amm::lp_rewards {
         unallocated_rewards: u128,
         reward_vault: address,
     }
+    #[event]
+    struct LpFractionalResidueRetired has drop, store {
+        epoch: u64,
+        owner: address,
+        residue_magnified: u256,
+        cumulative_retired_residue_magnified: u256,
+        rounding_reserve_base_units: u128,
+    }
+    #[event]
+    struct LpEpochTerminalDustClassified has drop, store {
+        epoch: u64,
+        reward_vault: address,
+        terminal_rounding_base_units: u128,
+        retired_residue_magnified: u256,
+        lifetime_received_base_units: u256,
+        lifetime_claimed_base_units: u256,
+    }
 
     public(package) fun initialize(amm_admin: &signer, first_reward_vault: Object<FungibleStore>): LpAccountingCapability {
         assert!(signer::address_of(amm_admin) == @test_amm, E_WRONG_AMM_ADDRESS);
@@ -116,7 +146,12 @@ module test_amm::lp_rewards {
         let state_constructor = object::create_object(@test_amm);
         let state_id = object::address_from_constructor_ref(&state_constructor);
         table::add(&mut epochs, 1, new_epoch(1, state_id, first_reward_vault));
-        move_to(amm_admin, LpEpochRegistry { active_epoch: 1, next_epoch: 2, epochs });
+        move_to(amm_admin, LpEpochRegistry {
+            active_epoch: 1,
+            next_epoch: 2,
+            epochs,
+            historical_lp_participants: table::new<address, bool>(),
+        });
         event::emit(LpEpochOpened {
             epoch: 1,
             state_id,
@@ -194,6 +229,7 @@ module test_amm::lp_rewards {
         assert_cap(cap);
         assert!(amount > 0, E_ZERO_AMOUNT);
         let registry = borrow_global_mut<LpEpochRegistry>(@test_amm);
+        mark_lp_participant(registry, owner);
         let epoch_id = registry.active_epoch;
         assert!(epoch_id > 0, E_NO_ACTIVE_EPOCH);
         let epoch = table::borrow_mut(&mut registry.epochs, epoch_id);
@@ -234,6 +270,7 @@ module test_amm::lp_rewards {
         };
         reflection_math::add_unsigned(&mut epoch.aggregate_correction, delta);
         epoch.total_shares = epoch.total_shares - amount;
+        if (owner_shares == 0) normalize_zero_position(epoch, owner);
         event::emit(LpSharesChanged {
             epoch: epoch_id, owner, added: false, amount, owner_shares, total_shares: epoch.total_shares,
         });
@@ -248,6 +285,8 @@ module test_amm::lp_rewards {
         assert_cap(cap);
         assert!(amount > 0, E_ZERO_AMOUNT);
         let registry = borrow_global_mut<LpEpochRegistry>(@test_amm);
+        mark_lp_participant(registry, sender);
+        mark_lp_participant(registry, recipient);
         let epoch_id = registry.active_epoch;
         assert!(epoch_id > 0, E_NO_ACTIVE_EPOCH);
         let epoch = table::borrow_mut(&mut registry.epochs, epoch_id);
@@ -266,6 +305,9 @@ module test_amm::lp_rewards {
             recipient_position.shares = recipient_position.shares + amount;
             reflection_math::subtract_unsigned(&mut recipient_position.correction, delta);
         };
+        if (table::borrow(&epoch.positions, sender).shares == 0) {
+            normalize_zero_position(epoch, sender);
+        };
         event::emit(LpSharesTransferred { epoch: epoch_id, sender, recipient, amount });
     }
 
@@ -281,7 +323,12 @@ module test_amm::lp_rewards {
         let registry = borrow_global_mut<LpEpochRegistry>(@test_amm);
         let epoch = table::borrow_mut(&mut registry.epochs, epoch_id);
         assert!(epoch.status == STATUS_ACTIVE || epoch.status == STATUS_CLAIM_ONLY, E_EPOCH_NOT_CLAIMABLE);
-        if (epoch.status == STATUS_ACTIVE) assert_active_epoch_healthy_internal(epoch);
+        // A quarantined active epoch freezes share/index mutation, but owners
+        // may still withdraw entitlement indexed before quarantine. The
+        // unallocated zero-denominator receipt is never included in `index`.
+        if (epoch.status == STATUS_ACTIVE && !epoch.quarantined) {
+            assert_active_epoch_healthy_internal(epoch);
+        };
         let pending = pending_for(epoch, owner);
         let amount = if (requested == 0) pending else requested;
         assert!(amount > 0 && amount <= pending, E_CLAIM_EXCEEDS_PENDING);
@@ -302,10 +349,31 @@ module test_amm::lp_rewards {
         assert!(epoch_id > 0, E_NO_ACTIVE_EPOCH);
         let epoch = table::borrow_mut(&mut registry.epochs, epoch_id);
         assert!(epoch.status == STATUS_ACTIVE && epoch.total_shares == 0, E_EPOCH_NOT_EMPTY);
+        recompute_rounding(epoch);
+        let liability = aggregate_liability(epoch);
+        let vault_balance = reflection_token::raw_store_balance(epoch.reward_vault) as u256;
+        assert!(
+            !epoch.quarantined
+                && liability == 0
+                && epoch.unallocated_rewards == 0
+                && vault_balance == (epoch.rounding_reserve as u256)
+                && epoch.lifetime_received >= epoch.lifetime_claimed
+                && vault_balance == epoch.lifetime_received - epoch.lifetime_claimed,
+            E_EPOCH_TERMINAL_ACCOUNTING,
+        );
+        epoch.terminal_rounding_reserve = epoch.rounding_reserve;
         let old_status = epoch.status;
         epoch.status = STATUS_CLAIM_ONLY;
         registry.active_epoch = 0;
         event::emit(LpEpochStatusChanged { epoch: epoch_id, old_status, new_status: STATUS_CLAIM_ONLY });
+        event::emit(LpEpochTerminalDustClassified {
+            epoch: epoch_id,
+            reward_vault: object::object_address(&epoch.reward_vault),
+            terminal_rounding_base_units: epoch.terminal_rounding_reserve,
+            retired_residue_magnified: epoch.retired_residue_magnified,
+            lifetime_received_base_units: epoch.lifetime_received,
+            lifetime_claimed_base_units: epoch.lifetime_claimed,
+        });
     }
 
     /// Capability-gated liveness guard for every active-epoch operation that
@@ -374,6 +442,14 @@ module test_amm::lp_rewards {
         )
     }
 
+    // Terminal evidence with explicit units. The first value is physical
+    // tRFL base units; the second is fractional correction scaled by M.
+    #[view]
+    public fun epoch_terminal_dust(epoch_id: u64): (u128, u256) acquires LpEpochRegistry {
+        let epoch = table::borrow(&borrow_global<LpEpochRegistry>(@test_amm).epochs, epoch_id);
+        (epoch.terminal_rounding_reserve, epoch.retired_residue_magnified)
+    }
+
     #[view]
     public fun epoch_identity(epoch_id: u64): (address, address, u8, bool) acquires LpEpochRegistry {
         let epoch = table::borrow(&borrow_global<LpEpochRegistry>(@test_amm).epochs, epoch_id);
@@ -383,6 +459,18 @@ module test_amm::lp_rewards {
             epoch.status,
             epoch.quarantined,
         )
+    }
+
+    #[view]
+    public fun epoch_is_quarantined(epoch_id: u64): bool acquires LpEpochRegistry {
+        table::borrow(&borrow_global<LpEpochRegistry>(@test_amm).epochs, epoch_id).quarantined
+    }
+
+    #[view]
+    public fun has_ever_held_lp(owner: address): bool acquires LpEpochRegistry {
+        let registry = borrow_global<LpEpochRegistry>(@test_amm);
+        table::contains(&registry.historical_lp_participants, owner)
+            && *table::borrow(&registry.historical_lp_participants, owner)
     }
 
     #[view]
@@ -435,6 +523,15 @@ module test_amm::lp_rewards {
                 && vault_balance == epoch.lifetime_received - epoch.lifetime_claimed,
             E_VAULT_ACCOUNTING,
         );
+        if (epoch.status == STATUS_CLAIM_ONLY) {
+            assert!(
+                aggregate_liability(epoch) == 0
+                    && epoch.unallocated_rewards == 0
+                    && epoch.terminal_rounding_reserve == epoch.rounding_reserve
+                    && vault_balance == (epoch.terminal_rounding_reserve as u256),
+                E_EPOCH_TERMINAL_ACCOUNTING,
+            );
+        };
     }
 
     fun new_epoch(epoch_id: u64, state_id: address, reward_vault: Object<FungibleStore>): LpEpoch {
@@ -449,6 +546,8 @@ module test_amm::lp_rewards {
             aggregate_correction: reflection_math::zero(),
             unallocated_rewards: 0,
             rounding_reserve: 0,
+            terminal_rounding_reserve: 0,
+            retired_residue_magnified: 0,
             lifetime_received: 0,
             lifetime_claimed: 0,
             quarantined: false,
@@ -463,6 +562,12 @@ module test_amm::lp_rewards {
                 correction: reflection_math::zero(),
                 claimed: 0,
             });
+        };
+    }
+
+    fun mark_lp_participant(registry: &mut LpEpochRegistry, owner: address) {
+        if (!table::contains(&registry.historical_lp_participants, owner)) {
+            table::add(&mut registry.historical_lp_participants, owner, true);
         };
     }
 
@@ -484,6 +589,42 @@ module test_amm::lp_rewards {
         );
         let entitled = magnified / reflection_math::magnitude();
         reflection_math::checked_subtract(entitled, epoch.lifetime_claimed)
+    }
+
+    /// A zero-share position may retain only the fraction below one base unit
+    /// after all whole pending rewards have been paid. Normalize it to
+    /// `claimed * M` in both the owner and aggregate corrections. Any whole
+    /// physical unit exposed by combining retired fractions becomes named
+    /// rounding reserve; it is never assigned to another owner or epoch.
+    fun normalize_zero_position(epoch: &mut LpEpoch, owner: address) {
+        assert!(pending_for(epoch, owner) == 0, E_PENDING_AT_POSITION_EXIT);
+        let (negative, correction_magnitude, claimed) = {
+            let position = table::borrow(&epoch.positions, owner);
+            let (negative, correction_magnitude) = reflection_math::parts(position.correction);
+            (negative, correction_magnitude, position.claimed)
+        };
+        let normalized_magnitude = claimed * reflection_math::magnitude();
+        assert!(
+            !negative
+                && correction_magnitude >= normalized_magnitude
+                && correction_magnitude < normalized_magnitude + reflection_math::magnitude(),
+            E_INVALID_POSITION_RESIDUE,
+        );
+        let residue_magnified = correction_magnitude - normalized_magnitude;
+        if (residue_magnified > 0) {
+            let position = table::borrow_mut(&mut epoch.positions, owner);
+            reflection_math::subtract_unsigned(&mut position.correction, residue_magnified);
+            reflection_math::subtract_unsigned(&mut epoch.aggregate_correction, residue_magnified);
+            epoch.retired_residue_magnified = epoch.retired_residue_magnified + residue_magnified;
+            recompute_rounding(epoch);
+            event::emit(LpFractionalResidueRetired {
+                epoch: epoch.epoch_id,
+                owner,
+                residue_magnified,
+                cumulative_retired_residue_magnified: epoch.retired_residue_magnified,
+                rounding_reserve_base_units: epoch.rounding_reserve,
+            });
+        };
     }
 
     fun recompute_rounding(epoch: &mut LpEpoch) {

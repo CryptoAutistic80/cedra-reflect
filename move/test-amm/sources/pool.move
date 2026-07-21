@@ -41,6 +41,7 @@ module test_amm::pool {
     const E_INVALID_LIQUIDITY_LIMIT: u64 = 24;
     const E_NOT_OPERATIONAL_ADMIN: u64 = 25;
     const E_INVALID_OPERATIONAL_ADMIN: u64 = 26;
+    const E_OPERATIONAL_ADMIN_HAS_LP_HISTORY: u64 = 27;
 
     const BPS_DENOMINATOR: u64 = 10_000;
     const DEFAULT_AMM_FEE_BPS: u64 = 30;
@@ -163,10 +164,10 @@ module test_amm::pool {
             core_admin, amm_admin, rfl_reserve, lp_reward_vault,
         );
         let lp_cap = lp_rewards::initialize(amm_admin, lp_reward_vault);
-        let usd_pool_cap = mock_usd::issue_pool_settlement_capability(assets_admin);
-        reflection_token::register_excluded_primary_store(core_admin, signer::address_of(assets_admin));
-        reflection_token::register_excluded_primary_store(core_admin, signer::address_of(amm_admin));
-        mock_usd::freeze_pool_reserve(&usd_pool_cap, usd_reserve);
+        let usd_pool_cap = mock_usd::issue_pool_settlement_capability(
+            assets_admin, amm_admin, usd_reserve,
+        );
+        reflection_token::register_protocol_publisher_store(core_admin, amm_admin);
         move_to(amm_admin, PoolState {
             admin: signer::address_of(amm_admin),
             operational_admin: signer::address_of(amm_admin),
@@ -215,7 +216,7 @@ module test_amm::pool {
     public entry fun seed_liquidity(
         core_admin: &signer,
         amm_admin: &signer,
-        beneficiary: address,
+        beneficiary: &signer,
         rfl_amount: u64,
         usd_amount: u64,
         min_lp_shares: u128,
@@ -224,7 +225,13 @@ module test_amm::pool {
         let state = borrow_global<PoolState>(@test_amm);
         assert_amm_admin(state, amm_admin);
         assert!(!state.seeded, E_ALREADY_SEEDED);
-        assert_valid_beneficiary(state, beneficiary);
+        let beneficiary_address = signer::address_of(beneficiary);
+        assert_valid_beneficiary(state, beneficiary_address);
+        // The authenticated beneficiary may be a fresh Testnet account. Bind
+        // its primary store to the wallet accounting surface atomically with
+        // the LP grant so bootstrap never depends on a hidden pre-transaction.
+        reflection_token::register_wallet(beneficiary);
+        assert!(reflection_token::wallet_is_registered(beneficiary_address), E_INVALID_BENEFICIARY);
         assert!(lp_rewards::active_epoch() == 1 && lp_rewards::total_active_shares() == 0, E_ACTIVE_EPOCH_EXISTS);
         let (before_rfl, before_usd) = reserves(state);
         assert!(before_rfl == 0 && before_usd == 0, E_ALREADY_SEEDED);
@@ -233,7 +240,7 @@ module test_amm::pool {
         reflection_token::seed_pool_from_distribution(&state.custody_cap, core_admin, state.rfl_reserve, rfl_amount);
         let usd = primary_fungible_store::withdraw(amm_admin, mock_usd::metadata(), usd_amount);
         mock_usd::deposit_to_pool(&state.usd_pool_cap, state.usd_reserve, usd);
-        lp_rewards::mint_active(&state.lp_cap, beneficiary, shares);
+        lp_rewards::mint_active(&state.lp_cap, beneficiary_address, shares);
         lp_rewards::assert_active_epoch_healthy(&state.lp_cap);
         lp_rewards::assert_epoch_backing(&state.lp_cap, 1);
         assert_reserve_custody(state);
@@ -242,7 +249,7 @@ module test_amm::pool {
         let mutable_state = borrow_global_mut<PoolState>(@test_amm);
         mutable_state.seeded = true;
         event::emit(LiquiditySeeded {
-            epoch, provider: beneficiary, rfl_amount, usd_amount, lp_shares: shares, reserve_rfl, reserve_usd,
+            epoch, provider: beneficiary_address, rfl_amount, usd_amount, lp_shares: shares, reserve_rfl, reserve_usd,
         });
     }
 
@@ -251,7 +258,7 @@ module test_amm::pool {
     public entry fun reseed_liquidity(
         core_admin: &signer,
         amm_admin: &signer,
-        beneficiary: address,
+        beneficiary: &signer,
         rfl_amount: u64,
         usd_amount: u64,
         min_lp_shares: u128,
@@ -261,7 +268,10 @@ module test_amm::pool {
         assert_amm_admin(state, amm_admin);
         assert!(!state.seeded && !state.shutdown_mode, E_ALREADY_SEEDED);
         assert!(lp_rewards::active_epoch() == 0, E_ACTIVE_EPOCH_EXISTS);
-        assert_valid_beneficiary(state, beneficiary);
+        let beneficiary_address = signer::address_of(beneficiary);
+        assert_valid_beneficiary(state, beneficiary_address);
+        reflection_token::register_wallet(beneficiary);
+        assert!(reflection_token::wallet_is_registered(beneficiary_address), E_INVALID_BENEFICIARY);
         let (before_rfl, before_usd) = reserves(state);
         assert!(before_rfl == 0 && before_usd == 0, E_ALREADY_SEEDED);
         let lp_vault_constructor = object::create_object(@test_amm);
@@ -279,7 +289,7 @@ module test_amm::pool {
         reflection_token::seed_pool_from_distribution(&state.custody_cap, core_admin, state.rfl_reserve, rfl_amount);
         let usd = primary_fungible_store::withdraw(amm_admin, mock_usd::metadata(), usd_amount);
         mock_usd::deposit_to_pool(&state.usd_pool_cap, state.usd_reserve, usd);
-        lp_rewards::mint_active(&state.lp_cap, beneficiary, shares);
+        lp_rewards::mint_active(&state.lp_cap, beneficiary_address, shares);
         lp_rewards::assert_active_epoch_healthy(&state.lp_cap);
         lp_rewards::assert_epoch_backing(&state.lp_cap, epoch);
         assert_reserve_custody(state);
@@ -287,7 +297,7 @@ module test_amm::pool {
         let mutable_state = borrow_global_mut<PoolState>(@test_amm);
         mutable_state.seeded = true;
         event::emit(LiquiditySeeded {
-            epoch, provider: beneficiary, rfl_amount, usd_amount, lp_shares: shares, reserve_rfl, reserve_usd,
+            epoch, provider: beneficiary_address, rfl_amount, usd_amount, lp_shares: shares, reserve_rfl, reserve_usd,
         });
     }
 
@@ -301,6 +311,7 @@ module test_amm::pool {
         assert_deadline(deadline_seconds);
         assert!(max_rfl > 0 && max_usd > 0, E_ZERO_AMOUNT);
         let state = borrow_global<PoolState>(@test_amm);
+        assert_not_operational_account(state, signer::address_of(provider));
         assert!(state.seeded, E_NOT_SEEDED);
         assert!(!state.liquidity_paused && !state.shutdown_mode, E_LIQUIDITY_PAUSED);
         checkpoint_active(state);
@@ -349,7 +360,7 @@ module test_amm::pool {
         let total_shares = lp_rewards::total_active_shares();
         let final_exit = shares == total_shares;
         if (final_exit) assert!(state.shutdown_mode, E_FINAL_EXIT_REQUIRES_SHUTDOWN);
-        if (!final_exit) {
+        if (!final_exit && !state.shutdown_mode) {
             assert!(
                 (shares as u256) * (BPS_DENOMINATOR as u256)
                     <= (total_shares as u256) * (state.max_withdrawal_share_bps as u256),
@@ -360,12 +371,36 @@ module test_amm::pool {
         let (rfl_out, usd_out) = reflection_settlement::liquidity_withdrawal(
             shares, total_shares, reserve_rfl, reserve_usd,
         );
-        assert!(rfl_out > 0 && usd_out > 0, E_ZERO_AMOUNT);
+        if (state.shutdown_mode) {
+            // Fragmented ownership can make one proportional side floor to
+            // zero even though the other side is withdrawable. Shutdown must
+            // remain operator-independent and let every holder unwind; a
+            // both-zero burn still destroys value and is rejected.
+            assert!(rfl_out > 0 || usd_out > 0, E_ZERO_AMOUNT);
+        } else {
+            // During normal operation, retain the conservative two-sided
+            // output requirement so routine removals cannot strand dust.
+            assert!(rfl_out > 0 && usd_out > 0, E_ZERO_AMOUNT);
+        };
         assert!(rfl_out >= min_rfl_output && usd_out >= min_usd_output, E_MIN_OUTPUT);
+        auto_pay_before_position_exit(state, provider, epoch, shares);
         lp_rewards::burn_active(&state.lp_cap, provider_address, shares);
-        custody_settlement::custody_to_wallet(&state.custody_cap, state.rfl_reserve, provider, rfl_out);
-        let usd = mock_usd::withdraw_from_pool(&state.usd_pool_cap, state.usd_reserve, usd_out);
-        primary_fungible_store::deposit(provider_address, usd);
+        if (rfl_out > 0) {
+            custody_settlement::custody_to_wallet(
+                &state.custody_cap,
+                state.rfl_reserve,
+                provider,
+                rfl_out,
+            );
+        };
+        if (usd_out > 0) {
+            let usd = mock_usd::withdraw_from_pool(
+                &state.usd_pool_cap,
+                state.usd_reserve,
+                usd_out,
+            );
+            primary_fungible_store::deposit(provider_address, usd);
+        };
         assert_reserve_custody(state);
         let (after_rfl, after_usd) = reserves(state);
         lp_rewards::assert_epoch_backing(&state.lp_cap, epoch);
@@ -386,19 +421,26 @@ module test_amm::pool {
     /// secondary/delegated custody cannot silently receive reward weight.
     public entry fun transfer_lp_shares(sender: &signer, recipient: address, shares: u128) acquires PoolState {
         assert!(shares > 0 && recipient != signer::address_of(sender), E_INVALID_RECIPIENT);
-        assert!(reflection_token::wallet_is_registered(recipient), E_INVALID_RECIPIENT);
         let state = borrow_global<PoolState>(@test_amm);
+        assert_not_operational_account(state, recipient);
+        assert!(reflection_token::wallet_is_registered(recipient), E_INVALID_RECIPIENT);
         assert!(!state.liquidity_paused && !state.shutdown_mode, E_LIQUIDITY_PAUSED);
         checkpoint_active(state);
+        let epoch = lp_rewards::active_epoch();
+        auto_pay_before_position_exit(state, sender, epoch, shares);
         lp_rewards::transfer_active(&state.lp_cap, signer::address_of(sender), recipient, shares);
-        lp_rewards::assert_epoch_backing(&state.lp_cap, lp_rewards::active_epoch());
+        lp_rewards::assert_epoch_backing(&state.lp_cap, epoch);
     }
 
     /// `amount == 0` claims all currently pending rewards for the epoch.
     public entry fun claim_lp_rewards(owner: &signer, epoch: u64, amount: u64) acquires PoolState {
         let state = borrow_global<PoolState>(@test_amm);
         assert!(!state.lp_claims_paused, E_LP_CLAIMS_PAUSED);
-        if (epoch == lp_rewards::active_epoch() && epoch > 0) checkpoint_active(state);
+        if (
+            epoch == lp_rewards::active_epoch()
+                && epoch > 0
+                && !lp_rewards::epoch_is_quarantined(epoch)
+        ) checkpoint_active(state);
         let claimed = lp_rewards::prepare_claim(&state.lp_cap, epoch, signer::address_of(owner), amount);
         let vault = lp_rewards::reward_vault(epoch);
         custody_settlement::pay_lp_claim(&state.custody_cap, owner, epoch, vault, claimed);
@@ -416,28 +458,79 @@ module test_amm::pool {
         checkpoint_active(state);
     }
 
-    /// The AMM publisher remains the cold package/capability authority. This
-    /// evented handoff assigns routine pause, shutdown, fee, and limit controls
-    /// to a separate operational key.
+    /// Recovery-only AMM-role handoff. Normal rotations should use
+    /// `set_all_operational_admin` so all three authority views change in one
+    /// transaction.
     public entry fun set_operational_admin(
         amm_publisher: &signer,
-        new_operational_admin: address,
+        new_operational_admin: &signer,
     ) acquires PoolState {
-        assert!(new_operational_admin != @0x0, E_INVALID_OPERATIONAL_ADMIN);
         let state = borrow_global_mut<PoolState>(@test_amm);
         assert_amm_admin(state, amm_publisher);
+        let new_operational_admin_address = signer::address_of(new_operational_admin);
+        assert!(
+            new_operational_admin_address != @0x0
+                && new_operational_admin_address != @reflection_core
+                && new_operational_admin_address != @test_assets
+                && new_operational_admin_address != @test_amm
+                && new_operational_admin_address == reflection_token::operational_admin()
+                && reflection_token::primary_store_is_excluded(
+                    new_operational_admin_address,
+                ),
+            E_INVALID_OPERATIONAL_ADMIN,
+        );
+        assert!(
+            !lp_rewards::has_ever_held_lp(new_operational_admin_address),
+            E_OPERATIONAL_ADMIN_HAS_LP_HISTORY,
+        );
         let old_operational_admin = state.operational_admin;
-        state.operational_admin = new_operational_admin;
+        state.operational_admin = new_operational_admin_address;
         event::emit(OperationalAdminChanged {
             old_operational_admin,
-            new_operational_admin,
+            new_operational_admin: new_operational_admin_address,
         });
+    }
+
+    /// Preferred atomic handoff. All cold publishers and the new operational
+    /// account co-sign; any failed role validation rolls back every role change.
+    public entry fun set_all_operational_admin(
+        core_publisher: &signer,
+        assets_publisher: &signer,
+        amm_publisher: &signer,
+        new_operational_admin: &signer,
+    ) acquires PoolState {
+        let new_operational_admin_address = signer::address_of(new_operational_admin);
+        // Preflight the AMM-specific permanent LP-history rule before changing
+        // any of the three authority resources.
+        assert!(
+            !lp_rewards::has_ever_held_lp(new_operational_admin_address),
+            E_OPERATIONAL_ADMIN_HAS_LP_HISTORY,
+        );
+        reflection_token::set_operational_admin(
+            core_publisher,
+            new_operational_admin,
+        );
+        test_faucet::set_operational_admin(
+            assets_publisher,
+            new_operational_admin,
+        );
+        set_operational_admin(amm_publisher, new_operational_admin);
+        assert!(
+            reflection_token::operational_admin() == new_operational_admin_address
+                && test_faucet::operational_admin() == new_operational_admin_address
+                && operational_admin() == new_operational_admin_address,
+            E_INVALID_OPERATIONAL_ADMIN,
+        );
     }
 
     public entry fun begin_shutdown(amm_admin: &signer) acquires PoolState {
         let state = borrow_global_mut<PoolState>(@test_amm);
         assert_operational_admin(state, amm_admin);
         assert!(state.seeded, E_NOT_SEEDED);
+        // Shutdown disables pause reconfiguration. Entering it while LP
+        // claims are paused could permanently block full-position auto-pay
+        // and therefore reserve exit, so fail before changing any state.
+        assert!(!state.lp_claims_paused, E_LP_CLAIMS_PAUSED);
         state.pool_paused = true;
         state.shutdown_mode = true;
         state.liquidity_paused = false;
@@ -552,6 +645,7 @@ module test_amm::pool {
     ) acquires PoolState {
         assert_deadline(deadline_seconds);
         let state = borrow_global<PoolState>(@test_amm);
+        assert_not_operational_account(state, signer::address_of(buyer));
         assert_pool_live(state);
         assert_swap_bounds(state, tusd_input, false);
         let (rfl_before, usd_before) = reserves(state);
@@ -661,6 +755,43 @@ module test_amm::pool {
     ): (u8, u256, u256, u128, u128, u128, u256, u256, u256) {
         lp_rewards::epoch_accounting(epoch)
     }
+    #[view]
+    public fun lp_epoch_terminal_dust(epoch: u64): (u128, u256) {
+        lp_rewards::epoch_terminal_dust(epoch)
+    }
+
+    #[test_only]
+    public fun attempt_usd_withdraw_from_store_for_test(
+        store: Object<FungibleStore>,
+        recipient: address,
+        amount: u64,
+    ) acquires PoolState {
+        let state = borrow_global<PoolState>(@test_amm);
+        let asset = mock_usd::withdraw_from_pool(&state.usd_pool_cap, store, amount);
+        primary_fungible_store::deposit(recipient, asset);
+    }
+
+    // Exercises the defense-in-depth receipt path that canonical entry
+    // functions preflight away. Test-only bytecode can deliberately remove
+    // the denominator before routing a real pending custody reward.
+    #[test_only]
+    public fun force_zero_denominator_receipt_for_test(owner: address): u64 acquires PoolState {
+        let state = borrow_global<PoolState>(@test_amm);
+        let epoch = lp_rewards::active_epoch();
+        let shares = lp_rewards::position_shares(epoch, owner);
+        assert!(shares > 0, E_ZERO_AMOUNT);
+        lp_rewards::burn_active(&state.lp_cap, owner, shares);
+        let vault = lp_rewards::active_reward_vault();
+        let amount = custody_settlement::checkpoint(
+            &state.custody_cap,
+            state.rfl_reserve,
+            epoch,
+            vault,
+        );
+        assert!(amount > 0, E_ZERO_AMOUNT);
+        lp_rewards::receive_routed_reward(&state.lp_cap, amount);
+        amount
+    }
 
     fun checkpoint_active(state: &PoolState) {
         lp_rewards::assert_active_epoch_healthy(&state.lp_cap);
@@ -669,6 +800,39 @@ module test_amm::pool {
         let vault = lp_rewards::active_reward_vault();
         let amount = custody_settlement::checkpoint(&state.custody_cap, state.rfl_reserve, epoch, vault);
         if (amount > 0) lp_rewards::receive_routed_reward(&state.lp_cap, amount);
+        lp_rewards::assert_epoch_backing(&state.lp_cap, epoch);
+        reflection_token::assert_accounting_backing();
+    }
+
+    /// A full burn or transfer pays every whole unit accrued by the departing
+    /// owner before its LP correction is normalized. If LP claims are paused,
+    /// an exit that needs payment aborts atomically; a zero-pending exit remains
+    /// available because it moves no reward-vault funds.
+    fun auto_pay_before_position_exit(
+        state: &PoolState,
+        owner: &signer,
+        epoch: u64,
+        shares_to_remove: u128,
+    ) {
+        let owner_address = signer::address_of(owner);
+        if (lp_rewards::position_shares(epoch, owner_address) != shares_to_remove) return;
+        let pending = lp_rewards::pending_rewards(epoch, owner_address);
+        if (pending == 0) return;
+        assert!(!state.lp_claims_paused, E_LP_CLAIMS_PAUSED);
+        let claimed = lp_rewards::prepare_claim(
+            &state.lp_cap,
+            epoch,
+            owner_address,
+            pending,
+        );
+        let vault = lp_rewards::reward_vault(epoch);
+        custody_settlement::pay_lp_claim(
+            &state.custody_cap,
+            owner,
+            epoch,
+            vault,
+            claimed,
+        );
         lp_rewards::assert_epoch_backing(&state.lp_cap, epoch);
         reflection_token::assert_accounting_backing();
     }
@@ -688,8 +852,9 @@ module test_amm::pool {
     }
 
     fun assert_pool_live(state: &PoolState) {
+        let (core_swaps_paused, _) = reflection_token::pauses();
         assert!(state.seeded, E_NOT_SEEDED);
-        assert!(!state.pool_paused && !state.shutdown_mode, E_POOL_PAUSED);
+        assert!(!state.pool_paused && !state.shutdown_mode && !core_swaps_paused, E_POOL_PAUSED);
         lp_rewards::assert_active_epoch_healthy(&state.lp_cap);
     }
 
@@ -705,12 +870,19 @@ module test_amm::pool {
     }
 
     fun assert_valid_beneficiary(state: &PoolState, beneficiary: address) {
+        assert_not_operational_account(state, beneficiary);
         assert!(
             beneficiary != state.admin
-                && beneficiary != state.operational_admin
-                && beneficiary != reflection_token::operational_admin()
-                && beneficiary != test_faucet::operational_admin()
-                && reflection_token::wallet_is_registered(beneficiary),
+                && !reflection_token::primary_store_is_excluded(beneficiary),
+            E_INVALID_BENEFICIARY,
+        );
+    }
+
+    fun assert_not_operational_account(state: &PoolState, account: address) {
+        assert!(
+            account != state.operational_admin
+                && account != reflection_token::operational_admin()
+                && account != test_faucet::operational_admin(),
             E_INVALID_BENEFICIARY,
         );
     }

@@ -1,4 +1,8 @@
-import type { Address, SwapDirection } from "../../protocol-sdk/src/types.js";
+import type {
+  Address,
+  CedraTestnetChainId,
+  SwapDirection,
+} from "../../protocol-sdk/src/types.js";
 
 export type EventId = string;
 export type EventSource = "chain" | "replay" | "fixture";
@@ -21,17 +25,47 @@ export interface EventBase {
 
 export interface ProtocolInitializedEvent extends EventBase {
   readonly type: "ProtocolInitialized";
+  readonly deploymentId: string;
+  readonly networkLabel: string;
+  readonly tokenMetadata: Address;
   readonly automaticMaterialization: boolean;
   readonly feeBps: bigint;
   readonly initialIndex: bigint;
   readonly packageVersion: string;
   readonly rewardVault: Address;
   readonly distributionVault: Address;
+  readonly protocolExclusionSlots: bigint;
+}
+
+export interface ProtocolPrimaryStoreExcludedEvent extends EventBase {
+  readonly type: "ProtocolPrimaryStoreExcluded";
+  readonly account: Address;
+  readonly store: Address;
+  readonly remainingSlots: bigint;
+}
+
+/**
+ * Permanent exclusion created when a co-signing operations account is first
+ * appointed. Unlike publisher bootstrap exclusions, it consumes no finite
+ * protocol-exclusion slot.
+ */
+export interface OperationalPrimaryStoreExcludedEvent extends EventBase {
+  readonly type: "OperationalPrimaryStoreExcluded";
+  readonly account: Address;
+  readonly store: Address;
 }
 
 export interface PositionCreatedEvent extends EventBase {
   readonly type: "PositionCreated";
   readonly account: Address;
+}
+
+export interface WalletRegisteredEvent extends EventBase {
+  readonly type: "WalletRegistered";
+  readonly account: Address;
+  readonly primaryStore: Address;
+  /** Exact post-registration u64 counter emitted by reflection-core. */
+  readonly registeredWalletCount: bigint;
 }
 
 export interface FaucetGrantEvent extends EventBase {
@@ -46,6 +80,12 @@ export interface FaucetConfiguredEvent extends EventBase {
   readonly trflGrant: bigint;
   readonly tusdGrant: bigint;
   readonly cooldownSeconds: bigint;
+}
+
+export interface PoolReserveBoundEvent extends EventBase {
+  readonly type: "PoolReserveBound";
+  readonly reserveStore: Address;
+  readonly custodian: Address;
 }
 
 /** Informational router receipt. Native hook endpoints are the accounting authority. */
@@ -136,6 +176,7 @@ export interface CustodyEpochRouteOpenedEvent extends EventBase {
   readonly epoch: bigint;
   readonly reserveStore: Address;
   readonly lpRewardVault: Address;
+  readonly retiredResidueMagnified: bigint;
 }
 
 export interface CustodyRewardsRoutedEvent extends EventBase {
@@ -288,11 +329,38 @@ export interface LpRewardQuarantinedEvent extends EventBase {
   readonly rewardVault: Address;
 }
 
+export interface LpFractionalResidueRetiredEvent extends EventBase {
+  readonly type: "LpFractionalResidueRetired";
+  readonly epoch: bigint;
+  readonly owner: Address;
+  /** Fractional correction units scaled by REFLECTION_MAGNITUDE (u256). */
+  readonly residueMagnified: bigint;
+  readonly cumulativeRetiredResidueMagnified: bigint;
+  /** Physical tRFL base units retained in the epoch vault (u128). */
+  readonly roundingReserveBaseUnits: bigint;
+}
+
+export interface LpEpochTerminalDustClassifiedEvent extends EventBase {
+  readonly type: "LpEpochTerminalDustClassified";
+  readonly epoch: bigint;
+  readonly rewardVault: Address;
+  /** Physical tRFL base units remaining at terminal classification (u128). */
+  readonly terminalRoundingBaseUnits: bigint;
+  /** Cumulative fractional correction units scaled by REFLECTION_MAGNITUDE (u256). */
+  readonly retiredResidueMagnified: bigint;
+  readonly lifetimeReceivedBaseUnits: bigint;
+  readonly lifetimeClaimedBaseUnits: bigint;
+}
+
 export type ProtocolEvent =
   | ProtocolInitializedEvent
+  | ProtocolPrimaryStoreExcludedEvent
+  | OperationalPrimaryStoreExcludedEvent
   | PositionCreatedEvent
+  | WalletRegisteredEvent
   | FaucetGrantEvent
   | FaucetConfiguredEvent
+  | PoolReserveBoundEvent
   | WalletTransferEvent
   | EligibleBalanceDebitedEvent
   | EligibleBalanceCreditedEvent
@@ -321,7 +389,9 @@ export type ProtocolEvent =
   | LpSharesTransferredEvent
   | LpRewardIndexAdvancedEvent
   | LpRewardsClaimedEvent
-  | LpRewardQuarantinedEvent;
+  | LpRewardQuarantinedEvent
+  | LpFractionalResidueRetiredEvent
+  | LpEpochTerminalDustClassifiedEvent;
 
 export interface IndexedPosition {
   readonly account: Address;
@@ -364,6 +434,10 @@ export interface IndexedLpEpoch {
   readonly aggregateCorrection: bigint;
   readonly unallocatedRewards: bigint;
   readonly roundingReserve: bigint;
+  /** Cumulative fractional correction units retired from zero-share owners. */
+  readonly retiredResidueMagnified: bigint;
+  /** Null until the active-to-claim-only transaction classifies terminal dust. */
+  readonly terminalRoundingBaseUnits: bigint | null;
   readonly lifetimeReceived: bigint;
   readonly lifetimeClaimed: bigint;
   readonly quarantined: boolean;
@@ -388,6 +462,17 @@ export interface IndexedPool {
 
 /** Event-replayed values. They are an independent witness, not a chain response. */
 export interface ProtocolProjection {
+  /** Fixed consensus identity for every event, view, and durable checkpoint. */
+  readonly chainId: CedraTestnetChainId;
+  readonly deploymentId: string;
+  readonly networkLabel: string;
+  readonly tokenMetadata: Address | null;
+  readonly protocolExclusionSlots: bigint;
+  readonly protocolExclusionsRemaining: bigint;
+  readonly protocolExcludedStores: ReadonlyMap<Address, Address>;
+  /** Exact event-authenticated wallet -> canonical primary-store binding. */
+  readonly registeredWallets: ReadonlyMap<Address, Address>;
+  readonly registeredWalletCount: bigint;
   readonly automaticMaterialization: boolean;
   readonly feeBps: bigint;
   readonly currentIndex: bigint;
@@ -398,6 +483,8 @@ export interface ProtocolProjection {
   readonly roundingReserve: bigint;
   readonly rewardVault: Address | null;
   readonly distributionVault: Address | null;
+  /** Immutable tUSD reserve selected by the one-shot settlement capability. */
+  readonly mockUsdPoolReserve: Address | null;
   readonly rewardVaultCredits: bigint;
   readonly rewardVaultPayouts: bigint;
   readonly lifetimeSwapFees: bigint;
@@ -415,6 +502,8 @@ export interface ProtocolProjection {
     readonly testAssets: Address | null;
     readonly testAmm: Address | null;
   };
+  /** True only after all three package authority histories have been replayed. */
+  readonly deploymentReady: boolean;
   readonly pool: IndexedPool;
   readonly custody: IndexedCustodyPosition;
   readonly activeLpEpoch: bigint | null;
@@ -452,6 +541,10 @@ export interface ObservedLpEpoch {
   readonly aggregateCorrection: bigint;
   readonly unallocatedRewards: bigint;
   readonly roundingReserve: bigint;
+  /** `pool::lp_epoch_terminal_dust` first return: physical u128 base units. */
+  readonly terminalRoundingBaseUnits: bigint;
+  /** `pool::lp_epoch_terminal_dust` second return: magnified u256 units. */
+  readonly retiredResidueMagnified: bigint;
   readonly lifetimeReceived: bigint;
   readonly lifetimeClaimed: bigint;
   readonly quarantined: boolean;
@@ -461,7 +554,16 @@ export interface ObservedLpEpoch {
 
 /** Values fetched from on-chain views at one finalized ledger version. */
 export interface ObservedAccountingSnapshot {
+  readonly chainId: number;
   readonly ledgerVersion: bigint;
+  readonly deploymentId: string;
+  readonly networkLabel: string;
+  readonly tokenMetadata: Address;
+  readonly protocolExclusionsRemaining: bigint;
+  /** Finalized `registered_wallet_count()` view. */
+  readonly registeredWalletCount: bigint;
+  /** Accounts independently confirmed through `wallet_is_registered(account)`. */
+  readonly registeredWalletAccounts: readonly Address[];
   readonly automaticMaterialization: boolean;
   readonly rewardVault: Address;
   readonly rewardVaultBalance: bigint;
@@ -477,6 +579,9 @@ export interface ObservedAccountingSnapshot {
   readonly lifetimeCustodyRouted: bigint;
   readonly custodyAdapterId: bigint;
   readonly custodyReserveStore: Address;
+  readonly poolRflReserveStore: Address;
+  readonly poolUsdReserveStore: Address;
+  readonly mockUsdPoolReserve: Address;
   readonly custodyReserveBalance: bigint;
   readonly custodyShares: bigint;
   readonly custodyCorrection: bigint;
@@ -539,9 +644,12 @@ export interface CriticalAlert {
     | "LP_VAULT_BACKING"
     | "VAULT_BINDING"
     | "POSITION_ACCOUNTING"
+    | "WALLET_REGISTRATION"
     | "PACKAGE_VERSION"
     | "PAUSE_STATE"
-    | "OPERATIONAL_ADMIN";
+    | "OPERATIONAL_ADMIN"
+    | "DEPLOYMENT_IDENTITY"
+    | "LEDGER_VERSION";
   readonly message: string;
   readonly detectedAtUnixMilliseconds: bigint;
   readonly cursor: EventCursor | null;
@@ -575,6 +683,8 @@ export interface IndexerSnapshot {
 }
 
 export interface EventPage {
+  /** Consensus chain identity observed by the finalized event source. */
+  readonly chainId: number;
   /** Sources must not split one ledger-version transaction across pages. */
   readonly events: readonly ProtocolEvent[];
   readonly nextCursor: EventCursor | null;
@@ -582,12 +692,31 @@ export interface EventPage {
 
 export interface ProtocolEventSource {
   listEvents(after: EventCursor | null, limit: number): Promise<EventPage>;
-  getAccountingSnapshot(): Promise<ObservedAccountingSnapshot>;
+  getAccountingSnapshot(ledgerVersion: bigint): Promise<ObservedAccountingSnapshot>;
+}
+
+declare const indexerWriterLeaseBrand: unique symbol;
+
+/** Store-issued, runtime identity-checked authority for one writer cycle. */
+export interface IndexerWriterLease {
+  readonly [indexerWriterLeaseBrand]: true;
 }
 
 export interface IndexerStore {
+  /** In-memory stores may acquire a short implicit lease for test ergonomics. */
+  readonly permitsImplicitWriterLease: boolean;
+  /**
+   * Execute one complete restore/poll/reconcile/checkpoint cycle while holding
+   * the store's exclusive writer lease. Implementations must fail fast rather
+   * than permit two concurrent writers.
+   */
+  withExclusiveWriter<T>(operation: (lease: IndexerWriterLease) => Promise<T>): Promise<T>;
   loadLatestSnapshot(): Promise<IndexerSnapshot | null>;
-  saveSnapshot(snapshot: IndexerSnapshot): Promise<void>;
-  appendAlerts(alerts: readonly CriticalAlert[]): Promise<void>;
+  saveSnapshot(
+    snapshot: IndexerSnapshot,
+    lease: IndexerWriterLease,
+    expectedBaseSnapshotId: string | null,
+  ): Promise<void>;
+  appendAlerts(alerts: readonly CriticalAlert[], lease: IndexerWriterLease): Promise<void>;
   listAlerts(): Promise<readonly CriticalAlert[]>;
 }

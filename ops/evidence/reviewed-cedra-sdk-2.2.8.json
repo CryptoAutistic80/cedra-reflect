@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "evidence_scope": "reviewed-npm-sdk-artifact",
+  "package_name": "@cedra-labs/ts-sdk",
+  "package_version": "2.2.8",
+  "registry_tarball_url": "https://registry.npmjs.org/@cedra-labs/ts-sdk/-/ts-sdk-2.2.8.tgz",
+  "npm_tarball_sha512_integrity": "sha512-6T3/GlaUZm46lAhTjovplv5XnqRQxATaVN5IFsnzeoqhNulY9OPzel7e8I1qi6CFSonmmIWluduOcU1L7FJU1w==",
+  "npm_tarball_sha256": "c75c4157ed3607e5860ec68e830a83c1c8691e658166fa1ebcf1cb934a381321",
+  "package_tree_digest_algorithm": "sha256(depth_first_lexicographic_path_components(sha256(file_bytes) NUL decimal_byte_length NUL posix_relative_path LF))",
+  "sdk_package_json_sha256": "eafd7e5fa5543444a08394aa3ac0bdf255cecd1d222804fb02b83c14c06f5dcf",
+  "sdk_loaded_entrypoint": "dist/esm/index.mjs",
+  "sdk_loaded_entrypoint_sha256": "5fe66313f179a68909e7a68bc721326af7f8e32ad3d792739447838ce2e7ae5a",
+  "sdk_package_tree_sha256": "0259184429bdc85d4d78e1a6bf105677e8cea7707bec5dcdbba269dea36e2765",
+  "sdk_package_file_count": 731
+}

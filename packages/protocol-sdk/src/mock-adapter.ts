@@ -1,8 +1,11 @@
 import { reflectionFee } from "./safe-client.js";
+import { detachedDeepFreeze } from "./immutable.js";
 import {
+  CEDRA_TESTNET_CHAIN_ID,
   type Address,
   type CedraReadAdapter,
   type FaucetStatus,
+  type LpEpochTerminalDustSnapshot,
   type PoolSnapshot,
   type PortfolioSnapshot,
   type ProtocolSnapshot,
@@ -14,29 +17,46 @@ export interface MockReadState {
   readonly protocol: ProtocolSnapshot;
   readonly faucetTrfl: FaucetStatus;
   readonly faucetTusd: FaucetStatus;
+  readonly lpEpochTerminalDust?: ReadonlyMap<bigint, Omit<LpEpochTerminalDustSnapshot, "epoch" | "ledgerVersion">>;
 }
 
 /** Deterministic in-memory read adapter for UI development and tests. */
 export class MockCedraReadAdapter implements CedraReadAdapter {
-  public constructor(private readonly state: MockReadState) {}
+  private readonly state: MockReadState;
+
+  public constructor(state: MockReadState) {
+    // Test fixtures are caller-owned mutable JavaScript values despite their
+    // readonly TypeScript surface. Never retain their aliases.
+    this.state = structuredClone(state);
+  }
 
   public async getPortfolio(_account: Address): Promise<PortfolioSnapshot> {
-    return this.state.portfolio;
+    return detachedDeepFreeze(this.state.portfolio);
   }
 
   public async getProtocol(): Promise<ProtocolSnapshot> {
-    return this.state.protocol;
+    return detachedDeepFreeze(this.state.protocol);
   }
 
   public async getPool(): Promise<PoolSnapshot> {
-    return this.state.protocol.pool;
+    return detachedDeepFreeze(this.state.protocol.pool);
+  }
+
+  public async getLpEpochTerminalDust(epoch: bigint): Promise<LpEpochTerminalDustSnapshot> {
+    const dust = this.state.lpEpochTerminalDust?.get(epoch);
+    return detachedDeepFreeze({
+      epoch,
+      terminalRoundingBaseUnits: dust?.terminalRoundingBaseUnits ?? 0n,
+      retiredResidueMagnified: dust?.retiredResidueMagnified ?? 0n,
+      ledgerVersion: this.state.protocol.ledgerVersion,
+    });
   }
 
   public async getFaucetStatus(
     _account: Address,
     asset: "tRFL" | "tUSD",
   ): Promise<FaucetStatus> {
-    return asset === "tRFL" ? this.state.faucetTrfl : this.state.faucetTusd;
+    return detachedDeepFreeze(asset === "tRFL" ? this.state.faucetTrfl : this.state.faucetTusd);
   }
 
   public async quoteSwap(input: {
@@ -45,6 +65,7 @@ export class MockCedraReadAdapter implements CedraReadAdapter {
     readonly slippageBps: bigint;
     readonly deadlineUnixSeconds: bigint;
   }): Promise<SwapQuote> {
+    input = Object.freeze(structuredClone(input));
     const pool = this.state.protocol.pool;
     // A sell pays reflection from tRFL input; a buy pays it from the tRFL
     // output. The tUSD buy input reaches the pool unchanged before AMM fee.
@@ -59,10 +80,13 @@ export class MockCedraReadAdapter implements CedraReadAdapter {
       ? grossPoolOutput - reflectionFee(grossPoolOutput)
       : grossPoolOutput;
     const minimumNetUserReceipt = (netUserReceipt * (10_000n - input.slippageBps)) / 10_000n;
-    const priceImpactBps = inputReserve === 0n ? 0n : (invariantInput * 10_000n) / inputReserve;
-    return {
+    const priceImpactBps = inputReserve === 0n
+      ? 0n
+      : (invariantInput * 10_000n) / (inputReserve + invariantInput);
+    return detachedDeepFreeze({
       direction: input.direction,
       grossAmount: input.grossAmount,
+      slippageBps: input.slippageBps,
       reflectionFee: input.direction === "buy" ? reflectionFee(grossPoolOutput) : inputReflection,
       ammFee,
       netReserveInput: reserveInput,
@@ -71,6 +95,18 @@ export class MockCedraReadAdapter implements CedraReadAdapter {
       minimumNetUserReceipt,
       priceImpactBps,
       deadlineUnixSeconds: input.deadlineUnixSeconds,
-    };
+      context: {
+        chainId: CEDRA_TESTNET_CHAIN_ID,
+        ledgerVersion: pool.ledgerVersion,
+        deploymentId: "mock-reflection-pilot",
+        packageVersion: this.state.protocol.packageVersion,
+        inputReserve,
+        outputReserve,
+        reflectionFeeBps: 100n,
+        ammFeeBps: 30n,
+        maximumGrossSwap: pool.maximumGrossSwap,
+        maximumReserveBps: pool.maximumReserveBps,
+      },
+    });
   }
 }

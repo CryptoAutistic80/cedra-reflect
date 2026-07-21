@@ -1,0 +1,207 @@
+{
+  "name": "amm_u64_u128_arithmetic_boundaries",
+  "limits": {
+    "max_u64": 18446744073709551615,
+    "max_u128": 340282366920938463463374607431768211455
+  },
+  "fee": [
+    {
+      "amount": 0,
+      "fee_bps": 0,
+      "expected_fee": 0
+    },
+    {
+      "amount": 1,
+      "fee_bps": 30,
+      "expected_fee": 1
+    },
+    {
+      "amount": 1801,
+      "fee_bps": 30,
+      "expected_fee": 6
+    },
+    {
+      "amount": 18446744073709551615,
+      "fee_bps": 0,
+      "expected_fee": 0
+    },
+    {
+      "amount": 18446744073709551615,
+      "fee_bps": 100,
+      "expected_fee": 184467440737095517
+    },
+    {
+      "amount": 18446744073709551615,
+      "fee_bps": 10000,
+      "expected_fee": 18446744073709551615
+    }
+  ],
+  "constant_product": [
+    {
+      "reserve_in": 1,
+      "reserve_out": 1,
+      "gross_input": 0,
+      "fee_bps": 0,
+      "expected_output": 0,
+      "expected_fee": 0
+    },
+    {
+      "reserve_in": 1,
+      "reserve_out": 1,
+      "gross_input": 1,
+      "fee_bps": 0,
+      "expected_output": 0,
+      "expected_fee": 0
+    },
+    {
+      "reserve_in": 18446744073709551615,
+      "reserve_out": 18446744073709551615,
+      "gross_input": 1,
+      "fee_bps": 30,
+      "expected_output": 0,
+      "expected_fee": 1
+    },
+    {
+      "reserve_in": 18446744073709551615,
+      "reserve_out": 18446744073709551615,
+      "gross_input": 18446744073709551615,
+      "fee_bps": 0,
+      "expected_output": 9223372036854775807,
+      "expected_fee": 0
+    },
+    {
+      "reserve_in": 18446744073709551615,
+      "reserve_out": 18446744073709551615,
+      "gross_input": 18446744073709551615,
+      "fee_bps": 100,
+      "expected_output": 9177023433654500551,
+      "expected_fee": 184467440737095517
+    },
+    {
+      "reserve_in": 1,
+      "reserve_out": 18446744073709551615,
+      "gross_input": 18446744073709551615,
+      "fee_bps": 0,
+      "expected_output": 18446744073709551614,
+      "expected_fee": 0
+    }
+  ],
+  "initial_lp_shares": [
+    {
+      "rfl_amount": 0,
+      "usd_amount": 18446744073709551615,
+      "expected_shares": 0
+    },
+    {
+      "rfl_amount": 1,
+      "usd_amount": 1,
+      "expected_shares": 1
+    },
+    {
+      "rfl_amount": 2,
+      "usd_amount": 3,
+      "expected_shares": 2
+    },
+    {
+      "rfl_amount": 1,
+      "usd_amount": 18446744073709551615,
+      "expected_shares": 4294967295
+    },
+    {
+      "rfl_amount": 18446744073709551615,
+      "usd_amount": 18446744073709551614,
+      "expected_shares": 18446744073709551614
+    },
+    {
+      "rfl_amount": 18446744073709551615,
+      "usd_amount": 18446744073709551615,
+      "expected_shares": 18446744073709551615
+    }
+  ],
+  "liquidity_mint": [
+    {
+      "max_rfl": 1,
+      "max_usd": 1,
+      "reserve_rfl": 18446744073709551615,
+      "reserve_usd": 18446744073709551615,
+      "total_shares": 1,
+      "expected_shares": 0,
+      "expected_rfl_used": 0,
+      "expected_usd_used": 0
+    },
+    {
+      "max_rfl": 25000,
+      "max_usd": 100000,
+      "reserve_rfl": 800000,
+      "reserve_usd": 1600000,
+      "total_shares": 1131370,
+      "expected_shares": 35355,
+      "expected_rfl_used": 25000,
+      "expected_usd_used": 50000
+    },
+    {
+      "max_rfl": 18446744073709551615,
+      "max_usd": 18446744073709551615,
+      "reserve_rfl": 18446744073709551615,
+      "reserve_usd": 18446744073709551615,
+      "total_shares": 18446744073709551615,
+      "expected_shares": 18446744073709551615,
+      "expected_rfl_used": 18446744073709551615,
+      "expected_usd_used": 18446744073709551615
+    },
+    {
+      "max_rfl": 18446744073709551615,
+      "max_usd": 18446744073709551615,
+      "reserve_rfl": 18446744073709551615,
+      "reserve_usd": 18446744073709551615,
+      "total_shares": 340282366920938463463374607431768211455,
+      "expected_shares": 340282366920938463463374607431768211455,
+      "expected_rfl_used": 18446744073709551615,
+      "expected_usd_used": 18446744073709551615
+    },
+    {
+      "max_rfl": 18446744073709551615,
+      "max_usd": 1,
+      "reserve_rfl": 1,
+      "reserve_usd": 18446744073709551615,
+      "total_shares": 340282366920938463463374607431768211455,
+      "expected_shares": 18446744073709551617,
+      "expected_rfl_used": 1,
+      "expected_usd_used": 1
+    }
+  ],
+  "liquidity_withdrawal": [
+    {
+      "shares": 1,
+      "total_shares": 340282366920938463463374607431768211455,
+      "reserve_rfl": 18446744073709551615,
+      "reserve_usd": 18446744073709551615,
+      "expected_rfl_out": 0,
+      "expected_usd_out": 0
+    },
+    {
+      "shares": 340282366920938463463374607431768211454,
+      "total_shares": 340282366920938463463374607431768211455,
+      "reserve_rfl": 18446744073709551615,
+      "reserve_usd": 18446744073709551615,
+      "expected_rfl_out": 18446744073709551614,
+      "expected_usd_out": 18446744073709551614
+    },
+    {
+      "shares": 340282366920938463463374607431768211455,
+      "total_shares": 340282366920938463463374607431768211455,
+      "reserve_rfl": 18446744073709551615,
+      "reserve_usd": 18446744073709551615,
+      "expected_rfl_out": 18446744073709551615,
+      "expected_usd_out": 18446744073709551615
+    },
+    {
+      "shares": 1,
+      "total_shares": 3,
+      "reserve_rfl": 2,
+      "reserve_usd": 5,
+      "expected_rfl_out": 0,
+      "expected_usd_out": 1
+    }
+  ]
+}

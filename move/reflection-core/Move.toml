@@ -8,6 +8,10 @@ CedraFramework = { git = "https://github.com/cedra-labs/cedra-framework.git", su
 
 [addresses]
 reflection_core = "_"
+test_assets = "_"
+test_amm = "_"
 
 [dev-addresses]
 reflection_core = "0xcafe"
+test_assets = "0xbabe"
+test_amm = "0xdead"

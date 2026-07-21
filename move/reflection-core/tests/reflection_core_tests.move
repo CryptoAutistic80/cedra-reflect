@@ -19,6 +19,15 @@ module reflection_core::reflection_core_tests {
         assert!(reflection_token::pending_rewards(signer::address_of(bob)) == 0, 13);
         let (_, _, shares, _, _, _) = reflection_token::global_accounting();
         assert!(shares == 11_000, 14);
+        assert!(reflection_token::fixed_supply() == 1_000_000_000_000_000, 15);
+        assert!(
+            reflection_token::distribution_vault_balance()
+                + reflection_token::reward_vault_balance()
+                + reflection_token::raw_balance(signer::address_of(alice))
+                + reflection_token::raw_balance(signer::address_of(bob))
+                == reflection_token::fixed_supply(),
+            16,
+        );
     }
 
     #[test(admin = @0xcafe)]
@@ -37,15 +46,56 @@ module reflection_core::reflection_core_tests {
     }
 
     #[test(admin = @0xcafe)]
+    fun production_initializer_is_claim_backed_and_fully_vaulted(admin: &signer) {
+        reflection_token::initialize(admin);
+        let admin_address = signer::address_of(admin);
+        assert!(!reflection_token::automatic_materialization_enabled(), 40);
+        assert!(reflection_token::distribution_vault_balance() == reflection_token::fixed_supply(), 41);
+        assert!(reflection_token::reward_vault_balance() == 0, 42);
+        assert!(reflection_token::protocol_exclusions_remaining() == 2, 43);
+        assert!(reflection_token::operational_admin() == admin_address, 44);
+        assert!(reflection_token::primary_store_is_excluded(admin_address), 45);
+    }
+
+    #[test(admin = @0xcafe, alice = @0xa11ce, bob = @0xb0b)]
+    fun explicit_and_implicit_wallet_registration_are_exact_once(
+        admin: &signer,
+        alice: &signer,
+        bob: &signer,
+    ) {
+        reflection_token::initialize_claim_backed_for_test(admin);
+        assert!(reflection_token::registered_wallet_count() == 0, 50);
+        reflection_token::register_wallet(alice);
+        reflection_token::register_wallet(alice);
+        assert!(reflection_token::registered_wallet_count() == 1, 51);
+
+        let faucet_cap = reflection_token::issue_faucet_capability(admin);
+        reflection_token::faucet_grant(
+            &faucet_cap,
+            signer::address_of(bob),
+            1,
+            signer::address_of(admin),
+        );
+        reflection_token::faucet_grant(
+            &faucet_cap,
+            signer::address_of(bob),
+            1,
+            signer::address_of(admin),
+        );
+        reflection_token::destroy_faucet_capability_for_test(faucet_cap);
+        assert!(reflection_token::registered_wallet_count() == 2, 52);
+    }
+
+    #[test(admin = @0xcafe)]
     #[expected_failure(abort_code = 1, location = reflection_core::reflection_token)]
     fun initialization_is_one_shot(admin: &signer) {
         reflection_token::initialize_for_test(admin);
-        reflection_token::initialize(admin, false);
+        reflection_token::initialize(admin);
     }
 
     #[test(alice = @0xa11ce)]
     #[expected_failure(abort_code = 2, location = reflection_core::reflection_token)]
     fun initialization_requires_package_publisher(alice: &signer) {
-        reflection_token::initialize(alice, false);
+        reflection_token::initialize(alice);
     }
 }

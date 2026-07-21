@@ -1,9 +1,12 @@
 {
   "name": "wallet_custody_lp_fee_transfer_claim_and_swaps",
   "initial": {
-    "fixed_supply": 2000000,
+    "fixed_supply": 1000000000000000,
     "fee_bps": 100,
-    "amm_fee_bps": 30
+    "amm_fee_bps": 30,
+    "automatic_materialization": false,
+    "max_reserve_bps": 2000,
+    "max_gross_swap": 100000000000
   },
   "operations": [
     {"op": "faucet_grant", "actor": "admin", "recipient": "alice", "amount": 200000},
@@ -38,7 +41,7 @@
       "pool": 421490,
       "reward_vault": 153,
       "lp_reward_vault:1": 1,
-      "distribution_vault": 1000000
+      "distribution_vault": 999999999000000
     },
     "pending": {
       "alice": 44,

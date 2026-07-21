@@ -9,10 +9,9 @@ from __future__ import annotations
 
 import copy
 import json
-import os
-import random
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from reflection_model import (
     AccountingError,
@@ -22,15 +21,31 @@ from reflection_model import (
     PoolBypassError,
     ReflectionModel,
 )
-from reflection_model.model import MAGNITUDE, MAX_U128
+from reflection_model.model import MAGNITUDE, MAX_U64, MAX_U128, MAX_U256
+from reflection_model.workload import (
+    APPLIED,
+    NOOP,
+    REJECTED,
+    GitProvenance,
+    WorkloadConfig,
+    WorkloadCounters,
+    WorkloadExhaustedError,
+    config_from_environment,
+    run_randomized_workload,
+)
 
 
 ROOT = Path(__file__).resolve().parents[2]
 VECTOR_PATH = ROOT / "python" / "test_vectors" / "basic_accounting.json"
 
 
-def configured_model() -> ReflectionModel:
-    model = ReflectionModel(fixed_supply=5_000_000, fee_bps=100, amm_fee_bps=30)
+def configured_model(*, automatic_materialization: bool = False) -> ReflectionModel:
+    model = ReflectionModel(
+        fixed_supply=5_000_000,
+        fee_bps=100,
+        amm_fee_bps=30,
+        automatic_materialization=automatic_materialization,
+    )
     model.faucet_grant("admin", "alice", 400_000)
     model.faucet_grant("admin", "bob", 300_000)
     model.faucet_grant("admin", "carol", 200_000)
@@ -58,6 +73,7 @@ class DeterministicVectorTests(unittest.TestCase):
     def test_wallet_custody_lp_vector(self) -> None:
         with VECTOR_PATH.open(encoding="utf-8") as handle:
             vector = json.load(handle)
+        self.assertEqual(vector["initial"]["fixed_supply"], 1_000_000_000_000_000)
         model = ReflectionModel(**vector["initial"])
         for operation in vector["operations"]:
             model.apply_operation(operation)
@@ -182,7 +198,8 @@ class CoreWalletAndCustodyInvariantTests(unittest.TestCase):
         model.assert_invariants()
 
     def test_automatic_materialisation_supports_wallet_and_liquidity_spends(self) -> None:
-        model = configured_model()
+        model = configured_model(automatic_materialization=True)
+        model.configure_swap_limits("admin", 30, 10_000, 100_000_000_000)
         model.sell("bob", model.raw_balance("bob"))
         pending = model.pending("alice")
         self.assertGreater(pending, 0)
@@ -274,6 +291,46 @@ class LpRewardAndLiquidityInvariantTests(unittest.TestCase):
         self.assertEqual(final_model.lp_epoch(1).status, LP_CLAIM_ONLY)
         final_model.assert_invariants()
 
+    def test_shutdown_fragmented_one_sided_exit_is_cap_independent(self) -> None:
+        model = ReflectionModel(fixed_supply=1_000)
+        model.mint_quote("admin", "admin", 100)
+        model.seed_pool("admin", 1, 100, beneficiary="alice")
+        model.register_wallet("bob")
+        model.transfer_lp_shares("alice", "bob", 5)
+        self.assertEqual(model.lp_shares(1, "alice"), 5)
+        self.assertEqual(model.lp_shares(1, "bob"), 5)
+        model.configure_liquidity_limits("admin", 1, 100, 1)
+
+        # Routine operation keeps the conservative two-sided output rule.
+        before = accounting_state(model)
+        with self.assertRaises(AccountingError):
+            model.remove_liquidity(
+                "bob", 5, min_rfl_output=0, min_usd_output=50
+            )
+        self.assertEqual(accounting_state(model), before)
+
+        # Shutdown bypasses the 1-bps operator cap and lets Bob take the USD
+        # side even though his proportional tRFL side floors to zero.
+        model.begin_shutdown("admin")
+        before = accounting_state(model)
+        with self.assertRaises(AccountingError):
+            model.remove_liquidity(
+                "bob", 5, min_rfl_output=1, min_usd_output=50
+            )
+        self.assertEqual(accounting_state(model), before)
+        first = model.remove_liquidity(
+            "bob", 5, min_rfl_output=0, min_usd_output=50
+        )
+        self.assertEqual((first.rfl_amount, first.usd_amount), (0, 50))
+        self.assertEqual((model.pool_rfl_reserve, model.pool_usd_reserve), (1, 50))
+        second = model.remove_liquidity(
+            "alice", 5, min_rfl_output=1, min_usd_output=50
+        )
+        self.assertEqual((second.rfl_amount, second.usd_amount), (1, 50))
+        self.assertTrue(second.final_exit)
+        self.assertEqual((model.pool_rfl_reserve, model.pool_usd_reserve), (0, 0))
+        model.assert_invariants()
+
     def test_active_epoch_health_preflights_all_live_pool_paths(self) -> None:
         model = configured_model()
         model.sell("bob", 20_000)
@@ -289,12 +346,20 @@ class LpRewardAndLiquidityInvariantTests(unittest.TestCase):
             lambda: model.add_liquidity("carol", 1_000, 2_000),
             lambda: model.remove_liquidity("alice", 1),
             lambda: model.transfer_lp_shares("alice", "bob", 1),
-            lambda: model.claim_lp("alice", 1, 1),
         )
         for operation in live_operations:
             with self.assertRaises(AccountingError):
                 operation()
             self.assertEqual(accounting_state(model), before)
+
+        # A claim against pre-quarantine index history remains live and must
+        # not invoke the unhealthy active-epoch checkpoint.
+        with patch.object(
+            model,
+            "_checkpoint_active",
+            side_effect=AssertionError("quarantined claim checkpointed"),
+        ):
+            model.claim_lp("alice", 1, 1)
 
         epoch.quarantined = False
         original_shares = epoch.total_shares
@@ -407,7 +472,7 @@ class LpRewardAndLiquidityInvariantTests(unittest.TestCase):
         self.assertEqual(model.pool_rfl_reserve * model.pool_usd_reserve, before_k)
         model.assert_invariants()
 
-    def test_shutdown_epoch_retains_claims_and_reseed_uses_fresh_state(self) -> None:
+    def test_shutdown_epoch_auto_pays_claims_and_reseed_uses_fresh_state(self) -> None:
         model = configured_model()
         model.sell("bob", 40_000)
         model.begin_shutdown("admin")
@@ -415,10 +480,18 @@ class LpRewardAndLiquidityInvariantTests(unittest.TestCase):
         final = model.remove_liquidity("alice", old_shares)
         self.assertTrue(final.final_exit)
         self.assertEqual(model.lp_epoch(1).status, LP_CLAIM_ONLY)
-        old_pending = model.lp_pending(1, "alice")
-        self.assertGreater(old_pending, 0)
+        self.assertEqual(model.lp_pending(1, "alice"), 0)
+        self.assertEqual(model.lp_epoch(1).aggregate_liability(), 0)
+        self.assertEqual(
+            model.lp_epoch(1).terminal_rounding_reserve,
+            model.lp_vault_balance(1),
+        )
         self.assertIsNone(model.active_epoch)
         self.assertEqual((model.pool_rfl_reserve, model.pool_usd_reserve), (0, 0))
+        normalized_custody = model.custody_settled * MAGNITUDE
+        self.assertGreaterEqual(model.custody_correction, normalized_custody)
+        self.assertLess(model.custody_correction, normalized_custody + MAGNITUDE)
+        route_residue = model.custody_correction - normalized_custody
 
         reseeded = model.reseed_pool(
             "admin", 100_000, 200_000, beneficiary="bob", min_lp_shares=1
@@ -426,6 +499,17 @@ class LpRewardAndLiquidityInvariantTests(unittest.TestCase):
         self.assertEqual(reseeded.epoch, 2)
         self.assertEqual(model.lp_epoch(2).status, LP_ACTIVE)
         self.assertEqual(model.lp_pending(2, "bob"), 0)
+        route_events = [
+            event
+            for event in model.events
+            if event["event"] == "CustodyEpochRouteOpened"
+            and event["epoch"] == 2
+        ]
+        self.assertEqual(len(route_events), 1)
+        self.assertEqual(
+            route_events[0]["retired_residue_magnified"],
+            route_residue,
+        )
         model.configure_pool_pauses(
             "admin", pool_paused=False, liquidity_paused=False, lp_claims_paused=False
         )
@@ -436,18 +520,20 @@ class LpRewardAndLiquidityInvariantTests(unittest.TestCase):
         reserves = (model.pool_rfl_reserve, model.pool_usd_reserve)
         model.lp_epoch(2).quarantined = True
 
-        # Claiming an old epoch never checkpoints the current pool or mutates
-        # the fresh epoch's index/vault/table, even if that active epoch is
-        # unhealthy and every live pool operation is fail-closed.
-        model.claim_lp("alice", 1)
+        # The old epoch is terminal and has no claimable unit to redirect into
+        # the new cohort. A rejected old claim never checkpoints or mutates the
+        # fresh epoch, even if the active epoch is unhealthy.
+        with self.assertRaises(AccountingError):
+            model.claim_lp("alice", 1)
         self.assertEqual(model.pool_pending_rewards(), new_pool_pending)
         self.assertEqual(model.lp_epoch(2).index, new_index)
         self.assertEqual(model.lp_vault_balance(2), new_vault)
         self.assertEqual((model.pool_rfl_reserve, model.pool_usd_reserve), reserves)
         self.assertEqual(model.lp_pending(1, "alice"), 0)
+        model.lp_epoch(2).quarantined = False
         model.assert_invariants()
 
-    def test_two_equal_lps_leave_one_base_unit_as_terminal_named_liability(self) -> None:
+    def test_two_equal_lps_classify_terminal_fractional_dust_without_liability(self) -> None:
         model = ReflectionModel(fixed_supply=100, fee_bps=100, amm_fee_bps=30)
         model.register_wallet("alice")
         model.register_wallet("bob")
@@ -471,9 +557,9 @@ class LpRewardAndLiquidityInvariantTests(unittest.TestCase):
         self.assertEqual(epoch.aggregate_liability(), 1)
         self.assertEqual(model.lp_vault_balance(1), 1)
 
-        # Consolidate only the withdrawable shares; each account's fractional
-        # history remains in its correction. Final reserve exit leaves the old
-        # epoch permanently CLAIM_ONLY with the aggregate unit named and backed.
+        # Full transfer and burn normalize only the departing sub-base-unit
+        # corrections. The physical unit is immutable terminal dust, never a
+        # claim, admin sweep, last-LP bonus, or future-epoch entitlement.
         model.transfer_lp_shares("bob", "alice", 1)
         model.begin_shutdown("admin")
         model.remove_liquidity("alice", 2)
@@ -481,8 +567,10 @@ class LpRewardAndLiquidityInvariantTests(unittest.TestCase):
         self.assertEqual(epoch.total_shares, 0)
         self.assertEqual(epoch.pending("alice"), 0)
         self.assertEqual(epoch.pending("bob"), 0)
-        self.assertEqual(epoch.aggregate_liability(), 1)
-        self.assertEqual(epoch.rounding_reserve, 0)
+        self.assertEqual(epoch.aggregate_liability(), 0)
+        self.assertEqual(epoch.rounding_reserve, 1)
+        self.assertEqual(epoch.terminal_rounding_reserve, 1)
+        self.assertEqual(epoch.retired_residue_magnified, MAGNITUDE)
         self.assertEqual(model.lp_vault_balance(1), 1)
         model.assert_invariants()
 
@@ -493,6 +581,260 @@ class LpRewardAndLiquidityInvariantTests(unittest.TestCase):
         with self.assertRaises(AccountingError):
             model.add_liquidity("carol", 1, 1, min_lp_shares=10**12)
         self.assertEqual(accounting_state(model), before)
+
+    def test_ten_fragmented_lps_classify_nine_units_without_redirect(self) -> None:
+        model = ReflectionModel(fixed_supply=100, fee_bps=100, amm_fee_bps=30)
+        owners = ["alice", *[f"lp-{index}" for index in range(1, 10)]]
+        model.mint_quote("admin", "admin", 20)
+        model.seed_pool("admin", 10, 10, beneficiary=owners[0])
+        for owner in owners[1:]:
+            model.register_wallet(owner)
+            model.transfer_lp_shares(owners[0], owner, 1)
+        self.assertTrue(all(model.lp_shares(1, owner) == 1 for owner in owners))
+
+        model._debit_excluded("distribution_vault", 9)
+        model._credit_excluded("reward_vault", 9)
+        model._advance_index(9)
+        self.assertEqual(model.checkpoint_pool(), 9)
+        epoch = model.lp_epoch(1)
+        self.assertEqual(sum(epoch.pending(owner) for owner in owners), 0)
+        self.assertEqual(epoch.aggregate_liability(), 9)
+
+        model.begin_shutdown("admin")
+        for owner in owners[1:]:
+            model.remove_liquidity(owner, 1)
+        model.remove_liquidity(owners[0], 1)
+        self.assertEqual(epoch.status, LP_CLAIM_ONLY)
+        self.assertEqual(epoch.aggregate_liability(), 0)
+        self.assertEqual(epoch.rounding_reserve, 9)
+        self.assertEqual(epoch.terminal_rounding_reserve, 9)
+        self.assertEqual(epoch.retired_residue_magnified, 9 * MAGNITUDE)
+        terminal_events = [
+            event
+            for event in model.events
+            if event["event"] == "LpEpochTerminalDustClassified"
+            and event["epoch"] == 1
+        ]
+        self.assertEqual(len(terminal_events), 1)
+        self.assertEqual(terminal_events[0]["terminal_rounding_base_units"], 9)
+
+        model.reseed_pool("admin", 10, 10, beneficiary="fresh-lp")
+        self.assertEqual(model.lp_pending(2, "fresh-lp"), 0)
+        self.assertEqual(model.lp_vault_balance(2), 0)
+        self.assertEqual(model.lp_vault_balance(1), 9)
+        model.assert_invariants()
+
+    def test_lp_claim_pause_aborts_zeroing_transfer_and_shutdown_atomically(self) -> None:
+        transfer_model = configured_model()
+        transfer_model.sell("bob", 40_000)
+        transfer_model.configure_pool_pauses(
+            "admin",
+            pool_paused=False,
+            liquidity_paused=False,
+            lp_claims_paused=True,
+        )
+        before = accounting_state(transfer_model)
+        with self.assertRaises(AccountingError):
+            transfer_model.transfer_lp_shares(
+                "alice",
+                "bob",
+                transfer_model.lp_shares(1, "alice"),
+            )
+        self.assertEqual(accounting_state(transfer_model), before)
+
+        burn_model = configured_model()
+        burn_model.sell("bob", 40_000)
+        burn_model.configure_pool_pauses(
+            "admin",
+            pool_paused=False,
+            liquidity_paused=False,
+            lp_claims_paused=True,
+        )
+        before = accounting_state(burn_model)
+        with self.assertRaises(AccountingError):
+            burn_model.begin_shutdown("admin")
+        self.assertEqual(accounting_state(burn_model), before)
+
+        burn_model.configure_pool_pauses(
+            "admin",
+            pool_paused=False,
+            liquidity_paused=False,
+            lp_claims_paused=False,
+        )
+        burn_model.begin_shutdown("admin")
+        result = burn_model.remove_liquidity(
+            "alice",
+            burn_model.lp_shares(1, "alice"),
+        )
+        self.assertTrue(result.final_exit)
+        burn_model.assert_invariants()
+
+    def test_zero_denominator_receipt_is_unallocated_and_quarantined(self) -> None:
+        model = configured_model()
+        model.sell("bob", 20_000)
+        model.checkpoint_pool()
+        pending = model.lp_pending(1, "alice")
+        self.assertGreater(pending, 0)
+        model.claim_lp("alice", 1, pending)
+        model.sell("bob", 20_000)
+        routed = model.pool_pending_rewards()
+        self.assertGreater(routed, 0)
+
+        received = model.force_zero_denominator_receipt_for_test("alice")
+        self.assertEqual(received, routed)
+        epoch = model.lp_epoch(1)
+        self.assertEqual(epoch.status, LP_ACTIVE)
+        self.assertEqual(epoch.total_shares, 0)
+        self.assertTrue(epoch.quarantined)
+        self.assertEqual(epoch.unallocated_rewards, routed)
+        self.assertEqual(epoch.aggregate_liability(), 0)
+        self.assertEqual(model.pool_pending_rewards(), 0)
+        self.assertEqual(
+            model.lp_vault_balance(1),
+            epoch.unallocated_rewards + epoch.rounding_reserve,
+        )
+        model.assert_invariants()
+
+
+class DeploymentParityTests(unittest.TestCase):
+    def test_materialization_mode_is_immutable_after_construction(self) -> None:
+        claim_backed = ReflectionModel(fixed_supply=1)
+        self.assertFalse(claim_backed.automatic_materialization)
+        with self.assertRaises(AttributeError):
+            claim_backed.automatic_materialization = True
+
+        compatibility = ReflectionModel(
+            fixed_supply=1,
+            automatic_materialization=True,
+        )
+        self.assertTrue(compatibility.automatic_materialization)
+        with self.assertRaises(AttributeError):
+            compatibility.automatic_materialization = False
+
+    def test_claim_backed_default_rejects_pending_backed_spends(self) -> None:
+        base = configured_model()
+        base.configure_swap_limits("admin", 30, 10_000, 100_000_000_000)
+        base.sell("bob", 40_000)
+        self.assertGreater(base.pending("alice"), 0)
+
+        wallet_model = copy.deepcopy(base)
+        with self.assertRaises(AccountingError):
+            wallet_model.transfer(
+                "alice",
+                "carol",
+                wallet_model.raw_balance("alice") + 1,
+            )
+
+        sell_model = copy.deepcopy(base)
+        with self.assertRaises(AccountingError):
+            sell_model.sell("alice", sell_model.raw_balance("alice") + 1)
+
+        liquidity_model = copy.deepcopy(base)
+        with self.assertRaises(AccountingError):
+            liquidity_model.add_liquidity(
+                "carol",
+                liquidity_model.raw_balance("carol") + 1,
+                500_000,
+            )
+
+    def test_swap_limits_match_move_defaults_and_configuration_envelope(self) -> None:
+        model = configured_model()
+        self.assertEqual(model.swap_limits(), (30, 2_000, 100_000_000_000))
+        before = accounting_state(model)
+        with self.assertRaises(AccountingError):
+            model.sell("bob", model.pool_rfl_reserve * 2_000 // 10_000 + 1)
+        self.assertEqual(accounting_state(model), before)
+        with self.assertRaises(AccountingError):
+            model.buy("bob", model.pool_usd_reserve * 2_000 // 10_000 + 1)
+        for limits in ((101, 2_000, 1), (30, 0, 1), (30, 10_001, 1)):
+            with self.assertRaises(AccountingError):
+                model.configure_swap_limits("admin", *limits)
+        with self.assertRaises(AuthorizationError):
+            model.configure_swap_limits("attacker", 30, 2_000, 1)
+
+    def test_token_and_reserve_surface_is_u64_while_lp_shares_are_u128(self) -> None:
+        ReflectionModel(fixed_supply=MAX_U64)
+        with self.assertRaises(AccountingError):
+            ReflectionModel(fixed_supply=MAX_U64 + 1)
+        model = ReflectionModel(fixed_supply=1)
+        model.mint_quote("admin", "alice", MAX_U64)
+        with self.assertRaises(AccountingError):
+            model.mint_quote("admin", "alice", 1)
+        with self.assertRaises(AccountingError):
+            model.configure_swap_limits("admin", 30, 2_000, MAX_U64 + 1)
+        with self.assertRaises(AccountingError):
+            model.transfer("alice", "bob", MAX_U64 + 1)
+
+    def test_u256_lifetime_exhaustion_matches_move_and_rolls_back(self) -> None:
+        fee_model = configured_model()
+        fee_model.lifetime_fees = MAX_U256
+        before = accounting_state(fee_model)
+        with self.assertRaises(AccountingError):
+            fee_model.sell("bob", 10_000)
+        self.assertEqual(accounting_state(fee_model), before)
+
+        materialize_model = configured_model()
+        materialize_model.sell("bob", 20_000)
+        self.assertGreater(materialize_model.pending("alice"), 0)
+        materialize_model.lifetime_materialized = MAX_U256
+        before = accounting_state(materialize_model)
+        with self.assertRaises(AccountingError):
+            materialize_model.claim("alice", 1)
+        self.assertEqual(accounting_state(materialize_model), before)
+
+        custody_model = configured_model()
+        custody_model.sell("bob", 20_000)
+        self.assertGreater(custody_model.pool_pending_rewards(), 0)
+        custody_model.lifetime_custody_routed = MAX_U256
+        before = accounting_state(custody_model)
+        with self.assertRaises(AccountingError):
+            custody_model.checkpoint_pool()
+        self.assertEqual(accounting_state(custody_model), before)
+
+        self.assertEqual(
+            ReflectionModel._require_u256_sum(MAX_U256 - 1, 1, "boundary"),
+            MAX_U256,
+        )
+        with self.assertRaises(AccountingError):
+            ReflectionModel._require_u256_sum(MAX_U256, 1, "boundary")
+
+    def test_fresh_bootstrap_beneficiaries_register_once_and_roles_fail_closed(self) -> None:
+        model = ReflectionModel(fixed_supply=1_000)
+        model.mint_quote("admin", "admin", 200)
+        model.seed_pool("admin", 100, 100, beneficiary="fresh-alice")
+        self.assertTrue(model.wallet_is_registered("fresh-alice"))
+        model.register_wallet("fresh-alice")
+        registrations = [
+            event
+            for event in model.events
+            if event["event"] == "WalletRegistered"
+            and event["account"] == "fresh-alice"
+        ]
+        self.assertEqual(len(registrations), 1)
+        self.assertEqual(registrations[0]["primary_store"], "primary_store:fresh-alice")
+        self.assertEqual(registrations[0]["registered_wallet_count"], 1)
+
+        model.begin_shutdown("admin")
+        model.remove_liquidity("fresh-alice", model.lp_shares(1, "fresh-alice"))
+        model.reseed_pool("admin", 100, 100, beneficiary="fresh-bob")
+        self.assertTrue(model.wallet_is_registered("fresh-bob"))
+        self.assertEqual(
+            len(
+                [
+                    event
+                    for event in model.events
+                    if event["event"] == "WalletRegistered"
+                    and event["account"] == "fresh-bob"
+                ]
+            ),
+            1,
+        )
+
+        for beneficiary in ("admin", "reflection_core", "test_assets", "test_amm"):
+            rejected = ReflectionModel(fixed_supply=100)
+            rejected.mint_quote("admin", "admin", 10)
+            with self.assertRaises(AccountingError):
+                rejected.seed_pool("admin", 1, 1, beneficiary=beneficiary)
 
 
 class AdversarialTests(unittest.TestCase):
@@ -543,17 +885,22 @@ class AdversarialTests(unittest.TestCase):
             model._lock = None
         model.assert_invariants()
 
-    def test_claim_pause_blocks_wallet_materialisation_and_custody_checkpoint(self) -> None:
+    def test_claim_pause_is_independent_from_custody_and_lp_claims(self) -> None:
         model = configured_model()
         model.sell("bob", 20_000)
         pending = model.pending("alice")
+        custody_pending = model.pool_pending_rewards()
+        self.assertGreater(pending, 0)
+        self.assertGreater(custody_pending, 0)
         model.set_claims_paused("admin", True)
         with self.assertRaises(AccountingError):
             model.claim("alice")
         with self.assertRaises(AccountingError):
-            model.checkpoint_pool()
-        with self.assertRaises(AccountingError):
             model.transfer("alice", "carol", model.raw_balance("alice") + min(1, pending))
+        self.assertEqual(model.checkpoint_pool(), custody_pending)
+        lp_pending = model.lp_pending(1, "alice")
+        self.assertGreater(lp_pending, 0)
+        self.assertEqual(model.claim_lp("alice", 1, lp_pending), lp_pending)
         model.assert_invariants()
 
     def test_final_lp_exit_requires_shutdown(self) -> None:
@@ -566,91 +913,23 @@ class AdversarialTests(unittest.TestCase):
 class RandomizedPropertyTests(unittest.TestCase):
     """Seeded mixed wallet/swap/custody/LP sequence with full audits."""
 
-    SEED = "cedra-trfl-wallet-custody-lp-2026-07-20"
-
-    @staticmethod
-    def _random_model(holder_count: int) -> tuple[ReflectionModel, list[str]]:
-        required_supply = 8_000_000 + holder_count * 30_000
-        model = ReflectionModel(fixed_supply=required_supply, fee_bps=100, amm_fee_bps=30)
-        holders = [f"holder-{number:04d}" for number in range(holder_count)]
-        for holder in holders:
-            model.faucet_grant("admin", holder, 30_000)
-            model.mint_quote("admin", holder, 100_000)
-        model.mint_quote("admin", "admin", 3_000_000)
-        model.seed_pool(
-            "admin", 5_000_000, 2_000_000, beneficiary=holders[0], min_lp_shares=1
-        )
-        model.assert_invariants()
-        return model, holders
-
     def test_seeded_randomized_accounting(self) -> None:
-        operations = int(os.environ.get("REFLECTION_MODEL_OPERATIONS", "20000"))
-        holder_count = int(os.environ.get("REFLECTION_MODEL_HOLDERS", "32"))
-        checkpoint = int(os.environ.get("REFLECTION_MODEL_CHECKPOINT", "500"))
-        self.assertGreaterEqual(operations, 1)
-        self.assertGreaterEqual(holder_count, 3)
-        self.assertGreaterEqual(checkpoint, 1)
-        rng = random.Random(self.SEED)
-        model, holders = self._random_model(holder_count)
-
-        for step in range(operations):
-            first = holders[rng.randrange(holder_count)]
-            second = holders[rng.randrange(holder_count)]
-            if first == second:
-                second = holders[(holders.index(first) + 1) % holder_count]
-            kind = rng.randrange(100)
-            try:
-                if kind < 24:
-                    available = model.effective_balance(first)
-                    if available:
-                        model.transfer(first, second, rng.randint(1, min(available, 2_000)))
-                elif kind < 43:
-                    available = model.effective_balance(first)
-                    if available:
-                        model.sell(first, rng.randint(1, min(available, 2_000)))
-                elif kind < 60:
-                    available_quote = model.quote_balance(first)
-                    if available_quote:
-                        model.buy(first, rng.randint(1, min(available_quote, 2_000)))
-                elif kind < 68:
-                    pending = model.pending(first)
-                    if pending:
-                        model.claim(first, rng.randint(1, pending))
-                elif kind < 73:
-                    model.checkpoint_pool()
-                elif kind < 80:
-                    if model.raw_balance(first) and model.quote_balance(first):
-                        model.add_liquidity(
-                            first,
-                            rng.randint(1, min(model.effective_balance(first), 1_000)),
-                            rng.randint(1, min(model.quote_balance(first), 2_000)),
-                        )
-                elif kind < 86:
-                    owned = model.lp_shares(1, first)
-                    if owned:
-                        model.transfer_lp_shares(first, second, rng.randint(1, owned))
-                elif kind < 91:
-                    pending = model.lp_pending(1, first)
-                    if pending:
-                        model.claim_lp(first, 1, rng.randint(1, pending))
-                elif kind < 96:
-                    owned = model.lp_shares(1, first)
-                    total = model.active_lp_epoch().total_shares
-                    if owned and total > 1:
-                        model.remove_liquidity(first, rng.randint(1, min(owned, total - 1)))
-                else:
-                    model.set_fee_bps("admin", rng.randint(0, 100))
-            except AccountingError:
-                # Tiny AMM/liquidity values and imbalanced maximum inputs can
-                # legitimately round to zero. Atomic methods restore any
-                # checkpoint that preceded a rejected operation.
-                pass
-
-            model.assert_fast_invariants()
-            if (step + 1) % checkpoint == 0:
-                model.assert_invariants()
-
-        model.assert_invariants()
+        result = run_randomized_workload(config_from_environment())
+        model = result.model
+        self.assertEqual(
+            result.counters.successful,
+            result.config.successful_operations,
+        )
+        self.assertEqual(
+            result.counters.attempts,
+            result.counters.successful
+            + result.counters.rejected
+            + result.counters.no_op,
+        )
+        self.assertEqual(
+            sum(result.counters.histogram.values()),
+            result.counters.successful,
+        )
         self.assertEqual(sum(model.raw.values()), model.fixed_supply)
         self.assertGreater(model.custody_shares, 0)
         self.assertGreaterEqual(model.lifetime_custody_routed, 0)
@@ -658,6 +937,65 @@ class RandomizedPropertyTests(unittest.TestCase):
             model.reward_vault_balance,
             model.reflection_liability() + model.unallocated_fees + model.rounding_reserve,
         )
+
+
+class RandomizedWorkloadHarnessTests(unittest.TestCase):
+    def test_outcome_counters_and_histograms_reconcile(self) -> None:
+        counters = WorkloadCounters()
+        counters.record("transfer", APPLIED)
+        counters.record("transfer", APPLIED)
+        counters.record("add_liquidity", REJECTED)
+        counters.record("claim", NOOP)
+
+        self.assertEqual(counters.attempts, 4)
+        self.assertEqual(counters.successful, 2)
+        self.assertEqual(counters.rejected, 1)
+        self.assertEqual(counters.no_op, 1)
+        self.assertEqual(counters.histogram, {"transfer": 2})
+        self.assertEqual(counters.rejected_histogram, {"add_liquidity": 1})
+        self.assertEqual(counters.no_op_histogram, {"claim": 1})
+        counters.assert_consistent()
+
+    def test_gate_fails_after_bounded_non_applied_attempts(self) -> None:
+        config = WorkloadConfig(
+            successful_operations=1,
+            holder_count=3,
+            audit_frequency=1,
+            max_attempts=3,
+            seed="bounded-attempt-test",
+        )
+        with patch(
+            "reflection_model.workload._attempt_random_operation",
+            return_value=("forced_no_op", NOOP),
+        ):
+            with self.assertRaisesRegex(
+                WorkloadExhaustedError,
+                r"exhausted 3 attempts after 0/1 successful",
+            ):
+                run_randomized_workload(config)
+
+    def test_small_gate_counts_realized_transitions_and_serializes_report(self) -> None:
+        result = run_randomized_workload(
+            WorkloadConfig(
+                successful_operations=50,
+                holder_count=4,
+                audit_frequency=10,
+                max_attempts=200,
+                seed="small-model-gate-counter-test",
+            )
+        )
+        report = result.report(GitProvenance(commit="f" * 40, clean=True))
+
+        self.assertEqual(result.counters.successful, 50)
+        self.assertLessEqual(result.counters.attempts, 200)
+        self.assertEqual(report["requested_successful_operations"], 50)
+        self.assertEqual(report["successful"], 50)
+        self.assertEqual(report["materialization_mode"], "claim-backed")
+        self.assertIs(report["automatic_materialization"], False)
+        self.assertEqual(len(report["final_state_digest"]), 64)
+        self.assertEqual(report["git_commit"], "f" * 40)
+        self.assertTrue(report["git_clean"])
+        self.assertEqual(json.loads(json.dumps(report)), report)
 
 
 if __name__ == "__main__":

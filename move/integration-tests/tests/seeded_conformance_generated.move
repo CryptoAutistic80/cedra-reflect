@@ -12,7 +12,7 @@ module integration_tests::seeded_conformance_generated {
 
     fun setup(core: &signer, assets: &signer, amm: &signer, framework: &signer) {
         timestamp::set_time_has_started_for_testing(framework);
-        reflection_token::initialize_for_test(core);
+        reflection_token::initialize_claim_backed_for_test(core);
         mock_usd::initialize_for_test(assets);
         test_faucet::initialize(core, assets);
         pool::initialize(core, assets, amm);
@@ -69,7 +69,7 @@ module integration_tests::seeded_conformance_generated {
         test_faucet::claim_tusd(dave);
         // operation 10: seed_pool
         pool::seed_liquidity(
-            core, amm, signer::address_of(alice), 2000000,
+            core, amm, alice, 2000000,
             2000000, 1,
         );
         // operation 11: sell
@@ -135,102 +135,107 @@ module integration_tests::seeded_conformance_generated {
         pool::sell_trfl(dave, 2238, 0, 1_000);
         // operation 37: checkpoint_pool
         pool::checkpoint_lp_rewards(alice);
-        // operation 38: checkpoint_pool
-        pool::checkpoint_lp_rewards(alice);
-        // operation 39: checkpoint_pool
-        pool::checkpoint_lp_rewards(alice);
-        // operation 40: buy
+        // operation 38: buy
         pool::buy_trfl(dave, 3513, 0, 1_000);
-        // operation 41: sell
+        // operation 39: sell
         pool::sell_trfl(alice, 735, 0, 1_000);
-        // operation 42: transfer_lp_shares
+        // operation 40: transfer_lp_shares
         pool::transfer_lp_shares(bob, signer::address_of(carol), 161);
-        // operation 43: buy
+        // operation 41: buy
         pool::buy_trfl(bob, 4181, 0, 1_000);
-        // operation 44: buy
+        // operation 42: buy
         pool::buy_trfl(bob, 459, 0, 1_000);
-        // operation 45: add_liquidity
+        // operation 43: add_liquidity
         pool::add_liquidity(
             bob, 1086, 2563,
             1, 1_000,
         );
-        // operation 46: sell
+        // operation 44: sell
         pool::sell_trfl(bob, 3379, 0, 1_000);
-        // operation 47: transfer
+        // operation 45: transfer
         reflection_router::transfer(dave, signer::address_of(bob), 1646);
-        // operation 48: transfer
+        // operation 46: transfer
         reflection_router::transfer(bob, signer::address_of(alice), 2490);
-        // operation 49: add_liquidity
+        // operation 47: add_liquidity
         pool::add_liquidity(
             dave, 163, 3802,
             1, 1_000,
         );
-        // operation 50: set_fee_bps
+        // operation 48: set_fee_bps
         reflection_token::set_fee_bps(core, 53);
-        // operation 51: buy
+        // operation 49: buy
         pool::buy_trfl(carol, 3986, 0, 1_000);
-        // operation 52: buy
+        // operation 50: buy
         pool::buy_trfl(dave, 3997, 0, 1_000);
-        // operation 53: transfer
+        // operation 51: transfer
         reflection_router::transfer(bob, signer::address_of(carol), 3265);
-        // operation 54: claim
+        // operation 52: claim
         reflection_token::claim(alice, 31);
-        // operation 55: set_fee_bps
+        // operation 53: set_fee_bps
         reflection_token::set_fee_bps(core, 89);
-        // operation 56: remove_liquidity
+        // operation 54: remove_liquidity
         pool::remove_liquidity(
             carol, 15,
             1, 1, 1_000,
         );
-        // operation 57: transfer_lp_shares
+        // operation 55: transfer_lp_shares
         pool::transfer_lp_shares(carol, signer::address_of(alice), 45);
-        // operation 58: transfer_lp_shares
+        // operation 56: transfer_lp_shares
         pool::transfer_lp_shares(bob, signer::address_of(dave), 1305);
-        // operation 59: remove_liquidity
+        // operation 57: remove_liquidity
         pool::remove_liquidity(
             carol, 29,
             1, 1, 1_000,
         );
-        // operation 60: claim
+        // operation 58: claim
         reflection_token::claim(dave, 40);
-        // operation 61: buy
+        // operation 59: buy
         pool::buy_trfl(alice, 3102, 0, 1_000);
-        // operation 62: buy
+        // operation 60: buy
         pool::buy_trfl(alice, 2684, 0, 1_000);
-        // operation 63: transfer
+        // operation 61: transfer
         reflection_router::transfer(bob, signer::address_of(carol), 771);
-        // operation 64: claim_lp
+        // operation 62: claim_lp
         pool::claim_lp_rewards(alice, 1, 93);
-        // operation 65: remove_liquidity
+        // operation 63: remove_liquidity
         pool::remove_liquidity(
             alice, 4358,
             1, 1, 1_000,
         );
-        // operation 66: sell
+        // operation 64: sell
         pool::sell_trfl(dave, 3681, 0, 1_000);
-        // operation 67: transfer
+        // operation 65: transfer
         reflection_router::transfer(dave, signer::address_of(bob), 3319);
-        // operation 68: buy
+        // operation 66: buy
         pool::buy_trfl(carol, 3463, 0, 1_000);
-        // operation 69: add_liquidity
+        // operation 67: add_liquidity
         pool::add_liquidity(
             dave, 756, 1205,
             1, 1_000,
         );
-        // operation 70: checkpoint_pool
-        pool::checkpoint_lp_rewards(alice);
-        // operation 71: sell
+        // operation 68: sell
         pool::sell_trfl(bob, 1356, 0, 1_000);
-        // operation 72: buy
+        // operation 69: buy
         pool::buy_trfl(alice, 3438, 0, 1_000);
-        // operation 73: sell
+        // operation 70: sell
         pool::sell_trfl(alice, 3667, 0, 1_000);
-        // operation 74: sell
+        // operation 71: sell
         pool::sell_trfl(dave, 2297, 0, 1_000);
+        // operation 72: transfer_lp_shares
+        pool::transfer_lp_shares(alice, signer::address_of(carol), 2598);
+        // operation 73: set_fee_bps
+        reflection_token::set_fee_bps(core, 7);
+        // operation 74: transfer
+        reflection_router::transfer(bob, signer::address_of(carol), 1198);
 
         let (index, remainder, shares, unallocated, lifetime_fees, materialized) =
             reflection_token::global_accounting();
-        assert!(reflection_token::fee_bps() == 89, 1);
+        assert!(!reflection_token::automatic_materialization_enabled(), 1000);
+        let (amm_fee_bps, max_reserve_bps, max_gross_swap) = pool::limits();
+        assert!(amm_fee_bps == 30, 1001);
+        assert!(max_reserve_bps == 2000, 1002);
+        assert!(max_gross_swap == 100000000000, 1003);
+        assert!(reflection_token::fee_bps() == 7, 1);
         assert!(index == 145621074240505212689, 2);
         assert!(remainder == 1699388, 3);
         assert!(shares == 3999609, 4);
@@ -244,27 +249,27 @@ module integration_tests::seeded_conformance_generated {
         let (custody_shares, routed, core_rounding) =
             reflection_token::custody_accounting();
         assert!(custody_shares == 1994424, 10);
-        assert!(routed == 244, 11);
+        assert!(routed == 291, 11);
         assert!(core_rounding == 1, 12);
         let (_, custody_negative, custody_magnitude, custody_settled, custody_pending) =
             reflection_token::custody_position_accounting();
         assert!(custody_negative == false, 13);
         assert!(custody_magnitude == 732304249739815834002303, 14);
-        assert!(custody_settled == 244, 15);
-        assert!(custody_pending == 47, 16);
+        assert!(custody_settled == 291, 15);
+        assert!(custody_pending == 0, 16);
         assert!(reflection_token::raw_balance(signer::address_of(alice)) == 512732, 20);
         assert!(reflection_token::pending_rewards(signer::address_of(alice)) == 42, 21);
-        assert!(reflection_token::raw_balance(signer::address_of(bob)) == 492305, 22);
+        assert!(reflection_token::raw_balance(signer::address_of(bob)) == 491107, 22);
         assert!(reflection_token::pending_rewards(signer::address_of(bob)) == 51, 23);
-        assert!(reflection_token::raw_balance(signer::address_of(carol)) == 501801, 24);
+        assert!(reflection_token::raw_balance(signer::address_of(carol)) == 502999, 24);
         assert!(reflection_token::pending_rewards(signer::address_of(carol)) == 66, 25);
         assert!(reflection_token::raw_balance(signer::address_of(dave)) == 498347, 26);
         assert!(reflection_token::pending_rewards(signer::address_of(dave)) == 32, 27);
         let (pool_rfl, pool_usd) = pool::reserves_view();
         assert!(pool_rfl == 1994424, 28);
         assert!(pool_usd == 2005253, 29);
-        assert!(reflection_token::pool_pending_rewards() == 47, 30);
-        assert!(reflection_token::reward_vault_balance() == 240, 31);
+        assert!(reflection_token::pool_pending_rewards() == 0, 30);
+        assert!(reflection_token::reward_vault_balance() == 193, 31);
         assert!(
             reflection_token::raw_store_balance(reflection_token::distribution_vault())
                 == 999999996000000,
@@ -279,26 +284,30 @@ module integration_tests::seeded_conformance_generated {
             lp_rounding, lp_received, lp_claimed, lp_liability) =
             pool::lp_epoch_accounting(1);
         assert!(lp_status == 1, 38);
-        assert!(lp_index == 121909165358824845043, 39);
-        assert!(lp_remainder == 891470, 40);
+        assert!(lp_index == 145412643873645038432, 39);
+        assert!(lp_remainder == 134614, 40);
         assert!(lp_shares == 1999704, 41);
         assert!(lp_unallocated == 0, 42);
         assert!(lp_rounding == 1, 43);
-        assert!(lp_received == 244, 44);
+        assert!(lp_received == 291, 44);
         assert!(lp_claimed == 93, 45);
-        assert!(lp_liability == 150, 46);
-        assert!(pool::lp_reward_vault_balance(1) == 151, 47);
+        assert!(lp_liability == 197, 46);
+        assert!(pool::lp_reward_vault_balance(1) == 198, 47);
+        let (terminal_rounding, retired_residue_magnified) =
+            pool::lp_epoch_terminal_dust(1);
+        assert!(terminal_rounding == 0, 1004);
+        assert!(retired_residue_magnified == 0, 1005);
         let (lp_aggregate_negative, lp_aggregate_magnitude) =
             test_amm::lp_rewards::epoch_aggregate_correction(1);
         assert!(lp_aggregate_negative == false, 48);
         assert!(lp_aggregate_magnitude == 217754395296522067241258, 49);
         let (owner_shares, negative, magnitude, claimed, pending) =
             test_amm::lp_rewards::position_accounting(1, signer::address_of(alice));
-        assert!(owner_shares == 1997074, 50);
+        assert!(owner_shares == 1994476, 50);
         assert!(negative == false, 51);
-        assert!(magnitude == 426181019977608556576012, 52);
+        assert!(magnitude == 803963068761338366422348, 52);
         assert!(claimed == 93, 53);
-        assert!(pending == 150, 54);
+        assert!(pending == 197, 54);
         let (owner_shares, negative, magnitude, claimed, pending) =
             test_amm::lp_rewards::position_accounting(1, signer::address_of(bob));
         assert!(owner_shares == 332, 55);
@@ -308,9 +317,9 @@ module integration_tests::seeded_conformance_generated {
         assert!(pending == 0, 59);
         let (owner_shares, negative, magnitude, claimed, pending) =
             test_amm::lp_rewards::position_accounting(1, signer::address_of(carol));
-        assert!(owner_shares == 72, 60);
+        assert!(owner_shares == 2670, 60);
         assert!(negative == true, 61);
-        assert!(magnitude == 3145141162725921819313, 62);
+        assert!(magnitude == 380927189946455731665649, 62);
         assert!(claimed == 0, 63);
         assert!(pending == 0, 64);
         let (owner_shares, negative, magnitude, claimed, pending) =
@@ -328,5 +337,1213 @@ module integration_tests::seeded_conformance_generated {
         assert!(lp_received - lp_claimed == (pool::lp_reward_vault_balance(1) as u256),
             71);
         reflection_token::assert_accounting_backing();
+    }
+}
+
+// @generated by scripts/generate_seeded_conformance.py; do not edit.
+#[test_only]
+module integration_tests::seeded_conformance_generated_2 {
+    use cedra_framework::primary_fungible_store;
+    use cedra_framework::timestamp;
+    use reflection_core::reflection_router;
+    use reflection_core::reflection_token;
+    use std::signer;
+    use test_amm::pool;
+    use test_assets::mock_usd;
+    use test_assets::test_faucet;
+
+    fun setup(core: &signer, assets: &signer, amm: &signer, framework: &signer) {
+        timestamp::set_time_has_started_for_testing(framework);
+        reflection_token::initialize_claim_backed_for_test(core);
+        mock_usd::initialize_for_test(assets);
+        test_faucet::initialize(core, assets);
+        pool::initialize(core, assets, amm);
+    }
+
+    #[test(
+        core = @0xcafe,
+        assets = @0xbabe,
+        amm = @0xdead,
+        framework = @0x1,
+        alice = @0xa11ce,
+        bob = @0xb0b,
+        carol = @0xca401,
+        dave = @0xda7e,
+    )]
+    fun seeded_python_move_conformance_2(
+        core: &signer,
+        assets: &signer,
+        amm: &signer,
+        framework: &signer,
+        alice: &signer,
+        bob: &signer,
+        carol: &signer,
+        dave: &signer,
+    ) {
+        setup(core, assets, amm, framework);
+
+        // operation 1: faucet_grant
+        test_faucet::configure(assets, 500000, 1, 0);
+        test_faucet::claim_trfl(alice);
+        // operation 2: faucet_grant
+        test_faucet::configure(assets, 500000, 1, 0);
+        test_faucet::claim_trfl(bob);
+        // operation 3: faucet_grant
+        test_faucet::configure(assets, 500000, 1, 0);
+        test_faucet::claim_trfl(carol);
+        // operation 4: faucet_grant
+        test_faucet::configure(assets, 500000, 1, 0);
+        test_faucet::claim_trfl(dave);
+        // operation 5: mint_quote
+        test_faucet::configure(assets, 1, 5000000, 0);
+        test_faucet::claim_tusd(amm);
+        // operation 6: mint_quote
+        test_faucet::configure(assets, 1, 1000000, 0);
+        test_faucet::claim_tusd(alice);
+        // operation 7: mint_quote
+        test_faucet::configure(assets, 1, 1000000, 0);
+        test_faucet::claim_tusd(bob);
+        // operation 8: mint_quote
+        test_faucet::configure(assets, 1, 1000000, 0);
+        test_faucet::claim_tusd(carol);
+        // operation 9: mint_quote
+        test_faucet::configure(assets, 1, 1000000, 0);
+        test_faucet::claim_tusd(dave);
+        // operation 10: seed_pool
+        pool::seed_liquidity(
+            core, amm, alice, 2000000,
+            2000000, 1,
+        );
+        // operation 11: buy
+        pool::buy_trfl(bob, 3473, 0, 1_000);
+        // operation 12: sell
+        pool::sell_trfl(alice, 4712, 0, 1_000);
+        // operation 13: sell
+        pool::sell_trfl(carol, 3788, 0, 1_000);
+        // operation 14: add_liquidity
+        pool::add_liquidity(
+            alice, 632, 124,
+            1, 1_000,
+        );
+        // operation 15: claim
+        reflection_token::claim(dave, 9);
+        // operation 16: add_liquidity
+        pool::add_liquidity(
+            alice, 1355, 336,
+            1, 1_000,
+        );
+        // operation 17: transfer
+        reflection_router::transfer(dave, signer::address_of(bob), 4251);
+        // operation 18: add_liquidity
+        pool::add_liquidity(
+            alice, 1211, 37,
+            1, 1_000,
+        );
+        // operation 19: transfer_lp_shares
+        pool::transfer_lp_shares(alice, signer::address_of(bob), 3991);
+        // operation 20: buy
+        pool::buy_trfl(bob, 430, 0, 1_000);
+        // operation 21: transfer
+        reflection_router::transfer(carol, signer::address_of(dave), 4845);
+        // operation 22: transfer
+        reflection_router::transfer(dave, signer::address_of(alice), 3180);
+        // operation 23: transfer
+        reflection_router::transfer(alice, signer::address_of(dave), 1091);
+        // operation 24: buy
+        pool::buy_trfl(alice, 2460, 0, 1_000);
+        // operation 25: sell
+        pool::sell_trfl(bob, 2297, 0, 1_000);
+        // operation 26: set_fee_bps
+        reflection_token::set_fee_bps(core, 96);
+        // operation 27: buy
+        pool::buy_trfl(dave, 2978, 0, 1_000);
+        // operation 28: claim
+        reflection_token::claim(dave, 4);
+        // operation 29: transfer
+        reflection_router::transfer(alice, signer::address_of(bob), 1413);
+        // operation 30: transfer
+        reflection_router::transfer(carol, signer::address_of(bob), 2840);
+        // operation 31: sell
+        pool::sell_trfl(bob, 826, 0, 1_000);
+        // operation 32: transfer
+        reflection_router::transfer(alice, signer::address_of(dave), 621);
+        // operation 33: transfer
+        reflection_router::transfer(dave, signer::address_of(bob), 461);
+        // operation 34: claim
+        reflection_token::claim(alice, 25);
+        // operation 35: sell
+        pool::sell_trfl(alice, 3351, 0, 1_000);
+        // operation 36: buy
+        pool::buy_trfl(carol, 3401, 0, 1_000);
+        // operation 37: sell
+        pool::sell_trfl(bob, 3140, 0, 1_000);
+        // operation 38: remove_liquidity
+        pool::remove_liquidity(
+            bob, 3380,
+            1, 1, 1_000,
+        );
+        // operation 39: add_liquidity
+        pool::add_liquidity(
+            alice, 1955, 2505,
+            1, 1_000,
+        );
+        // operation 40: buy
+        pool::buy_trfl(dave, 3797, 0, 1_000);
+        // operation 41: transfer_lp_shares
+        pool::transfer_lp_shares(alice, signer::address_of(carol), 3781);
+        // operation 42: transfer
+        reflection_router::transfer(alice, signer::address_of(carol), 1277);
+        // operation 43: transfer
+        reflection_router::transfer(bob, signer::address_of(carol), 2259);
+        // operation 44: sell
+        pool::sell_trfl(carol, 644, 0, 1_000);
+        // operation 45: transfer_lp_shares
+        pool::transfer_lp_shares(carol, signer::address_of(dave), 1503);
+        // operation 46: buy
+        pool::buy_trfl(alice, 3194, 0, 1_000);
+        // operation 47: remove_liquidity
+        pool::remove_liquidity(
+            carol, 1544,
+            1, 1, 1_000,
+        );
+        // operation 48: remove_liquidity
+        pool::remove_liquidity(
+            carol, 365,
+            1, 1, 1_000,
+        );
+        // operation 49: claim
+        reflection_token::claim(carol, 24);
+        // operation 50: claim
+        reflection_token::claim(dave, 13);
+        // operation 51: sell
+        pool::sell_trfl(dave, 4906, 0, 1_000);
+        // operation 52: buy
+        pool::buy_trfl(carol, 4835, 0, 1_000);
+        // operation 53: transfer
+        reflection_router::transfer(bob, signer::address_of(carol), 2192);
+        // operation 54: claim_lp
+        pool::claim_lp_rewards(alice, 1, 99);
+        // operation 55: buy
+        pool::buy_trfl(dave, 2896, 0, 1_000);
+        // operation 56: buy
+        pool::buy_trfl(dave, 3821, 0, 1_000);
+        // operation 57: buy
+        pool::buy_trfl(alice, 2276, 0, 1_000);
+        // operation 58: buy
+        pool::buy_trfl(dave, 4897, 0, 1_000);
+        // operation 59: transfer_lp_shares
+        pool::transfer_lp_shares(bob, signer::address_of(alice), 74);
+        // operation 60: claim
+        reflection_token::claim(carol, 16);
+        // operation 61: set_fee_bps
+        reflection_token::set_fee_bps(core, 18);
+        // operation 62: buy
+        pool::buy_trfl(alice, 658, 0, 1_000);
+        // operation 63: checkpoint_pool
+        pool::checkpoint_lp_rewards(alice);
+        // operation 64: transfer
+        reflection_router::transfer(dave, signer::address_of(alice), 2737);
+        // operation 65: transfer_lp_shares
+        pool::transfer_lp_shares(carol, signer::address_of(dave), 323);
+        // operation 66: buy
+        pool::buy_trfl(alice, 3990, 0, 1_000);
+        // operation 67: checkpoint_pool
+        pool::checkpoint_lp_rewards(alice);
+        // operation 68: remove_liquidity
+        pool::remove_liquidity(
+            alice, 4004,
+            1, 1, 1_000,
+        );
+        // operation 69: sell
+        pool::sell_trfl(bob, 472, 0, 1_000);
+        // operation 70: transfer
+        reflection_router::transfer(alice, signer::address_of(bob), 1877);
+        // operation 71: remove_liquidity
+        pool::remove_liquidity(
+            carol, 44,
+            1, 1, 1_000,
+        );
+        // operation 72: add_liquidity
+        pool::add_liquidity(
+            alice, 1284, 985,
+            1, 1_000,
+        );
+        // operation 73: claim_lp
+        pool::claim_lp_rewards(alice, 1, 18);
+        // operation 74: sell
+        pool::sell_trfl(carol, 2038, 0, 1_000);
+
+        let (index, remainder, shares, unallocated, lifetime_fees, materialized) =
+            reflection_token::global_accounting();
+        assert!(!reflection_token::automatic_materialization_enabled(), 1000);
+        let (amm_fee_bps, max_reserve_bps, max_gross_swap) = pool::limits();
+        assert!(amm_fee_bps == 30, 1001);
+        assert!(max_reserve_bps == 2000, 1002);
+        assert!(max_gross_swap == 100000000000, 1003);
+        assert!(reflection_token::fee_bps() == 18, 1);
+        assert!(index == 150895661509289639763, 2);
+        assert!(remainder == 1462883, 3);
+        assert!(shares == 3999605, 4);
+        assert!(unallocated == 0, 5);
+        assert!(lifetime_fees == 603, 6);
+        assert!(materialized == 91, 7);
+        let (aggregate_negative, aggregate_magnitude) =
+            reflection_token::aggregate_correction();
+        assert!(aggregate_negative == true, 8);
+        assert!(aggregate_magnitude == 523042250862389645756498, 9);
+        let (custody_shares, routed, core_rounding) =
+            reflection_token::custody_accounting();
+        assert!(custody_shares == 1977241, 10);
+        assert!(routed == 299, 11);
+        assert!(core_rounding == 1, 12);
+        let (_, custody_negative, custody_magnitude, custody_settled, custody_pending) =
+            reflection_token::custody_position_accounting();
+        assert!(custody_negative == false, 13);
+        assert!(custody_magnitude == 2911177220355045617841816, 14);
+        assert!(custody_settled == 299, 15);
+        assert!(custody_pending == 2, 16);
+        assert!(reflection_token::raw_balance(signer::address_of(alice)) == 504625, 20);
+        assert!(reflection_token::pending_rewards(signer::address_of(alice)) == 49, 21);
+        assert!(reflection_token::raw_balance(signer::address_of(bob)) == 506892, 22);
+        assert!(reflection_token::pending_rewards(signer::address_of(bob)) == 76, 23);
+        assert!(reflection_token::raw_balance(signer::address_of(carol)) == 501712, 24);
+        assert!(reflection_token::pending_rewards(signer::address_of(carol)) == 34, 25);
+        assert!(reflection_token::raw_balance(signer::address_of(dave)) == 509135, 26);
+        assert!(reflection_token::pending_rewards(signer::address_of(dave)) == 49, 27);
+        let (pool_rfl, pool_usd) = pool::reserves_view();
+        assert!(pool_rfl == 1977241, 28);
+        assert!(pool_usd == 2011309, 29);
+        assert!(reflection_token::pool_pending_rewards() == 2, 30);
+        assert!(reflection_token::reward_vault_balance() == 213, 31);
+        assert!(
+            reflection_token::raw_store_balance(reflection_token::distribution_vault())
+                == 999999996000000,
+            32,
+        );
+        assert!(primary_fungible_store::balance(signer::address_of(alice), mock_usd::metadata()) == 995990, 33);
+        assert!(primary_fungible_store::balance(signer::address_of(bob), mock_usd::metadata()) == 1006109, 34);
+        assert!(primary_fungible_store::balance(signer::address_of(carol), mock_usd::metadata()) == 1000143, 35);
+        assert!(primary_fungible_store::balance(signer::address_of(dave), mock_usd::metadata()) == 986449, 36);
+        assert!(primary_fungible_store::balance(signer::address_of(amm), mock_usd::metadata()) == 3000000, 37);
+        let (lp_status, lp_index, lp_remainder, lp_shares, lp_unallocated,
+            lp_rounding, lp_received, lp_claimed, lp_liability) =
+            pool::lp_epoch_accounting(1);
+        assert!(lp_status == 1, 38);
+        assert!(lp_index == 149579207028204376405, 39);
+        assert!(lp_remainder == 783050, 40);
+        assert!(lp_shares == 1994084, 41);
+        assert!(lp_unallocated == 0, 42);
+        assert!(lp_rounding == 1, 43);
+        assert!(lp_received == 299, 44);
+        assert!(lp_claimed == 117, 45);
+        assert!(lp_liability == 181, 46);
+        assert!(pool::lp_reward_vault_balance(1) == 182, 47);
+        let (terminal_rounding, retired_residue_magnified) =
+            pool::lp_epoch_terminal_dust(1);
+        assert!(terminal_rounding == 0, 1004);
+        assert!(retired_residue_magnified == 0, 1005);
+        let (lp_aggregate_negative, lp_aggregate_magnitude) =
+            test_amm::lp_rewards::epoch_aggregate_correction(1);
+        assert!(lp_aggregate_negative == false, 48);
+        assert!(lp_aggregate_magnitude == 726496532370104280028930, 49);
+        let (owner_shares, negative, magnitude, claimed, pending) =
+            test_amm::lp_rewards::position_accounting(1, signer::address_of(alice));
+        assert!(owner_shares == 1991719, 50);
+        assert!(negative == false, 51);
+        assert!(magnitude == 714820412736685351020994, 52);
+        assert!(claimed == 117, 53);
+        assert!(pending == 181, 54);
+        let (owner_shares, negative, magnitude, claimed, pending) =
+            test_amm::lp_rewards::position_accounting(1, signer::address_of(bob));
+        assert!(owner_shares == 537, 55);
+        assert!(negative == false, 56);
+        assert!(magnitude == 143268783039451783905208, 57);
+        assert!(claimed == 0, 58);
+        assert!(pending == 0, 59);
+        let (owner_shares, negative, magnitude, claimed, pending) =
+            test_amm::lp_rewards::position_accounting(1, signer::address_of(carol));
+        assert!(owner_shares == 2, 60);
+        assert!(negative == false, 61);
+        assert!(magnitude == 43230487750232776848659, 62);
+        assert!(claimed == 0, 63);
+        assert!(pending == 0, 64);
+        let (owner_shares, negative, magnitude, claimed, pending) =
+            test_amm::lp_rewards::position_accounting(1, signer::address_of(dave));
+        assert!(owner_shares == 1826, 65);
+        assert!(negative == true, 66);
+        assert!(magnitude == 174823151156265631745931, 67);
+        assert!(claimed == 0, 68);
+        assert!(pending == 0, 69);
+        assert!(
+            (pool::lp_reward_vault_balance(1) as u256)
+                == lp_liability + (lp_unallocated as u256) + (lp_rounding as u256),
+            70,
+        );
+        assert!(lp_received - lp_claimed == (pool::lp_reward_vault_balance(1) as u256),
+            71);
+        reflection_token::assert_accounting_backing();
+    }
+}
+
+// @generated by scripts/generate_seeded_conformance.py; do not edit.
+#[test_only]
+module integration_tests::seeded_conformance_generated_3 {
+    use cedra_framework::primary_fungible_store;
+    use cedra_framework::timestamp;
+    use reflection_core::reflection_router;
+    use reflection_core::reflection_token;
+    use std::signer;
+    use test_amm::pool;
+    use test_assets::mock_usd;
+    use test_assets::test_faucet;
+
+    fun setup(core: &signer, assets: &signer, amm: &signer, framework: &signer) {
+        timestamp::set_time_has_started_for_testing(framework);
+        reflection_token::initialize_claim_backed_for_test(core);
+        mock_usd::initialize_for_test(assets);
+        test_faucet::initialize(core, assets);
+        pool::initialize(core, assets, amm);
+    }
+
+    #[test(
+        core = @0xcafe,
+        assets = @0xbabe,
+        amm = @0xdead,
+        framework = @0x1,
+        alice = @0xa11ce,
+        bob = @0xb0b,
+        carol = @0xca401,
+        dave = @0xda7e,
+    )]
+    fun seeded_python_move_conformance_3(
+        core: &signer,
+        assets: &signer,
+        amm: &signer,
+        framework: &signer,
+        alice: &signer,
+        bob: &signer,
+        carol: &signer,
+        dave: &signer,
+    ) {
+        setup(core, assets, amm, framework);
+
+        // operation 1: faucet_grant
+        test_faucet::configure(assets, 500000, 1, 0);
+        test_faucet::claim_trfl(alice);
+        // operation 2: faucet_grant
+        test_faucet::configure(assets, 500000, 1, 0);
+        test_faucet::claim_trfl(bob);
+        // operation 3: faucet_grant
+        test_faucet::configure(assets, 500000, 1, 0);
+        test_faucet::claim_trfl(carol);
+        // operation 4: faucet_grant
+        test_faucet::configure(assets, 500000, 1, 0);
+        test_faucet::claim_trfl(dave);
+        // operation 5: mint_quote
+        test_faucet::configure(assets, 1, 5000000, 0);
+        test_faucet::claim_tusd(amm);
+        // operation 6: mint_quote
+        test_faucet::configure(assets, 1, 1000000, 0);
+        test_faucet::claim_tusd(alice);
+        // operation 7: mint_quote
+        test_faucet::configure(assets, 1, 1000000, 0);
+        test_faucet::claim_tusd(bob);
+        // operation 8: mint_quote
+        test_faucet::configure(assets, 1, 1000000, 0);
+        test_faucet::claim_tusd(carol);
+        // operation 9: mint_quote
+        test_faucet::configure(assets, 1, 1000000, 0);
+        test_faucet::claim_tusd(dave);
+        // operation 10: seed_pool
+        pool::seed_liquidity(
+            core, amm, alice, 2000000,
+            2000000, 1,
+        );
+        // operation 11: buy
+        pool::buy_trfl(bob, 2115, 0, 1_000);
+        // operation 12: buy
+        pool::buy_trfl(carol, 2839, 0, 1_000);
+        // operation 13: transfer
+        reflection_router::transfer(bob, signer::address_of(dave), 3237);
+        // operation 14: add_liquidity
+        pool::add_liquidity(
+            bob, 1491, 2726,
+            1, 1_000,
+        );
+        // operation 15: buy
+        pool::buy_trfl(carol, 3300, 0, 1_000);
+        // operation 16: remove_liquidity
+        pool::remove_liquidity(
+            bob, 629,
+            1, 1, 1_000,
+        );
+        // operation 17: add_liquidity
+        pool::add_liquidity(
+            carol, 536, 65,
+            1, 1_000,
+        );
+        // operation 18: claim_lp
+        pool::claim_lp_rewards(alice, 1, 18);
+        // operation 19: sell
+        pool::sell_trfl(carol, 799, 0, 1_000);
+        // operation 20: transfer_lp_shares
+        pool::transfer_lp_shares(carol, signer::address_of(dave), 20);
+        // operation 21: buy
+        pool::buy_trfl(alice, 3370, 0, 1_000);
+        // operation 22: checkpoint_pool
+        pool::checkpoint_lp_rewards(alice);
+        // operation 23: remove_liquidity
+        pool::remove_liquidity(
+            carol, 4,
+            1, 1, 1_000,
+        );
+        // operation 24: transfer
+        reflection_router::transfer(bob, signer::address_of(carol), 4314);
+        // operation 25: claim_lp
+        pool::claim_lp_rewards(alice, 1, 25);
+        // operation 26: sell
+        pool::sell_trfl(bob, 343, 0, 1_000);
+        // operation 27: transfer
+        reflection_router::transfer(bob, signer::address_of(dave), 3140);
+        // operation 28: checkpoint_pool
+        pool::checkpoint_lp_rewards(alice);
+        // operation 29: sell
+        pool::sell_trfl(bob, 1307, 0, 1_000);
+        // operation 30: add_liquidity
+        pool::add_liquidity(
+            alice, 234, 2777,
+            1, 1_000,
+        );
+        // operation 31: transfer_lp_shares
+        pool::transfer_lp_shares(carol, signer::address_of(alice), 24);
+        // operation 32: claim
+        reflection_token::claim(bob, 2);
+        // operation 33: sell
+        pool::sell_trfl(carol, 2538, 0, 1_000);
+        // operation 34: claim
+        reflection_token::claim(dave, 7);
+        // operation 35: transfer_lp_shares
+        pool::transfer_lp_shares(alice, signer::address_of(bob), 1840);
+        // operation 36: sell
+        pool::sell_trfl(bob, 3018, 0, 1_000);
+        // operation 37: transfer
+        reflection_router::transfer(bob, signer::address_of(alice), 465);
+        // operation 38: claim
+        reflection_token::claim(dave, 17);
+        // operation 39: sell
+        pool::sell_trfl(bob, 2752, 0, 1_000);
+        // operation 40: add_liquidity
+        pool::add_liquidity(
+            carol, 973, 1954,
+            1, 1_000,
+        );
+        // operation 41: transfer
+        reflection_router::transfer(carol, signer::address_of(alice), 4168);
+        // operation 42: transfer
+        reflection_router::transfer(carol, signer::address_of(bob), 3214);
+        // operation 43: set_fee_bps
+        reflection_token::set_fee_bps(core, 71);
+        // operation 44: transfer
+        reflection_router::transfer(bob, signer::address_of(carol), 3479);
+        // operation 45: transfer
+        reflection_router::transfer(dave, signer::address_of(alice), 188);
+        // operation 46: transfer_lp_shares
+        pool::transfer_lp_shares(bob, signer::address_of(carol), 2703);
+        // operation 47: claim
+        reflection_token::claim(dave, 2);
+        // operation 48: remove_liquidity
+        pool::remove_liquidity(
+            alice, 2498,
+            1, 1, 1_000,
+        );
+        // operation 49: claim
+        reflection_token::claim(carol, 5);
+        // operation 50: buy
+        pool::buy_trfl(dave, 4362, 0, 1_000);
+        // operation 51: buy
+        pool::buy_trfl(dave, 3877, 0, 1_000);
+        // operation 52: transfer_lp_shares
+        pool::transfer_lp_shares(carol, signer::address_of(dave), 3267);
+        // operation 53: claim
+        reflection_token::claim(alice, 13);
+        // operation 54: add_liquidity
+        pool::add_liquidity(
+            carol, 527, 1635,
+            1, 1_000,
+        );
+        // operation 55: sell
+        pool::sell_trfl(dave, 4696, 0, 1_000);
+        // operation 56: buy
+        pool::buy_trfl(dave, 2465, 0, 1_000);
+        // operation 57: remove_liquidity
+        pool::remove_liquidity(
+            alice, 3886,
+            1, 1, 1_000,
+        );
+        // operation 58: buy
+        pool::buy_trfl(bob, 1067, 0, 1_000);
+        // operation 59: transfer
+        reflection_router::transfer(alice, signer::address_of(carol), 1346);
+        // operation 60: remove_liquidity
+        pool::remove_liquidity(
+            carol, 867,
+            1, 1, 1_000,
+        );
+        // operation 61: add_liquidity
+        pool::add_liquidity(
+            dave, 953, 2491,
+            1, 1_000,
+        );
+        // operation 62: set_fee_bps
+        reflection_token::set_fee_bps(core, 51);
+        // operation 63: transfer_lp_shares
+        pool::transfer_lp_shares(carol, signer::address_of(dave), 49);
+        // operation 64: remove_liquidity
+        pool::remove_liquidity(
+            carol, 21,
+            1, 1, 1_000,
+        );
+        // operation 65: buy
+        pool::buy_trfl(carol, 4286, 0, 1_000);
+        // operation 66: sell
+        pool::sell_trfl(dave, 3510, 0, 1_000);
+        // operation 67: sell
+        pool::sell_trfl(bob, 4857, 0, 1_000);
+        // operation 68: sell
+        pool::sell_trfl(alice, 2482, 0, 1_000);
+        // operation 69: claim
+        reflection_token::claim(dave, 18);
+        // operation 70: transfer
+        reflection_router::transfer(dave, signer::address_of(alice), 4913);
+        // operation 71: sell
+        pool::sell_trfl(dave, 700, 0, 1_000);
+        // operation 72: claim
+        reflection_token::claim(dave, 2);
+        // operation 73: transfer
+        reflection_router::transfer(carol, signer::address_of(dave), 550);
+        // operation 74: claim_lp
+        pool::claim_lp_rewards(alice, 1, 47);
+
+        let (index, remainder, shares, unallocated, lifetime_fees, materialized) =
+            reflection_token::global_accounting();
+        assert!(!reflection_token::automatic_materialization_enabled(), 1000);
+        let (amm_fee_bps, max_reserve_bps, max_gross_swap) = pool::limits();
+        assert!(amm_fee_bps == 30, 1001);
+        assert!(max_reserve_bps == 2000, 1002);
+        assert!(max_gross_swap == 100000000000, 1003);
+        assert!(reflection_token::fee_bps() == 51, 1);
+        assert!(index == 102586363951557386553, 2);
+        assert!(remainder == 1145765, 3);
+        assert!(shares == 3999746, 4);
+        assert!(unallocated == 0, 5);
+        assert!(lifetime_fees == 410, 6);
+        assert!(materialized == 66, 7);
+        let (aggregate_negative, aggregate_magnitude) =
+            reflection_token::aggregate_correction();
+        assert!(aggregate_negative == true, 8);
+        assert!(aggregate_magnitude == 319398869785850636961303, 9);
+        let (custody_shares, routed, core_rounding) =
+            reflection_token::custody_accounting();
+        assert!(custody_shares == 1995750, 10);
+        assert!(routed == 204, 11);
+        assert!(core_rounding == 1, 12);
+        let (_, custody_negative, custody_magnitude, custody_settled, custody_pending) =
+            reflection_token::custody_position_accounting();
+        assert!(custody_negative == true, 13);
+        assert!(custody_magnitude == 378253839095685643906635, 14);
+        assert!(custody_settled == 204, 15);
+        assert!(custody_pending == 0, 16);
+        assert!(reflection_token::raw_balance(signer::address_of(alice)) == 515438, 20);
+        assert!(reflection_token::pending_rewards(signer::address_of(alice)) == 38, 21);
+        assert!(reflection_token::raw_balance(signer::address_of(bob)) == 478571, 22);
+        assert!(reflection_token::pending_rewards(signer::address_of(bob)) == 48, 23);
+        assert!(reflection_token::raw_balance(signer::address_of(carol)) == 507434, 24);
+        assert!(reflection_token::pending_rewards(signer::address_of(carol)) == 46, 25);
+        assert!(reflection_token::raw_balance(signer::address_of(dave)) == 502553, 26);
+        assert!(reflection_token::pending_rewards(signer::address_of(dave)) == 5, 27);
+        let (pool_rfl, pool_usd) = pool::reserves_view();
+        assert!(pool_rfl == 1995750, 28);
+        assert!(pool_usd == 1997137, 29);
+        assert!(reflection_token::pool_pending_rewards() == 0, 30);
+        assert!(reflection_token::reward_vault_balance() == 140, 31);
+        assert!(
+            reflection_token::raw_store_balance(reflection_token::distribution_vault())
+                == 999999996000000,
+            32,
+        );
+        assert!(primary_fungible_store::balance(signer::address_of(alice), mock_usd::metadata()) == 1005259, 33);
+        assert!(primary_fungible_store::balance(signer::address_of(bob), mock_usd::metadata()) == 1008158, 34);
+        assert!(primary_fungible_store::balance(signer::address_of(carol), mock_usd::metadata()) == 992218, 35);
+        assert!(primary_fungible_store::balance(signer::address_of(dave), mock_usd::metadata()) == 997228, 36);
+        assert!(primary_fungible_store::balance(signer::address_of(amm), mock_usd::metadata()) == 3000000, 37);
+        let (lp_status, lp_index, lp_remainder, lp_shares, lp_unallocated,
+            lp_rounding, lp_received, lp_claimed, lp_liability) =
+            pool::lp_epoch_accounting(1);
+        assert!(lp_status == 1, 38);
+        assert!(lp_index == 102015689391477411829, 39);
+        assert!(lp_remainder == 1853040, 40);
+        assert!(lp_shares == 1996346, 41);
+        assert!(lp_unallocated == 0, 42);
+        assert!(lp_rounding == 1, 43);
+        assert!(lp_received == 204, 44);
+        assert!(lp_claimed == 90, 45);
+        assert!(lp_liability == 113, 46);
+        assert!(pool::lp_reward_vault_balance(1) == 114, 47);
+        let (terminal_rounding, retired_residue_magnified) =
+            pool::lp_epoch_terminal_dust(1);
+        assert!(terminal_rounding == 0, 1004);
+        assert!(retired_residue_magnified == 0, 1005);
+        let (lp_aggregate_negative, lp_aggregate_magnitude) =
+            test_amm::lp_rewards::epoch_aggregate_correction(1);
+        assert!(lp_aggregate_negative == false, 48);
+        assert!(lp_aggregate_magnitude == 341386546081634802970126, 49);
+        let (owner_shares, negative, magnitude, claimed, pending) =
+            test_amm::lp_rewards::position_accounting(1, signer::address_of(alice));
+        assert!(owner_shares == 1992035, 50);
+        assert!(negative == false, 51);
+        assert!(magnitude == 515525414474459999517930, 52);
+        assert!(claimed == 90, 53);
+        assert!(pending == 113, 54);
+        let (owner_shares, negative, magnitude, claimed, pending) =
+            test_amm::lp_rewards::position_accounting(1, signer::address_of(bob));
+        assert!(owner_shares == 2, 55);
+        assert!(negative == false, 56);
+        assert!(magnitude == 68325267325553504506859, 57);
+        assert!(claimed == 0, 58);
+        assert!(pending == 0, 59);
+        let (owner_shares, negative, magnitude, claimed, pending) =
+            test_amm::lp_rewards::position_accounting(1, signer::address_of(carol));
+        assert!(owner_shares == 17, 60);
+        assert!(negative == false, 61);
+        assert!(magnitude == 65079856592675720341244, 62);
+        assert!(claimed == 0, 63);
+        assert!(pending == 0, 64);
+        let (owner_shares, negative, magnitude, claimed, pending) =
+            test_amm::lp_rewards::position_accounting(1, signer::address_of(dave));
+        assert!(owner_shares == 4292, 65);
+        assert!(negative == true, 66);
+        assert!(magnitude == 307543992311054421395907, 67);
+        assert!(claimed == 0, 68);
+        assert!(pending == 0, 69);
+        assert!(
+            (pool::lp_reward_vault_balance(1) as u256)
+                == lp_liability + (lp_unallocated as u256) + (lp_rounding as u256),
+            70,
+        );
+        assert!(lp_received - lp_claimed == (pool::lp_reward_vault_balance(1) as u256),
+            71);
+        reflection_token::assert_accounting_backing();
+    }
+}
+
+// @generated by scripts/generate_seeded_conformance.py; do not edit.
+#[test_only]
+module integration_tests::lifecycle_conformance_generated {
+    use cedra_framework::primary_fungible_store;
+    use cedra_framework::timestamp;
+    use reflection_core::reflection_math;
+    use reflection_core::reflection_token;
+    use std::signer;
+    use test_amm::lp_rewards;
+    use test_amm::pool;
+    use test_assets::mock_usd;
+    use test_assets::test_faucet;
+
+    fun setup(core: &signer, assets: &signer, amm: &signer, framework: &signer) {
+        timestamp::set_time_has_started_for_testing(framework);
+        reflection_token::initialize_claim_backed_for_test(core);
+        mock_usd::initialize_for_test(assets);
+        test_faucet::initialize(core, assets);
+        pool::initialize(core, assets, amm);
+    }
+
+    #[test(
+        core = @0xcafe,
+        assets = @0xbabe,
+        amm = @0xdead,
+        framework = @0x1,
+        alice = @0xa11ce,
+        bob = @0xb0b,
+        carol = @0xca401,
+        dave = @0xda7e,
+    )]
+    fun shutdown_reseed_epoch_two(
+        core: &signer,
+        assets: &signer,
+        amm: &signer,
+        framework: &signer,
+        alice: &signer,
+        bob: &signer,
+        carol: &signer,
+        dave: &signer,
+    ) {
+        setup(core, assets, amm, framework);
+        // operation 1: faucet_grant
+        test_faucet::configure(assets, 20000000, 1, 0);
+        test_faucet::claim_trfl(bob);
+        // operation 2: mint_quote
+        test_faucet::configure(assets, 1, 200000000, 0);
+        test_faucet::claim_tusd(amm);
+        // operation 3: seed_pool
+        pool::seed_liquidity(
+            core, amm, alice, 100000000,
+            100000000, 1,
+        );
+        // operation 4: register_wallet
+        reflection_token::register_wallet(carol);
+        // operation 5: transfer_lp_shares
+        pool::transfer_lp_shares(alice, signer::address_of(carol), 50000000);
+        // operation 6: sell
+        pool::sell_trfl(bob, 10000000, 0, 1_000);
+        // operation 7: checkpoint_pool
+        pool::checkpoint_lp_rewards(alice);
+        // operation 8: claim
+        reflection_token::claim(bob, 9090);
+        // operation 9: begin_shutdown
+        pool::begin_shutdown(amm);
+        // operation 10: remove_liquidity
+        pool::remove_liquidity(
+            carol, 50000000,
+            1, 1, 1_000,
+        );
+        // operation 11: remove_liquidity
+        pool::remove_liquidity(
+            alice, 50000000,
+            1, 1, 1_000,
+        );
+        // operation 12: reseed_pool
+        let (_, route_negative, route_magnitude, route_claimed, route_pending) =
+            reflection_token::custody_position_accounting();
+        assert!(!route_negative && route_pending == 0, 2000);
+        let route_normalized = route_claimed * reflection_math::magnitude();
+        assert!(route_magnitude >= route_normalized, 2001);
+        assert!(route_magnitude - route_normalized == 90909090909090900000000, 2002);
+        pool::reseed_liquidity(
+            core, amm, dave, 50000000,
+            50000000, 1,
+        );
+
+        let (index, remainder, shares, unallocated, lifetime_fees, materialized) =
+            reflection_token::global_accounting();
+        assert!(reflection_token::fixed_supply() == 1000000000000000, 2003);
+        assert!(index == 909090909090909090909, 2004);
+        assert!(remainder == 10000000, 2005);
+        assert!(shares == 169999998, 2006);
+        assert!(unallocated == 0, 2007);
+        assert!(lifetime_fees == 100000, 2008);
+        assert!(materialized == 9090, 2009);
+        let (aggregate_negative, aggregate_magnitude) =
+            reflection_token::aggregate_correction();
+        assert!(aggregate_negative == true, 2010);
+        assert!(aggregate_magnitude == 54545543636363636363621818182, 2011);
+        let (custody_shares, routed, core_rounding) =
+            reflection_token::custody_accounting();
+        assert!(custody_shares == 50000000, 2012);
+        assert!(routed == 90909, 2013);
+        assert!(core_rounding == 1, 2014);
+        let (_, custody_negative, custody_magnitude, custody_claimed, custody_pending) =
+            reflection_token::custody_position_accounting();
+        assert!(custody_negative == false, 2015);
+        assert!(custody_magnitude == 45454454545454545454550000000, 2016);
+        assert!(custody_claimed == 90909, 2017);
+        assert!(custody_pending == 0, 2018);
+        assert!(reflection_token::reward_vault_balance() == 1, 2019);
+        assert!(reflection_token::distribution_vault_balance() == 999999830000000, 2020);
+        let (pool_paused, liquidity_paused, lp_claims_paused, shutdown_mode, seeded) =
+            pool::pause_state();
+        assert!(pool_paused == true, 2021);
+        assert!(liquidity_paused == false, 2022);
+        assert!(lp_claims_paused == false, 2023);
+        assert!(shutdown_mode == false, 2024);
+        assert!(seeded == true, 2025);
+        assert!(pool::active_epoch() == 2, 2026);
+        let (reserve_rfl, reserve_usd) = pool::reserves_view();
+        assert!(reserve_rfl == 50000000, 2027);
+        assert!(reserve_usd == 50000000, 2028);
+        assert!(primary_fungible_store::balance(
+            signer::address_of(amm), mock_usd::metadata(),
+        ) == 50000000, 2029);
+        assert!(reflection_token::wallet_is_registered(signer::address_of(alice)) == true, 2030);
+        assert!(reflection_token::raw_balance(signer::address_of(alice)) == 54995454, 2031);
+        assert!(reflection_token::pending_rewards(signer::address_of(alice)) == 0, 2032);
+        let (wallet_negative, wallet_magnitude, wallet_claimed) =
+            reflection_token::wallet_position_accounting(signer::address_of(alice));
+        assert!(wallet_negative == true, 2033);
+        assert!(wallet_magnitude == 49995867272727272727267727686, 2034);
+        assert!(wallet_claimed == 0, 2035);
+        assert!(primary_fungible_store::balance(
+            signer::address_of(alice), mock_usd::metadata(),
+        ) == 45508204, 2036);
+        assert!(reflection_token::wallet_is_registered(signer::address_of(bob)) == true, 2037);
+        assert!(reflection_token::raw_balance(signer::address_of(bob)) == 10009090, 2038);
+        assert!(reflection_token::pending_rewards(signer::address_of(bob)) == 0, 2039);
+        let (wallet_negative, wallet_magnitude, wallet_claimed) =
+            reflection_token::wallet_position_accounting(signer::address_of(bob));
+        assert!(wallet_negative == true, 2040);
+        assert!(wallet_magnitude == 8263636363636363636362810, 2041);
+        assert!(wallet_claimed == 9090, 2042);
+        assert!(primary_fungible_store::balance(
+            signer::address_of(bob), mock_usd::metadata(),
+        ) == 8983592, 2043);
+        assert!(reflection_token::wallet_is_registered(signer::address_of(carol)) == true, 2044);
+        assert!(reflection_token::raw_balance(signer::address_of(carol)) == 54995454, 2045);
+        assert!(reflection_token::pending_rewards(signer::address_of(carol)) == 0, 2046);
+        let (wallet_negative, wallet_magnitude, wallet_claimed) =
+            reflection_token::wallet_position_accounting(signer::address_of(carol));
+        assert!(wallet_negative == true, 2047);
+        assert!(wallet_magnitude == 49995867272727272727267727686, 2048);
+        assert!(wallet_claimed == 0, 2049);
+        assert!(primary_fungible_store::balance(
+            signer::address_of(carol), mock_usd::metadata(),
+        ) == 45508204, 2050);
+        assert!(reflection_token::wallet_is_registered(signer::address_of(dave)) == true, 2051);
+        assert!(reflection_token::raw_balance(signer::address_of(dave)) == 0, 2052);
+        assert!(reflection_token::pending_rewards(signer::address_of(dave)) == 0, 2053);
+        let (wallet_negative, wallet_magnitude, wallet_claimed) =
+            reflection_token::wallet_position_accounting(signer::address_of(dave));
+        assert!(wallet_negative == false, 2054);
+        assert!(wallet_magnitude == 0, 2055);
+        assert!(wallet_claimed == 0, 2056);
+        assert!(primary_fungible_store::balance(
+            signer::address_of(dave), mock_usd::metadata(),
+        ) == 0, 2057);
+        let (lp_status, lp_index, lp_remainder, lp_shares, lp_unallocated,
+            lp_rounding, lp_received, lp_claimed, lp_liability) =
+            pool::lp_epoch_accounting(1);
+        assert!(lp_status == 2, 2058);
+        assert!(lp_index == 909090000000000000000, 2059);
+        assert!(lp_remainder == 0, 2060);
+        assert!(lp_shares == 0, 2061);
+        assert!(lp_unallocated == 0, 2062);
+        assert!(lp_rounding == 1, 2063);
+        assert!(lp_received == 90909, 2064);
+        assert!(lp_claimed == 90908, 2065);
+        assert!(lp_liability == 0, 2066);
+        assert!(pool::lp_reward_vault_balance(1) == 1, 2067);
+        let (_, _, _, quarantined) =
+            lp_rewards::epoch_identity(1);
+        assert!(quarantined == false, 2068);
+        let (terminal_rounding, retired_residue) =
+            pool::lp_epoch_terminal_dust(1);
+        assert!(terminal_rounding == 1, 2069);
+        assert!(retired_residue == 1000000000000000000000000, 2070);
+        let (lp_aggregate_negative, lp_aggregate_magnitude) =
+            lp_rewards::epoch_aggregate_correction(1);
+        assert!(lp_aggregate_negative == false, 2071);
+        assert!(lp_aggregate_magnitude == 90908000000000000000000000000, 2072);
+        let (owner_shares, owner_negative, owner_magnitude, owner_claimed, owner_pending) =
+            lp_rewards::position_accounting(1, signer::address_of(alice));
+        assert!(owner_shares == 0, 2073);
+        assert!(owner_negative == false, 2074);
+        assert!(owner_magnitude == 45454000000000000000000000000, 2075);
+        assert!(owner_claimed == 45454, 2076);
+        assert!(owner_pending == 0, 2077);
+        let (owner_shares, owner_negative, owner_magnitude, owner_claimed, owner_pending) =
+            lp_rewards::position_accounting(1, signer::address_of(bob));
+        assert!(owner_shares == 0, 2078);
+        assert!(owner_negative == false, 2079);
+        assert!(owner_magnitude == 0, 2080);
+        assert!(owner_claimed == 0, 2081);
+        assert!(owner_pending == 0, 2082);
+        let (owner_shares, owner_negative, owner_magnitude, owner_claimed, owner_pending) =
+            lp_rewards::position_accounting(1, signer::address_of(carol));
+        assert!(owner_shares == 0, 2083);
+        assert!(owner_negative == false, 2084);
+        assert!(owner_magnitude == 45454000000000000000000000000, 2085);
+        assert!(owner_claimed == 45454, 2086);
+        assert!(owner_pending == 0, 2087);
+        let (owner_shares, owner_negative, owner_magnitude, owner_claimed, owner_pending) =
+            lp_rewards::position_accounting(1, signer::address_of(dave));
+        assert!(owner_shares == 0, 2088);
+        assert!(owner_negative == false, 2089);
+        assert!(owner_magnitude == 0, 2090);
+        assert!(owner_claimed == 0, 2091);
+        assert!(owner_pending == 0, 2092);
+        let (lp_status, lp_index, lp_remainder, lp_shares, lp_unallocated,
+            lp_rounding, lp_received, lp_claimed, lp_liability) =
+            pool::lp_epoch_accounting(2);
+        assert!(lp_status == 1, 2093);
+        assert!(lp_index == 0, 2094);
+        assert!(lp_remainder == 0, 2095);
+        assert!(lp_shares == 50000000, 2096);
+        assert!(lp_unallocated == 0, 2097);
+        assert!(lp_rounding == 0, 2098);
+        assert!(lp_received == 0, 2099);
+        assert!(lp_claimed == 0, 2100);
+        assert!(lp_liability == 0, 2101);
+        assert!(pool::lp_reward_vault_balance(2) == 0, 2102);
+        let (_, _, _, quarantined) =
+            lp_rewards::epoch_identity(2);
+        assert!(quarantined == false, 2103);
+        let (terminal_rounding, retired_residue) =
+            pool::lp_epoch_terminal_dust(2);
+        assert!(terminal_rounding == 0, 2104);
+        assert!(retired_residue == 0, 2105);
+        let (lp_aggregate_negative, lp_aggregate_magnitude) =
+            lp_rewards::epoch_aggregate_correction(2);
+        assert!(lp_aggregate_negative == false, 2106);
+        assert!(lp_aggregate_magnitude == 0, 2107);
+        let (owner_shares, owner_negative, owner_magnitude, owner_claimed, owner_pending) =
+            lp_rewards::position_accounting(2, signer::address_of(alice));
+        assert!(owner_shares == 0, 2108);
+        assert!(owner_negative == false, 2109);
+        assert!(owner_magnitude == 0, 2110);
+        assert!(owner_claimed == 0, 2111);
+        assert!(owner_pending == 0, 2112);
+        let (owner_shares, owner_negative, owner_magnitude, owner_claimed, owner_pending) =
+            lp_rewards::position_accounting(2, signer::address_of(bob));
+        assert!(owner_shares == 0, 2113);
+        assert!(owner_negative == false, 2114);
+        assert!(owner_magnitude == 0, 2115);
+        assert!(owner_claimed == 0, 2116);
+        assert!(owner_pending == 0, 2117);
+        let (owner_shares, owner_negative, owner_magnitude, owner_claimed, owner_pending) =
+            lp_rewards::position_accounting(2, signer::address_of(carol));
+        assert!(owner_shares == 0, 2118);
+        assert!(owner_negative == false, 2119);
+        assert!(owner_magnitude == 0, 2120);
+        assert!(owner_claimed == 0, 2121);
+        assert!(owner_pending == 0, 2122);
+        let (owner_shares, owner_negative, owner_magnitude, owner_claimed, owner_pending) =
+            lp_rewards::position_accounting(2, signer::address_of(dave));
+        assert!(owner_shares == 50000000, 2123);
+        assert!(owner_negative == false, 2124);
+        assert!(owner_magnitude == 0, 2125);
+        assert!(owner_claimed == 0, 2126);
+        assert!(owner_pending == 0, 2127);
+        reflection_token::assert_accounting_backing();
+    }
+
+    #[test(
+        core = @0xcafe,
+        assets = @0xbabe,
+        amm = @0xdead,
+        framework = @0x1,
+        alice = @0xa11ce,
+    )]
+    fun zero_denominator_quarantine(
+        core: &signer,
+        assets: &signer,
+        amm: &signer,
+        framework: &signer,
+        alice: &signer,
+    ) {
+        setup(core, assets, amm, framework);
+        // operation 1: faucet_grant
+        test_faucet::configure(assets, 10000000, 1, 0);
+        test_faucet::claim_trfl(alice);
+        // operation 2: mint_quote
+        test_faucet::configure(assets, 1, 100000000, 0);
+        test_faucet::claim_tusd(amm);
+        // operation 3: seed_pool
+        pool::seed_liquidity(
+            core, amm, alice, 100000000,
+            100000000, 1,
+        );
+        // operation 4: sell
+        pool::sell_trfl(alice, 5000000, 0, 1_000);
+        // operation 5: checkpoint_pool
+        pool::checkpoint_lp_rewards(alice);
+        // operation 6: claim_lp
+        pool::claim_lp_rewards(alice, 1, 0);
+        // operation 7: sell
+        pool::sell_trfl(alice, 5000000, 0, 1_000);
+        // operation 8: force_zero_denominator_receipt_for_test
+        pool::force_zero_denominator_receipt_for_test(signer::address_of(alice));
+
+        let (index, remainder, shares, unallocated, lifetime_fees, materialized) =
+            reflection_token::global_accounting();
+        assert!(reflection_token::fixed_supply() == 1000000000000000, 4000);
+        assert!(index == 952391750811760697889, 4001);
+        assert!(remainder == 67150353, 4002);
+        assert!(shares == 109947619, 4003);
+        assert!(unallocated == 0, 4004);
+        assert!(lifetime_fees == 100000, 4005);
+        assert!(materialized == 0, 4006);
+        let (aggregate_negative, aggregate_magnitude) =
+            reflection_token::aggregate_correction();
+        assert!(aggregate_negative == true, 4007);
+        assert!(aggregate_magnitude == 4713205356994405930741026644, 4008);
+        let (custody_shares, routed, core_rounding) =
+            reflection_token::custody_accounting();
+        assert!(custody_shares == 109900000, 4009);
+        assert!(routed == 97596, 4010);
+        assert!(core_rounding == 1, 4011);
+        let (_, custody_negative, custody_magnitude, custody_claimed, custody_pending) =
+            reflection_token::custody_position_accounting();
+        assert!(custody_negative == true, 4012);
+        assert!(custody_magnitude == 7071482023661072597406750000, 4013);
+        assert!(custody_claimed == 97596, 4014);
+        assert!(custody_pending == 0, 4015);
+        assert!(reflection_token::reward_vault_balance() == 2404, 4016);
+        assert!(reflection_token::distribution_vault_balance() == 999999890000000, 4017);
+        let (pool_paused, liquidity_paused, lp_claims_paused, shutdown_mode, seeded) =
+            pool::pause_state();
+        assert!(pool_paused == false, 4018);
+        assert!(liquidity_paused == false, 4019);
+        assert!(lp_claims_paused == false, 4020);
+        assert!(shutdown_mode == false, 4021);
+        assert!(seeded == true, 4022);
+        assert!(pool::active_epoch() == 1, 4023);
+        let (reserve_rfl, reserve_usd) = pool::reserves_view();
+        assert!(reserve_rfl == 109900000, 4024);
+        assert!(reserve_usd == 91016987, 4025);
+        assert!(primary_fungible_store::balance(
+            signer::address_of(amm), mock_usd::metadata(),
+        ) == 0, 4026);
+        assert!(reflection_token::wallet_is_registered(signer::address_of(alice)) == true, 4027);
+        assert!(reflection_token::raw_balance(signer::address_of(alice)) == 47619, 4028);
+        assert!(reflection_token::pending_rewards(signer::address_of(alice)) == 2403, 4029);
+        let (wallet_negative, wallet_magnitude, wallet_claimed) =
+            reflection_token::wallet_position_accounting(signer::address_of(alice));
+        assert!(wallet_negative == false, 4030);
+        assert!(wallet_magnitude == 2358276666666666666665723356, 4031);
+        assert!(wallet_claimed == 0, 4032);
+        assert!(primary_fungible_store::balance(
+            signer::address_of(alice), mock_usd::metadata(),
+        ) == 8983013, 4033);
+        let (lp_status, lp_index, lp_remainder, lp_shares, lp_unallocated,
+            lp_rounding, lp_received, lp_claimed, lp_liability) =
+            pool::lp_epoch_accounting(1);
+        assert!(lp_status == 1, 4034);
+        assert!(lp_index == 476190000000000000000, 4035);
+        assert!(lp_remainder == 0, 4036);
+        assert!(lp_shares == 0, 4037);
+        assert!(lp_unallocated == 49977, 4038);
+        assert!(lp_rounding == 0, 4039);
+        assert!(lp_received == 97596, 4040);
+        assert!(lp_claimed == 47619, 4041);
+        assert!(lp_liability == 0, 4042);
+        assert!(pool::lp_reward_vault_balance(1) == 49977, 4043);
+        let (_, _, _, quarantined) =
+            lp_rewards::epoch_identity(1);
+        assert!(quarantined == true, 4044);
+        let (terminal_rounding, retired_residue) =
+            pool::lp_epoch_terminal_dust(1);
+        assert!(terminal_rounding == 0, 4045);
+        assert!(retired_residue == 0, 4046);
+        let (lp_aggregate_negative, lp_aggregate_magnitude) =
+            lp_rewards::epoch_aggregate_correction(1);
+        assert!(lp_aggregate_negative == false, 4047);
+        assert!(lp_aggregate_magnitude == 47619000000000000000000000000, 4048);
+        let (owner_shares, owner_negative, owner_magnitude, owner_claimed, owner_pending) =
+            lp_rewards::position_accounting(1, signer::address_of(alice));
+        assert!(owner_shares == 0, 4049);
+        assert!(owner_negative == false, 4050);
+        assert!(owner_magnitude == 47619000000000000000000000000, 4051);
+        assert!(owner_claimed == 47619, 4052);
+        assert!(owner_pending == 0, 4053);
+        reflection_token::assert_accounting_backing();
+    }
+}
+
+// @generated by scripts/generate_seeded_conformance.py; do not edit.
+#[test_only]
+module integration_tests::amm_arithmetic_conformance_generated {
+    use test_amm::reflection_settlement;
+
+    #[test]
+    fun maximum_and_rounding_boundaries_match_python() {
+        assert!(reflection_settlement::fee(0, 0) == 0, 1);
+        assert!(reflection_settlement::fee(1, 30) == 1, 2);
+        assert!(reflection_settlement::fee(1801, 30) == 6, 3);
+        assert!(reflection_settlement::fee(18446744073709551615, 0) == 0, 4);
+        assert!(reflection_settlement::fee(18446744073709551615, 100) == 184467440737095517, 5);
+        assert!(reflection_settlement::fee(18446744073709551615, 10000) == 18446744073709551615, 6);
+        let (output_7, fee_7) = reflection_settlement::constant_product_output(
+            1, 1, 0, 0,
+        );
+        assert!(output_7 == 0, 7);
+        assert!(fee_7 == 0, 8);
+        let (output_9, fee_9) = reflection_settlement::constant_product_output(
+            1, 1, 1, 0,
+        );
+        assert!(output_9 == 0, 9);
+        assert!(fee_9 == 0, 10);
+        let (output_11, fee_11) = reflection_settlement::constant_product_output(
+            18446744073709551615, 18446744073709551615, 1, 30,
+        );
+        assert!(output_11 == 0, 11);
+        assert!(fee_11 == 1, 12);
+        let (output_13, fee_13) = reflection_settlement::constant_product_output(
+            18446744073709551615, 18446744073709551615, 18446744073709551615, 0,
+        );
+        assert!(output_13 == 9223372036854775807, 13);
+        assert!(fee_13 == 0, 14);
+        let (output_15, fee_15) = reflection_settlement::constant_product_output(
+            18446744073709551615, 18446744073709551615, 18446744073709551615, 100,
+        );
+        assert!(output_15 == 9177023433654500551, 15);
+        assert!(fee_15 == 184467440737095517, 16);
+        let (output_17, fee_17) = reflection_settlement::constant_product_output(
+            1, 18446744073709551615, 18446744073709551615, 0,
+        );
+        assert!(output_17 == 18446744073709551614, 17);
+        assert!(fee_17 == 0, 18);
+        assert!(reflection_settlement::initial_lp_shares(0, 18446744073709551615) == 0, 19);
+        assert!(reflection_settlement::initial_lp_shares(1, 1) == 1, 20);
+        assert!(reflection_settlement::initial_lp_shares(2, 3) == 2, 21);
+        assert!(reflection_settlement::initial_lp_shares(1, 18446744073709551615) == 4294967295, 22);
+        assert!(reflection_settlement::initial_lp_shares(18446744073709551615, 18446744073709551614) == 18446744073709551614, 23);
+        assert!(reflection_settlement::initial_lp_shares(18446744073709551615, 18446744073709551615) == 18446744073709551615, 24);
+        let (shares_25, rfl_25, usd_25) = reflection_settlement::liquidity_mint(
+            1, 1, 18446744073709551615,
+            18446744073709551615, 1,
+        );
+        assert!(shares_25 == 0, 25);
+        assert!(rfl_25 == 0, 26);
+        assert!(usd_25 == 0, 27);
+        let (shares_28, rfl_28, usd_28) = reflection_settlement::liquidity_mint(
+            25000, 100000, 800000,
+            1600000, 1131370,
+        );
+        assert!(shares_28 == 35355, 28);
+        assert!(rfl_28 == 25000, 29);
+        assert!(usd_28 == 50000, 30);
+        let (shares_31, rfl_31, usd_31) = reflection_settlement::liquidity_mint(
+            18446744073709551615, 18446744073709551615, 18446744073709551615,
+            18446744073709551615, 18446744073709551615,
+        );
+        assert!(shares_31 == 18446744073709551615, 31);
+        assert!(rfl_31 == 18446744073709551615, 32);
+        assert!(usd_31 == 18446744073709551615, 33);
+        let (shares_34, rfl_34, usd_34) = reflection_settlement::liquidity_mint(
+            18446744073709551615, 18446744073709551615, 18446744073709551615,
+            18446744073709551615, 340282366920938463463374607431768211455,
+        );
+        assert!(shares_34 == 340282366920938463463374607431768211455, 34);
+        assert!(rfl_34 == 18446744073709551615, 35);
+        assert!(usd_34 == 18446744073709551615, 36);
+        let (shares_37, rfl_37, usd_37) = reflection_settlement::liquidity_mint(
+            18446744073709551615, 1, 1,
+            18446744073709551615, 340282366920938463463374607431768211455,
+        );
+        assert!(shares_37 == 18446744073709551617, 37);
+        assert!(rfl_37 == 1, 38);
+        assert!(usd_37 == 1, 39);
+        let (rfl_40, usd_40) = reflection_settlement::liquidity_withdrawal(
+            1, 340282366920938463463374607431768211455,
+            18446744073709551615, 18446744073709551615,
+        );
+        assert!(rfl_40 == 0, 40);
+        assert!(usd_40 == 0, 41);
+        let (rfl_42, usd_42) = reflection_settlement::liquidity_withdrawal(
+            340282366920938463463374607431768211454, 340282366920938463463374607431768211455,
+            18446744073709551615, 18446744073709551615,
+        );
+        assert!(rfl_42 == 18446744073709551614, 42);
+        assert!(usd_42 == 18446744073709551614, 43);
+        let (rfl_44, usd_44) = reflection_settlement::liquidity_withdrawal(
+            340282366920938463463374607431768211455, 340282366920938463463374607431768211455,
+            18446744073709551615, 18446744073709551615,
+        );
+        assert!(rfl_44 == 18446744073709551615, 44);
+        assert!(usd_44 == 18446744073709551615, 45);
+        let (rfl_46, usd_46) = reflection_settlement::liquidity_withdrawal(
+            1, 3,
+            2, 5,
+        );
+        assert!(rfl_46 == 0, 46);
+        assert!(usd_46 == 1, 47);
     }
 }

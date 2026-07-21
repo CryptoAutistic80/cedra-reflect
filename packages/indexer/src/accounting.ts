@@ -4,6 +4,11 @@ import type {
   IndexedPosition,
   ProtocolProjection,
 } from "./types.js";
+import {
+  applyMoveSignedU256,
+  checkedMoveU256Multiply,
+  checkedMoveU256Subtract,
+} from "./move-domains.js";
 
 export const REFLECTION_MAGNITUDE = 1_000_000_000_000_000_000_000_000n;
 
@@ -21,14 +26,14 @@ export function magnifiedEntitlement(
 ): bigint {
   requireNonNegative(shares, "shares");
   requireNonNegative(index, "index");
-  const magnified = shares * index + signedCorrection;
-  requireNonNegative(magnified, "corrected magnified entitlement");
+  const base = checkedMoveU256Multiply(shares, index, "magnified entitlement base");
+  const magnified = applyMoveSignedU256(base, signedCorrection, "corrected magnified entitlement");
   return magnified / REFLECTION_MAGNITUDE;
 }
 
 export function walletPending(position: IndexedPosition, index: bigint): bigint {
   const gross = magnifiedEntitlement(position.rawTrfl, index, position.correction);
-  return requireNonNegative(gross - position.claimed, "wallet pending reward");
+  return checkedMoveU256Subtract(gross, position.claimed, "wallet pending reward");
 }
 
 export function custodyPending(projection: ProtocolProjection): bigint {
@@ -37,7 +42,7 @@ export function custodyPending(projection: ProtocolProjection): bigint {
     projection.currentIndex,
     projection.custody.correction,
   );
-  return requireNonNegative(gross - projection.custody.claimed, "custody pending reward");
+  return checkedMoveU256Subtract(gross, projection.custody.claimed, "custody pending reward");
 }
 
 export function coreIndexedLiability(projection: ProtocolProjection): bigint {
@@ -46,34 +51,39 @@ export function coreIndexedLiability(projection: ProtocolProjection): bigint {
     projection.currentIndex,
     projection.aggregateCorrection,
   );
-  return requireNonNegative(
-    gross - projection.lifetimeMaterialized - projection.lifetimeCustodyRouted,
-    "core indexed liability",
+  return checkedMoveU256Subtract(
+    checkedMoveU256Subtract(gross, projection.lifetimeMaterialized, "core indexed liability materialized settlement"),
+    projection.lifetimeCustodyRouted,
+    "core indexed liability custody settlement",
   );
 }
 
 export function expectedCoreVaultBalance(projection: ProtocolProjection): bigint {
-  return requireNonNegative(
-    projection.lifetimeSwapFees
-      - projection.lifetimeMaterialized
-      - projection.lifetimeCustodyRouted,
-    "expected core reward-vault balance",
+  return checkedMoveU256Subtract(
+    checkedMoveU256Subtract(
+      projection.lifetimeSwapFees,
+      projection.lifetimeMaterialized,
+      "expected core vault materialized settlement",
+    ),
+    projection.lifetimeCustodyRouted,
+    "expected core vault custody settlement",
   );
 }
 
 export function lpPositionPending(position: IndexedLpPosition, epoch: IndexedLpEpoch): bigint {
   const gross = magnifiedEntitlement(position.shares, epoch.index, position.correction);
-  return requireNonNegative(gross - position.claimed, "LP position pending reward");
+  return checkedMoveU256Subtract(gross, position.claimed, "LP position pending reward");
 }
 
 export function lpIndexedLiability(epoch: IndexedLpEpoch): bigint {
   const gross = magnifiedEntitlement(epoch.totalShares, epoch.index, epoch.aggregateCorrection);
-  return requireNonNegative(gross - epoch.lifetimeClaimed, "LP indexed liability");
+  return checkedMoveU256Subtract(gross, epoch.lifetimeClaimed, "LP indexed liability");
 }
 
 export function expectedLpVaultBalance(epoch: IndexedLpEpoch): bigint {
-  return requireNonNegative(
-    epoch.lifetimeReceived - epoch.lifetimeClaimed,
+  return checkedMoveU256Subtract(
+    epoch.lifetimeReceived,
+    epoch.lifetimeClaimed,
     `expected LP vault balance for epoch ${epoch.epoch.toString()}`,
   );
 }

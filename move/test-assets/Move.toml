@@ -10,7 +10,9 @@ ReflectionCore = { local = "../reflection-core" }
 [addresses]
 test_assets = "_"
 reflection_core = "_"
+test_amm = "_"
 
 [dev-addresses]
 test_assets = "0xbabe"
 reflection_core = "0xcafe"
+test_amm = "0xdead"

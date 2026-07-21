@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cedra-reflect.invalid/schemas/release-executable-closure.schema.json",
+  "title": "Reviewed release executable closure",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "evidence_scope",
+    "node_runtime",
+    "python_runtime",
+    "package_json_sha256",
+    "package_lock_sha256",
+    "node_modules",
+    "typescript",
+    "sdk",
+    "dist",
+    "release_javascript"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "evidence_scope": { "const": "reviewed-release-executable-closure" },
+    "node_runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha256", "byte_length"],
+      "properties": {
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "byte_length": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "python_runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha256", "byte_length"],
+      "properties": {
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "byte_length": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "package_json_sha256": { "$ref": "#/$defs/sha256" },
+    "package_lock_sha256": { "$ref": "#/$defs/sha256" },
+    "node_modules": { "$ref": "#/$defs/tree", "properties": { "path": { "const": "node_modules" } } },
+    "typescript": { "$ref": "#/$defs/tree", "properties": { "path": { "const": "node_modules/typescript" } } },
+    "sdk": { "$ref": "#/$defs/tree", "properties": { "path": { "const": "node_modules/@cedra-labs/ts-sdk" } } },
+    "dist": { "$ref": "#/$defs/tree", "properties": { "path": { "const": "fresh-private-tsc-outdir" } } },
+    "release_javascript": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["typescript_bin_sha256", "typescript_compiler_sha256", "bcs_validator_sha256", "rename_noreplace_helper_sha256"],
+      "properties": {
+        "typescript_bin_sha256": { "$ref": "#/$defs/sha256" },
+        "typescript_compiler_sha256": { "$ref": "#/$defs/sha256" },
+        "bcs_validator_sha256": { "$ref": "#/$defs/sha256" },
+        "rename_noreplace_helper_sha256": { "$ref": "#/$defs/sha256" }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "tree": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "file_count"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "file_count": { "type": "integer", "minimum": 1 }
+      }
+    }
+  }
+}

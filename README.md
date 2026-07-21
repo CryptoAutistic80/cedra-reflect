@@ -2,18 +2,20 @@
 
 > **TESTNET ASSET — NO MONETARY VALUE — STATE AND ADDRESSES MAY CHANGE**
 
-This repository is the source and evidence set for the Cedra Reflection Pilot
-Testnet: a production-engineering-quality, intentionally non-economic beta for
-a fixed-supply `tRFL` / `tUSD` reflection-token system. It is not a mainnet
-launch, token sale, investment product, or promise of value.
+This repository is the source and evidence set for the planned Cedra Reflection
+Pilot Testnet: a production-engineering-quality, intentionally non-economic
+beta for a fixed-supply `tRFL` / `tUSD` reflection-token system. It is not a
+mainnet launch, token sale, investment product, or promise of value.
 
-## What this repository proves
+## What the current repository proves locally
 
-The planned pilot has one project-controlled constant-product AMM, a one
-percent reflection fee on supported swaps, untaxed ordinary transfers, an
-excluded reward vault and distribution vault, an O(1) global-index accounting
-model, canonical-LP reward passthrough, one clean initial contract schema, and
-an independent reconciliation witness.
+The source and deterministic tests implement one project-controlled constant-
+product AMM, a one percent reflection fee on supported swaps, untaxed ordinary
+transfers, excluded reward and distribution vaults, an O(1) global-index
+accounting model, canonical-LP reward passthrough, one clean initial contract
+schema, and an independent reconciliation implementation. This is local source
+and test evidence; it is not evidence that the release packages or pilot have
+been deployed.
 
 The source tree is organised to keep test-only distribution and synthetic
 liquidity separate from the reflection core:
@@ -22,18 +24,41 @@ liquidity separate from the reflection core:
 move/       Cedra Move packages and integration tests
 python/     Independent reference model, vectors, and property tests
 packages/   TypeScript protocol SDK and indexer/reconciler
-apps/       Public Testnet dashboard
+apps/       Deferred static dashboard prototype; not wallet or live-pilot evidence
 ops/        Release, incident, and redeployment controls
 ```
 
+The TypeScript SDK and indexer are optional, non-authoritative off-chain
+integration tools. The SDK can build, fingerprint, and simulate an exact
+transaction but contains no release signing or submission shortcut. The Move
+packages do not call either package, trust them, or rely on them for any
+balance, fee, custody, LP-ownership, pause, or authority rule. Deleting or
+replacing them cannot change the on-chain economics.
+
+This is one hard-bound tRFL instance split across three immutable packages,
+not a factory. On chain, registered wallet primary stores and the canonical LP
+are rewarded exactly once. If an account-controlled vault uses that account's
+canonical primary store, the contract sees and rewards only that one address;
+it does not infer or apportion rewards among the vault's depositors. Custom and
+secondary stores fail closed, and no other custody or LP adapter is supported
+by this deployment.
+
 ## Safety and operational boundary
 
-- Never publish, fund, transfer, or invoke state-changing Testnet commands
-  from CI or a local convenience script.
-- Only an approved release operator publishes after a two-person approval
-  recorded in a signed release manifest.
-- Package publishers hand routine fee, pause, faucet, shutdown, and limit
-  controls to a distinct operational key through three evented transactions.
+- Repository scripts may build and non-commit simulation-test exact transaction
+  candidates, but they must never fund accounts, sign, publish, or submit a
+  state-changing Testnet transaction.
+- Every exact state-changing candidate requires two verified detached OpenSSH
+  approvals from distinct trusted identities and keys. The final release
+  manifest cross-binds those per-transaction approval envelopes and finalized
+  evidence; it does not replace them.
+- Three package publishers and the destination operations account co-sign one
+  atomic, evented handoff of routine fee, pause, faucet, shutdown, and limit
+  controls. Individual package setters are recovery-only.
+- The operations primary store is permanently reward-excluded, and an address
+  that has ever held LP shares cannot become operations.
+- Initial or replacement bootstrap LP ownership requires the beneficiary
+  signer; it cannot be assigned with a bare address argument.
 - The three release packages are immutable after publication. A code fix uses
   a new deployment and manifest, never an in-place upgrade or migration.
 - Do not add a `force_set_balance`, arbitrary vault sweep, post-seal `tRFL`
@@ -43,32 +68,75 @@ ops/        Release, incident, and redeployment controls
 
 ## Factory boundary
 
-This repository deploys one tRFL instance; it is the secure single-token
+This repository defines one tRFL instance for deployment; it is the secure single-token
 reference, not yet a reflection-token factory. A later factory must give every
 created token its own object-scoped accounting state, vault capabilities,
 custody bindings, instance-qualified events, and indexer keys. The current
 canonical LP design can be reused only for adapters that prove beneficial
 ownership and checkpoint before every share mutation.
 
+The five generated public Testnet role candidates are recorded in
+`ops/testnet-roles.candidate.json` and summarized in
+`CEDRA_TESTNET_PLAN.md`. Their keys remain outside this repository. Local
+public-profile capture verifies profile names and public-key/address derivation
+with OpenSSL SHA3-256. The keyless assembler separately revalidates the same
+bindings with the reviewed `@cedra-labs/ts-sdk` `2.2.8`; neither check
+establishes account existence, funding, private-key control, or release
+authorization. See `CHANGELOG.md` for the candidate history.
+
 ## Local verification
+
+The latest settled dirty-tree evidence is 118/118 Move tests (2 hook probe, 8
+core, 0 asset-local, 5 AMM, 103 integration), 60/60 Python tests, 78/78
+TypeScript SDK/indexer tests, and 21/21 release-candidate assembler tests.
+Generated conformance is current. The latest claim-backed million-operation run
+completed 1,000,000 successful transitions from 1,071,570 attempts, with
+70,626 no-ops, 944 rejected operations, 2,002 full audits, 1,024 holders,
+`automatic_materialization=false`, and digest
+`a40abf6fd8f4b91c7152ba8a63016ef2ef49d2be6c698fdb4dcd87f6c16d90e9`.
+Every figure in this paragraph is local dirty-tree evidence; the entire suite
+and workload must be reproduced from the final clean exact commit.
+
+Independent local re-audits currently report GO for the contract with no
+remaining Critical, High, Medium, or Low finding, for SDK/indexer parity, and
+for release tooling. They do not replace the external human source/bytecode
+review or signed SDK-review attestation required by the release process.
 
 The root verification command is deliberately read-only/local:
 
 ```bash
-make verify
+make verify RELEASE_NODE_RUNTIME=/ABSOLUTE/REVIEWED/PATH/node
 ```
 
-It runs Move, Python, and TypeScript checks once their toolchains are
-installed. See the individual package READMEs for setup. `make pilot-gate`
-runs the expanded randomized accounting gate; it does not submit transactions
-or contact a wallet.
+It runs the Move, Python, TypeScript, keyless candidate-assembler,
+release-tooling security, executable-closure, and JSON-schema suites with the
+current toolchains. Exact counts must be reproduced at the clean reviewed
+commit rather than copied from an earlier run. See the individual package
+READMEs for setup.
+`make pilot-gate` runs the expanded randomized accounting gate; the latest
+million-operation run passed on a dirty tree and must also be repeated for the
+clean release record. Neither command submits transactions or contacts a
+wallet. These local checks validate implementation and evidence handling, not
+a live release or independent human SDK approval.
+
+Approval-grade release commands intentionally fail in this developer checkout.
+They require a trusted administrator to prepare a fresh standalone exact-commit
+clone, not a linked worktree or external Git directory,
+whose complete tree, reviewed Node runtime, and pre-emitted closure-matching
+JavaScript are root-owned and not writable by the release euid, group, or
+others. The ceremony then runs under a dedicated unprivileged uid in an
+isolated container or VM and writes only to a separate private output root.
+There is no candidate-time compilation and no local/test bypass for this
+boundary; see `ops/RELEASE_EVIDENCE.md` for the mandatory preparation procedure.
 
 ## Pilot completion evidence
 
 The codebase can prove local arithmetic and implementation requirements. The
-following gates require a live, operator-controlled Testnet deployment and are
-therefore tracked as evidence records rather than faked in CI: the Testnet
-dispatchable-hook probe, 50,000 on-chain synthetic transactions,
-10,000 completed swaps, 1,000 distinct on-chain holders, one clean
-redeployment/restoration, wallet-display verification, and independent
-review. See `ops/` for the required records and stop conditions.
+isolated Testnet dispatchable-hook probe is already preserved as a bounded
+compatibility record. The following broader gates still require a live,
+operator-controlled Testnet deployment and are therefore tracked as evidence
+rather than faked in CI: 50,000 on-chain synthetic transactions, 10,000
+completed swaps, 1,000 distinct on-chain holders, one clean
+redeployment/restoration, and wallet-display verification. Independent human
+source/bytecode review is a separate pre-publication gate. See `ops/` for the
+required records and stop conditions.

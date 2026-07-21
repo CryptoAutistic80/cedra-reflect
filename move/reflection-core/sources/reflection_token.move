@@ -46,6 +46,10 @@ module reflection_core::reflection_token {
     const E_STORE_ALREADY_CLASSIFIED: u64 = 30;
     const E_NOT_CUSTODY_STORE_OWNER: u64 = 31;
     const E_AUTOMATIC_MATERIALIZATION_DISABLED: u64 = 32;
+    const E_PROTOCOL_EXCLUSIONS_CLOSED: u64 = 33;
+    const E_INVALID_PROTOCOL_PUBLISHER: u64 = 34;
+    const E_OPERATIONAL_ADMIN_REGISTERED: u64 = 35;
+    const E_OPERATIONAL_ADMIN_FUNDED: u64 = 36;
 
     const MAX_FEE_BPS: u64 = 100;
     const BPS_DENOMINATOR: u64 = 10_000;
@@ -60,6 +64,7 @@ module reflection_core::reflection_token {
     const DISTRIBUTION_VAULT_SEED: vector<u8> = b"reflection-distribution-vault-v1";
     const DEPLOYMENT_ID: vector<u8> = b"reflection-pilot-001";
     const NETWORK_LABEL: vector<u8> = b"cedra-testnet";
+    const PROTOCOL_EXCLUSION_SLOTS: u64 = 2;
 
     /// `claimed` is whole-token materialisation. `correction` preserves the
     /// accrued dividend when raw balance changes, exactly as a magnified
@@ -90,6 +95,7 @@ module reflection_core::reflection_token {
         automatic_materialization: bool,
         positions: Table<address, Position>,
         exclusions: Table<address, bool>,
+        protocol_exclusions_remaining: u64,
 
         reward_vault: Object<FungibleStore>,
         distribution_vault: Object<FungibleStore>,
@@ -109,6 +115,7 @@ module reflection_core::reflection_token {
         lifetime_custody_routed: u256,
         rounding_reserve: u128,
         registered_wallets: Table<address, bool>,
+        registered_wallet_count: u64,
         registered: bool,
     }
 
@@ -124,7 +131,14 @@ module reflection_core::reflection_token {
     /// from finalized module storage, so registration must occur after package
     /// publication rather than from `init_module`. The selected materialization
     /// mode is immutable for this deployment.
-    public entry fun initialize(admin: &signer, automatic_materialization: bool) {
+    public entry fun initialize(admin: &signer) {
+        initialize_with_mode(admin, false)
+    }
+
+    /// This Testnet release is hard-bound to the probe-selected claim-backed
+    /// mode. The parameterized path exists only so unit tests can exercise
+    /// automatic dispatcher behavior that is not publishable in this build.
+    fun initialize_with_mode(admin: &signer, automatic_materialization: bool) {
         assert!(signer::address_of(admin) == @reflection_core, E_NOT_ADMIN);
         assert!(!exists<ReflectionState>(@reflection_core), E_ALREADY_INITIALIZED);
         let constructor_ref = object::create_named_object(admin, ASSET_SEED);
@@ -197,6 +211,7 @@ module reflection_core::reflection_token {
             automatic_materialization,
             positions: table::new<address, Position>(),
             exclusions,
+            protocol_exclusions_remaining: PROTOCOL_EXCLUSION_SLOTS,
             reward_vault,
             distribution_vault,
             pool_store: @0x0,
@@ -210,6 +225,7 @@ module reflection_core::reflection_token {
             lifetime_custody_routed: 0,
             rounding_reserve: 0,
             registered_wallets: table::new<address, bool>(),
+            registered_wallet_count: 0,
             registered: false,
         });
         reflection_registry::initialize(
@@ -227,11 +243,13 @@ module reflection_core::reflection_token {
             RELEASE_MINOR,
             RELEASE_PATCH,
             DEPLOYMENT_ID,
+            NETWORK_LABEL,
             metadata_address,
             reward_vault_address,
             distribution_vault_address,
             automatic_materialization,
             INITIAL_FEE_BPS,
+            PROTOCOL_EXCLUSION_SLOTS,
         );
         reflection_events::operational_admin_changed(
             @0x0,
@@ -343,19 +361,57 @@ module reflection_core::reflection_token {
         reflection_events::pause_changed(swaps_paused, claims_paused);
     }
 
-    /// The publisher remains the cold package/capability authority while this
-    /// evented handoff assigns routine fee and pause controls to a separate key.
+    /// Recovery-only core-role handoff. Normal cross-package rotations use the
+    /// AMM coordinator so every operational authority changes atomically.
     public entry fun set_operational_admin(
         publisher: &signer,
-        new_operational_admin: address,
-    ) acquires ReflectionState {
-        assert!(new_operational_admin != @0x0, E_INVALID_OPERATIONAL_ADMIN);
+        new_operational_admin: &signer,
+    ) acquires ReflectionState, CustodyAccounting {
+        let new_operational_admin_address = signer::address_of(new_operational_admin);
+        assert!(
+            new_operational_admin_address != @0x0
+                && new_operational_admin_address != @reflection_core
+                && new_operational_admin_address != @test_assets
+                && new_operational_admin_address != @test_amm,
+            E_INVALID_OPERATIONAL_ADMIN,
+        );
         let state = borrow_global_mut<ReflectionState>(@reflection_core);
         assert_admin(state, publisher);
+        let custody = borrow_global<CustodyAccounting>(@reflection_core);
+        assert!(
+            !is_registered_wallet(custody, new_operational_admin_address),
+            E_OPERATIONAL_ADMIN_REGISTERED,
+        );
+        let store = primary_fungible_store::primary_store_address_inlined(
+            new_operational_admin_address,
+            state.metadata,
+        );
+        if (primary_fungible_store::primary_store_exists(
+            new_operational_admin_address,
+            state.metadata,
+        )) {
+            assert!(
+                fungible_asset::balance_with_ref(
+                    &state.raw_balance_ref,
+                    primary_fungible_store::primary_store(
+                        new_operational_admin_address,
+                        state.metadata,
+                    ),
+                ) == 0,
+                E_OPERATIONAL_ADMIN_FUNDED,
+            );
+        };
+        if (!is_excluded_store(state, store)) {
+            table::add(&mut state.exclusions, store, true);
+            reflection_events::operational_primary_store_excluded(
+                new_operational_admin_address,
+                store,
+            );
+        };
         let old_operational_admin = state.operational_admin;
-        state.operational_admin = new_operational_admin;
+        state.operational_admin = new_operational_admin_address;
         reflection_events::operational_admin_changed(
-            old_operational_admin, new_operational_admin,
+            old_operational_admin, new_operational_admin_address,
         );
     }
 
@@ -488,17 +544,38 @@ module reflection_core::reflection_token {
         );
     }
 
-    /// Administrative and contract-owned primary stores must be registered
-    /// before they receive tRFL. This prevents privileged balances from taking
-    /// reflection shares while retaining a narrow, auditable allow-list.
-    public fun register_excluded_primary_store(admin: &signer, account: address) acquires ReflectionState, CustodyAccounting {
+    /// Exactly two co-signing protocol publishers may exclude their empty
+    /// primary stores during bootstrap. Requiring the target signer, a vacant
+    /// store, a finite slot, and an event prevents this from becoming a
+    /// unilateral wallet-blacklisting primitive after launch.
+    public fun register_protocol_publisher_store(
+        admin: &signer,
+        publisher: &signer,
+    ) acquires ReflectionState, CustodyAccounting {
         let state = borrow_global_mut<ReflectionState>(@reflection_core);
         assert_admin(state, admin);
+        assert!(state.protocol_exclusions_remaining > 0, E_PROTOCOL_EXCLUSIONS_CLOSED);
+        let account = signer::address_of(publisher);
         assert!(!is_registered_wallet(borrow_global<CustodyAccounting>(@reflection_core), account), E_UNREGISTERED_WALLET);
+        assert!(account == @test_assets || account == @test_amm, E_INVALID_PROTOCOL_PUBLISHER);
         let store = primary_fungible_store::primary_store_address_inlined(account, state.metadata);
-        if (!table::contains(&state.exclusions, store)) {
-            table::add(&mut state.exclusions, store, true);
+        assert!(!table::contains(&state.exclusions, store), E_STORE_ALREADY_CLASSIFIED);
+        if (primary_fungible_store::primary_store_exists(account, state.metadata)) {
+            assert!(
+                fungible_asset::balance_with_ref(
+                    &state.raw_balance_ref,
+                    primary_fungible_store::primary_store(account, state.metadata),
+                ) == 0,
+                E_STORE_NOT_EMPTY,
+            );
         };
+        table::add(&mut state.exclusions, store, true);
+        state.protocol_exclusions_remaining = state.protocol_exclusions_remaining - 1;
+        reflection_events::protocol_primary_store_excluded(
+            account,
+            store,
+            state.protocol_exclusions_remaining,
+        );
     }
 
     /// Bootstrap movement from the pre-minted excluded reserve. Requiring the
@@ -674,8 +751,7 @@ module reflection_core::reflection_token {
         epoch: u64,
         lp_reward_vault: Object<FungibleStore>,
     ): u64 acquires ReflectionState, CustodyAccounting {
-        let state = borrow_global_mut<ReflectionState>(@reflection_core);
-        assert!(!state.claims_paused, E_CLAIMS_PAUSED);
+        let state = borrow_global<ReflectionState>(@reflection_core);
         assert_pool(state, pool_store);
         custody_registry::assert_active_route(cap, pool_store, epoch, lp_reward_vault);
         let custody = borrow_global_mut<CustodyAccounting>(@reflection_core);
@@ -708,7 +784,6 @@ module reflection_core::reflection_token {
     ) acquires ReflectionState, CustodyAccounting {
         assert!(amount > 0, E_ZERO_AMOUNT);
         let state = borrow_global_mut<ReflectionState>(@reflection_core);
-        assert!(!state.claims_paused, E_CLAIMS_PAUSED);
         custody_registry::assert_claim_vault(cap, epoch, lp_reward_vault);
         let claimant_address = signer::address_of(claimant);
         let custody = borrow_global_mut<CustodyAccounting>(@reflection_core);
@@ -727,6 +802,13 @@ module reflection_core::reflection_token {
     #[view]
     public fun distribution_vault(): Object<FungibleStore> acquires ReflectionState { borrow_global<ReflectionState>(@reflection_core).distribution_vault }
     #[view]
+    public fun fixed_supply(): u64 { TOTAL_SUPPLY }
+    #[view]
+    public fun distribution_vault_balance(): u64 acquires ReflectionState {
+        let state = borrow_global<ReflectionState>(@reflection_core);
+        fungible_asset::balance_with_ref(&state.raw_balance_ref, state.distribution_vault)
+    }
+    #[view]
     public fun fee_bps(): u64 acquires ReflectionState { borrow_global<ReflectionState>(@reflection_core).fee_bps }
     #[view]
     public fun reflection_fee_for(gross_amount: u64): u64 acquires ReflectionState {
@@ -741,6 +823,10 @@ module reflection_core::reflection_token {
     #[view]
     public fun automatic_materialization_enabled(): bool acquires ReflectionState {
         borrow_global<ReflectionState>(@reflection_core).automatic_materialization
+    }
+    #[view]
+    public fun protocol_exclusions_remaining(): u64 acquires ReflectionState {
+        borrow_global<ReflectionState>(@reflection_core).protocol_exclusions_remaining
     }
     #[view]
     public fun primary_store_is_excluded(account: address): bool acquires ReflectionState {
@@ -790,6 +876,10 @@ module reflection_core::reflection_token {
         let custody = borrow_global<CustodyAccounting>(@reflection_core);
         table::contains(&custody.registered_wallets, account)
             && *table::borrow(&custody.registered_wallets, account)
+    }
+    #[view]
+    public fun registered_wallet_count(): u64 acquires CustodyAccounting {
+        borrow_global<CustodyAccounting>(@reflection_core).registered_wallet_count
     }
     #[view]
     public fun custody_accounting(): (u128, u256, u128) acquires CustodyAccounting {
@@ -923,9 +1013,19 @@ module reflection_core::reflection_token {
         assert!(is_registered_wallet(custody, account), E_UNREGISTERED_WALLET);
     }
 
-    fun ensure_registered_wallet(custody: &mut CustodyAccounting, account: address) {
+    fun ensure_registered_wallet(
+        custody: &mut CustodyAccounting,
+        account: address,
+        primary_store: address,
+    ) {
         if (!table::contains(&custody.registered_wallets, account)) {
             table::add(&mut custody.registered_wallets, account, true);
+            custody.registered_wallet_count = custody.registered_wallet_count + 1;
+            reflection_events::wallet_registered(
+                account,
+                primary_store,
+                custody.registered_wallet_count,
+            );
         };
     }
 
@@ -944,7 +1044,7 @@ module reflection_core::reflection_token {
                 fungible_asset::balance_with_ref(&state.raw_balance_ref, store) == 0,
                 E_UNREGISTERED_WALLET,
             );
-            ensure_registered_wallet(custody, account);
+            ensure_registered_wallet(custody, account, object::object_address(&store));
         };
     }
 
@@ -1129,10 +1229,32 @@ module reflection_core::reflection_token {
     }
 
     #[test_only]
-    public fun initialize_for_test(admin: &signer) { initialize(admin, true); }
+    public fun initialize_for_test(admin: &signer) { initialize_with_mode(admin, true); }
 
     #[test_only]
-    public fun initialize_claim_backed_for_test(admin: &signer) { initialize(admin, false); }
+    public fun initialize_claim_backed_for_test(admin: &signer) { initialize_with_mode(admin, false); }
+
+    #[test_only]
+    /// Deliberately creates the otherwise unreachable funded/unregistered
+    /// primary-store state needed to prove operational handoff fails closed.
+    public fun fund_unregistered_primary_store_for_test(
+        admin: &signer,
+        account: address,
+        amount: u64,
+    ) acquires ReflectionState {
+        let state = borrow_global_mut<ReflectionState>(@reflection_core);
+        assert_admin(state, admin);
+        let store = primary_fungible_store::ensure_primary_store_exists(
+            account,
+            state.metadata,
+        );
+        fungible_asset::transfer_with_ref(
+            &state.transfer_ref,
+            state.distribution_vault,
+            store,
+            amount,
+        );
+    }
 
     #[test_only]
     public fun destroy_faucet_capability_for_test(cap: FaucetCapability) {

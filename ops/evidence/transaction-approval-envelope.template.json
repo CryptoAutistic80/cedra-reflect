@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "evidence_scope": "detached-transaction-approval-envelope",
+  "status": "signed",
+  "signature_namespace": "cedra-reflect-testnet-release-v1",
+  "candidate_file": "transaction-candidate.json",
+  "candidate_sha256": "RECORD_64_HEX_TRANSACTION_CANDIDATE_DIGEST",
+  "statement_file": "approval-statement.json",
+  "statement_sha256": "RECORD_64_HEX_CANONICAL_APPROVAL_STATEMENT_DIGEST",
+  "exact_address_artifacts_sha256": "RECORD_64_HEX_EXACT_ADDRESS_MANIFEST_DIGEST",
+  "public_profile_evidence_sha256": "RECORD_64_HEX_PUBLIC_PROFILE_EVIDENCE_DIGEST",
+  "public_role_candidate_sha256": "RECORD_64_HEX_PUBLIC_ROLE_CANDIDATE_DIGEST",
+  "trusted_allowed_signers_sha256": "RECORD_64_HEX_EXTERNAL_ALLOWED_SIGNERS_TRUST_ANCHOR_DIGEST",
+  "approvals": [
+    {
+      "identity": "RECORD_APPROVER_1_ALLOWED_SIGNERS_PRINCIPAL",
+      "key_fingerprint": "SHA256:RECORD_APPROVER_1_OPENSSH_KEY_FINGERPRINT",
+      "signature_file": "approver-1.sig",
+      "signature_sha256": "RECORD_64_HEX_APPROVER_1_SIGNATURE_DIGEST"
+    },
+    {
+      "identity": "RECORD_APPROVER_2_ALLOWED_SIGNERS_PRINCIPAL",
+      "key_fingerprint": "SHA256:RECORD_APPROVER_2_OPENSSH_KEY_FINGERPRINT",
+      "signature_file": "approver-2.sig",
+      "signature_sha256": "RECORD_64_HEX_APPROVER_2_SIGNATURE_DIGEST"
+    }
+  ]
+}

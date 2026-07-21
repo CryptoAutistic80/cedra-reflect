@@ -10,11 +10,13 @@ module reflection_core::reflection_events {
         release_minor: u64,
         release_patch: u64,
         deployment_id: vector<u8>,
+        network_label: vector<u8>,
         metadata: address,
         reward_vault: address,
         distribution_vault: address,
         automatic_materialization: bool,
         initial_fee_bps: u64,
+        protocol_exclusion_slots: u64,
     }
 
     #[event]
@@ -81,6 +83,17 @@ module reflection_core::reflection_events {
     #[event]
     struct PositionCreated has drop, store { account: address }
 
+    // Emitted exactly once when an address first joins the canonical
+    // primary-store reflection surface. `primary_store` is included so an
+    // indexer can reject secondary-store lookalikes without reconstructing
+    // object addresses off chain.
+    #[event]
+    struct WalletRegistered has drop, store {
+        account: address,
+        primary_store: address,
+        registered_wallet_count: u64,
+    }
+
     #[event]
     struct CustodyAdapterRegistered has drop, store {
         adapter_id: u64,
@@ -133,6 +146,19 @@ module reflection_core::reflection_events {
         new_operational_admin: address,
     }
 
+    #[event]
+    struct ProtocolPrimaryStoreExcluded has drop, store {
+        account: address,
+        store: address,
+        remaining_slots: u64,
+    }
+
+    #[event]
+    struct OperationalPrimaryStoreExcluded has drop, store {
+        account: address,
+        store: address,
+    }
+
     // Event constructors are package-only. Exposing them publicly would let an
     // unrelated module emit authentic-looking protocol events without making
     // the corresponding state transition.
@@ -142,11 +168,13 @@ module reflection_core::reflection_events {
         release_minor: u64,
         release_patch: u64,
         deployment_id: vector<u8>,
+        network_label: vector<u8>,
         metadata: address,
         reward_vault: address,
         distribution_vault: address,
         automatic_materialization: bool,
         initial_fee_bps: u64,
+        protocol_exclusion_slots: u64,
     ) {
         event::emit(ProtocolInitialized {
             version,
@@ -154,11 +182,13 @@ module reflection_core::reflection_events {
             release_minor,
             release_patch,
             deployment_id,
+            network_label,
             metadata,
             reward_vault,
             distribution_vault,
             automatic_materialization,
             initial_fee_bps,
+            protocol_exclusion_slots,
         });
     }
     public(package) fun faucet_grant(recipient: address, amount: u64, operator: address) { event::emit(FaucetGrant { recipient, amount, operator }); }
@@ -178,6 +208,17 @@ module reflection_core::reflection_events {
     public(package) fun rewards_materialized(account: address, amount: u64, total_claimed: u256) { event::emit(RewardsMaterialized { account, amount, total_claimed }); }
     public(package) fun rewards_claimed(account: address, amount: u64, total_claimed: u256) { event::emit(RewardsClaimed { account, amount, total_claimed }); }
     public(package) fun position_created(account: address) { event::emit(PositionCreated { account }); }
+    public(package) fun wallet_registered(
+        account: address,
+        primary_store: address,
+        registered_wallet_count: u64,
+    ) {
+        event::emit(WalletRegistered {
+            account,
+            primary_store,
+            registered_wallet_count,
+        });
+    }
     public(package) fun custody_adapter_registered(
         reserve_store: address,
         lp_reward_vault: address,
@@ -219,5 +260,15 @@ module reflection_core::reflection_events {
     public(package) fun pause_changed(swaps_paused: bool, claims_paused: bool) { event::emit(PauseStateChanged { swaps_paused, claims_paused }); }
     public(package) fun operational_admin_changed(old_operational_admin: address, new_operational_admin: address) {
         event::emit(OperationalAdminChanged { old_operational_admin, new_operational_admin });
+    }
+    public(package) fun protocol_primary_store_excluded(
+        account: address,
+        store: address,
+        remaining_slots: u64,
+    ) {
+        event::emit(ProtocolPrimaryStoreExcluded { account, store, remaining_slots });
+    }
+    public(package) fun operational_primary_store_excluded(account: address, store: address) {
+        event::emit(OperationalPrimaryStoreExcluded { account, store });
     }
 }

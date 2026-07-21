@@ -6,6 +6,8 @@ import {
   lpIndexedLiability,
   sumWalletShares,
 } from "./accounting.js";
+import { checkedMoveU256Add } from "./move-domains.js";
+import { CEDRA_TESTNET_CHAIN_ID, type Address } from "../../protocol-sdk/src/types.js";
 import type {
   CriticalAlert,
   EventCursor,
@@ -35,13 +37,15 @@ function alert(
   };
 }
 
-function tuple(values: readonly (bigint | string | boolean | null)[]): string {
+function tuple(values: readonly (bigint | number | string | boolean | null)[]): string {
   return values.map((value) => value === null ? "none" : String(value)).join("/");
 }
 
 function compareLpEpoch(
   projection: ProtocolProjection,
   observed: ObservedLpEpoch,
+  replayedRegisteredAccounts: ReadonlySet<Address>,
+  observedRegisteredAccounts: ReadonlySet<Address>,
   cursor: EventCursor | null,
   alerts: CriticalAlert[],
 ): { expectedVaultBalance: bigint; calculatedLiability: bigint; backingSurplus: bigint } | null {
@@ -67,15 +71,17 @@ function compareLpEpoch(
   if (observed.indexedLiability !== calculatedLiability) {
     alerts.push(alert("LP_ACCOUNTING", "LP indexed liability differs from share/index/correction/claim arithmetic.", cursor, calculatedLiability, observed.indexedLiability, scope));
   }
-  if (
-    observed.rewardVaultBalance
-      !== observed.indexedLiability + observed.unallocatedRewards + observed.roundingReserve
-  ) {
+  const observedLpBuckets = checkedMoveU256Add(
+    checkedMoveU256Add(observed.indexedLiability, observed.unallocatedRewards, "observed LP indexed and unallocated buckets"),
+    observed.roundingReserve,
+    "observed LP vault buckets",
+  );
+  if (observed.rewardVaultBalance !== observedLpBuckets) {
     alerts.push(alert(
       "LP_VAULT_BACKING",
       "Observed LP vault does not equal indexed liability plus unallocated and rounding buckets.",
       cursor,
-      observed.indexedLiability + observed.unallocatedRewards + observed.roundingReserve,
+      observedLpBuckets,
       observed.rewardVaultBalance,
       scope,
     ));
@@ -88,6 +94,8 @@ function compareLpEpoch(
     || observed.aggregateCorrection !== expected.aggregateCorrection
     || observed.unallocatedRewards !== expected.unallocatedRewards
     || observed.roundingReserve !== expected.roundingReserve
+    || observed.terminalRoundingBaseUnits !== (expected.terminalRoundingBaseUnits ?? 0n)
+    || observed.retiredResidueMagnified !== expected.retiredResidueMagnified
     || observed.lifetimeReceived !== expected.lifetimeReceived
     || observed.lifetimeClaimed !== expected.lifetimeClaimed
     || observed.quarantined !== expected.quarantined
@@ -104,6 +112,8 @@ function compareLpEpoch(
         expected.aggregateCorrection,
         expected.unallocatedRewards,
         expected.roundingReserve,
+        expected.terminalRoundingBaseUnits ?? 0n,
+        expected.retiredResidueMagnified,
         expected.lifetimeReceived,
         expected.lifetimeClaimed,
         expected.quarantined,
@@ -116,6 +126,8 @@ function compareLpEpoch(
         observed.aggregateCorrection,
         observed.unallocatedRewards,
         observed.roundingReserve,
+        observed.terminalRoundingBaseUnits,
+        observed.retiredResidueMagnified,
         observed.lifetimeReceived,
         observed.lifetimeClaimed,
         observed.quarantined,
@@ -127,6 +139,16 @@ function compareLpEpoch(
   const observedPositions = new Map(observed.positions.map((position) => [position.owner, position]));
   for (const [owner, position] of expected.positions) {
     const chain = observedPositions.get(owner);
+    if (position.shares > 0n && !replayedRegisteredAccounts.has(owner)) {
+      alerts.push(alert(
+        "WALLET_REGISTRATION",
+        "Replayed positive LP ownership is not bound to the registered-wallet set.",
+        cursor,
+        "registered LP owner",
+        owner,
+        `${scope}-${owner}-replayed-registration`,
+      ));
+    }
     if (
       chain === undefined
       || chain.shares !== position.shares
@@ -143,6 +165,18 @@ function compareLpEpoch(
       ));
     }
     observedPositions.delete(owner);
+  }
+  for (const position of observed.positions) {
+    if (position.shares > 0n && !observedRegisteredAccounts.has(position.owner)) {
+      alerts.push(alert(
+        "WALLET_REGISTRATION",
+        "Observed positive LP ownership is not bound to the finalized registered-wallet set.",
+        cursor,
+        "registered LP owner",
+        position.owner,
+        `${scope}-${position.owner}-observed-registration`,
+      ));
+    }
   }
   for (const owner of observedPositions.keys()) {
     alerts.push(alert("POSITION_ACCOUNTING", "Observed LP position is absent from replay.", cursor, "absent", owner, `${scope}-${owner}`));
@@ -167,6 +201,74 @@ export function reconcile(
   const backingSurplus = observed.rewardVaultBalance - calculatedReflectionLiability;
   const calculatedCustodyPending = custodyPending(projection);
 
+  if (cursor === null || observed.ledgerVersion !== cursor.ledgerVersion) {
+    alerts.push(alert(
+      "LEDGER_VERSION",
+      "Finalized chain views must be pinned to the exact event-replay ledger version.",
+      cursor,
+      cursor?.ledgerVersion ?? "indexed cursor required",
+      observed.ledgerVersion,
+    ));
+    return {
+      ledgerVersion: observed.ledgerVersion,
+      expectedRewardVaultBalance,
+      calculatedReflectionLiability,
+      backingSurplus,
+      lpEpochs: [],
+      alerts,
+      reconciled: false,
+    };
+  }
+
+  if (
+    projection.chainId !== CEDRA_TESTNET_CHAIN_ID
+    || observed.chainId !== projection.chainId
+    || observed.deploymentId !== projection.deploymentId
+    || observed.networkLabel !== projection.networkLabel
+    || projection.tokenMetadata === null
+    || observed.tokenMetadata !== projection.tokenMetadata
+    || observed.protocolExclusionsRemaining !== projection.protocolExclusionsRemaining
+  ) {
+    alerts.push(alert(
+      "DEPLOYMENT_IDENTITY",
+      "Chain, registry identity, token metadata, or finite exclusion-bootstrap state disagrees with initialization evidence.",
+      cursor,
+      tuple([
+        projection.chainId,
+        projection.deploymentId,
+        projection.networkLabel,
+        projection.tokenMetadata,
+        projection.protocolExclusionsRemaining,
+      ]),
+      tuple([
+        observed.chainId,
+        observed.deploymentId,
+        observed.networkLabel,
+        observed.tokenMetadata,
+        observed.protocolExclusionsRemaining,
+      ]),
+    ));
+  }
+
+  const replayedRegisteredAccountSet = new Set(projection.registeredWallets.keys());
+  const replayedRegisteredAccounts = [...replayedRegisteredAccountSet];
+  const observedRegisteredAccounts = new Set(observed.registeredWalletAccounts);
+  const registrationsMatch = observed.registeredWalletAccounts.length === observedRegisteredAccounts.size
+    && projection.registeredWalletCount === BigInt(projection.registeredWallets.size)
+    && observed.registeredWalletCount === projection.registeredWalletCount
+    && observedRegisteredAccounts.size === projection.registeredWallets.size
+    && replayedRegisteredAccounts.every((account) => observedRegisteredAccounts.has(account));
+  if (!registrationsMatch) {
+    alerts.push(alert(
+      "WALLET_REGISTRATION",
+      "Finalized wallet registration count/set disagrees with exact-once event replay.",
+      cursor,
+      tuple([projection.registeredWalletCount, ...replayedRegisteredAccounts.sort()]),
+      tuple([observed.registeredWalletCount, ...[...observed.registeredWalletAccounts].sort()]),
+      "registered-wallets",
+    ));
+  }
+
   const observedOperationalAdmins = {
     reflectionCore: observed.coreOperationalAdmin,
     testAssets: observed.faucetOperationalAdmin,
@@ -174,7 +276,16 @@ export function reconcile(
   } as const;
   for (const key of ["reflectionCore", "testAssets", "testAmm"] as const) {
     const expected = projection.operationalAdmins[key];
-    if (expected !== null && expected !== observedOperationalAdmins[key]) {
+    if (expected === null) {
+      alerts.push(alert(
+        "OPERATIONAL_ADMIN",
+        "Deployment is not ready because an operational-admin initialization event is absent from replay.",
+        cursor,
+        "evented non-zero authority",
+        observedOperationalAdmins[key],
+        key,
+      ));
+    } else if (expected !== observedOperationalAdmins[key]) {
       alerts.push(alert(
         "OPERATIONAL_ADMIN",
         "On-chain operational admin differs from the evented publisher handoff.",
@@ -184,6 +295,19 @@ export function reconcile(
         key,
       ));
     }
+  }
+  const allAuthorityHistoriesPresent = projection.operationalAdmins.reflectionCore !== null
+    && projection.operationalAdmins.testAssets !== null
+    && projection.operationalAdmins.testAmm !== null;
+  if (projection.deploymentReady !== allAuthorityHistoriesPresent || !projection.deploymentReady) {
+    alerts.push(alert(
+      "OPERATIONAL_ADMIN",
+      "Deployment readiness requires complete core, faucet, and AMM authority histories.",
+      cursor,
+      true,
+      projection.deploymentReady,
+      "deployment-readiness",
+    ));
   }
 
   if (projection.rewardVault === null || observed.rewardVault !== projection.rewardVault) {
@@ -209,15 +333,17 @@ export function reconcile(
       "core",
     ));
   }
-  if (
-    observed.rewardVaultBalance
-      !== observed.reflectionLiability + observed.unallocatedFees + observed.roundingReserve
-  ) {
+  const observedCoreBuckets = checkedMoveU256Add(
+    checkedMoveU256Add(observed.reflectionLiability, observed.unallocatedFees, "observed core indexed and unallocated buckets"),
+    observed.roundingReserve,
+    "observed core vault buckets",
+  );
+  if (observed.rewardVaultBalance !== observedCoreBuckets) {
     alerts.push(alert(
       "VAULT_BACKING",
       "Observed core vault does not equal indexed liability plus unallocated and rounding buckets.",
       cursor,
-      observed.reflectionLiability + observed.unallocatedFees + observed.roundingReserve,
+      observedCoreBuckets,
       observed.rewardVaultBalance,
       "core-buckets",
     ));
@@ -290,6 +416,34 @@ export function reconcile(
     && observed.custodyReserveStore !== projection.custody.reserveStore
   ) {
     alerts.push(alert("VAULT_BINDING", "Canonical reserve-store identifier differs from route evidence.", cursor, projection.custody.reserveStore, observed.custodyReserveStore, "custody"));
+  }
+  if (
+    observed.poolRflReserveStore !== observed.custodyReserveStore
+    || projection.custody.reserveStore === null
+    || observed.poolRflReserveStore !== projection.custody.reserveStore
+  ) {
+    alerts.push(alert(
+      "VAULT_BINDING",
+      "AMM tRFL reserve-store view must equal the immutable custody registration.",
+      cursor,
+      projection.custody.reserveStore ?? "missing",
+      tuple([observed.poolRflReserveStore, observed.custodyReserveStore]),
+      "pool-rfl-reserve",
+    ));
+  }
+  if (
+    projection.mockUsdPoolReserve === null
+    || observed.poolUsdReserveStore !== projection.mockUsdPoolReserve
+    || observed.mockUsdPoolReserve !== projection.mockUsdPoolReserve
+  ) {
+    alerts.push(alert(
+      "VAULT_BINDING",
+      "AMM tUSD reserve and mock-asset settlement capability must equal the one-shot reserve event.",
+      cursor,
+      projection.mockUsdPoolReserve ?? "missing",
+      tuple([observed.poolUsdReserveStore, observed.mockUsdPoolReserve]),
+      "pool-tusd-reserve",
+    ));
   }
   if (
     observed.trflReserve !== observed.custodyReserveBalance
@@ -380,7 +534,14 @@ export function reconcile(
   }
   const lpResults = observed.lpEpochs
     .map((epoch) => {
-      const result = compareLpEpoch(projection, epoch, cursor, alerts);
+      const result = compareLpEpoch(
+        projection,
+        epoch,
+        replayedRegisteredAccountSet,
+        observedRegisteredAccounts,
+        cursor,
+        alerts,
+      );
       return result === null ? null : { epoch: epoch.epoch, ...result };
     })
     .filter((result): result is NonNullable<typeof result> => result !== null);

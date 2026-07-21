@@ -17,6 +17,8 @@ could create, lose, misallocate or conceal a token balance.
 - A swap quote/reserve mismatch, missing net-receipt slippage check, or bypass
   of pool pause/deadline/caps.
 - Unauthorized administration, package publication, faucet or liquidity action.
+- An operations or publisher account becoming reward-eligible, receiving LP
+  ownership, or bypassing the co-signed authority handoff.
 - Indexer/reconciler behaviour that can hide a finalized discrepancy.
 
 ## Report format
@@ -32,3 +34,9 @@ the ledger evidence.
 Every report receives a public disposition in the release changelog. Public
 beta cannot proceed with unresolved critical or high-severity findings. A
 reproducible accounting mismatch pauses swaps under `ops/INCIDENT_RESPONSE.md`.
+
+The current independent local contract re-audit reports GO with no unresolved
+Critical, High, Medium, or Low finding; SDK/indexer parity and release tooling
+also passed their local rechecks. These are dirty-tree engineering results, not
+an external human review of clean exact package bytes, a signed SDK-review
+attestation, transaction approval, or live Testnet proof.

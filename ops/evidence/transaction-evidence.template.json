@@ -1,0 +1,113 @@
+{
+  "schema_version": 2,
+  "evidence_scope": "testnet-transaction-candidate",
+  "status": "simulated-awaiting-detached-approvals",
+  "network": "cedra-testnet",
+  "api_url": "https://testnet.cedra.dev/v1",
+  "chain_id": "2",
+  "deployment_id": "RECORD_DEPLOYMENT_ID",
+  "application_commit": "RECORD_40_HEX_APPLICATION_COMMIT",
+  "exact_address_artifacts_sha256": "RECORD_64_HEX_EXACT_ADDRESS_MANIFEST_DIGEST",
+  "public_profile_binding": {
+    "evidence_sha256": "RECORD_64_HEX_PUBLIC_PROFILE_EVIDENCE_DIGEST",
+    "public_role_candidate_sha256": "RECORD_64_HEX_PUBLIC_ROLE_CANDIDATE_DIGEST",
+    "derivation_method": "sha3-256(ed25519_public_key_bytes || 0x00)",
+    "derivation_tool": "OpenSSL dgst -sha3-256",
+    "assembler_revalidation_sdk_package": "@cedra-labs/ts-sdk",
+    "assembler_revalidation_sdk_version": "2.2.8",
+    "profiles": {
+      "core_publisher": { "profile_name": "cedra-reflect-core-publisher", "address": "RECORD_CORE_PUBLISHER_ADDRESS", "public_key": "ed25519-pub-0xRECORD_64_HEX_CORE_PUBLIC_KEY" },
+      "assets_publisher": { "profile_name": "cedra-reflect-assets-publisher", "address": "RECORD_ASSETS_PUBLISHER_ADDRESS", "public_key": "ed25519-pub-0xRECORD_64_HEX_ASSETS_PUBLIC_KEY" },
+      "amm_publisher": { "profile_name": "cedra-reflect-amm-publisher", "address": "RECORD_AMM_PUBLISHER_ADDRESS", "public_key": "ed25519-pub-0xRECORD_64_HEX_AMM_PUBLIC_KEY" },
+      "operations": { "profile_name": "cedra-reflect-operations", "address": "RECORD_OPERATIONS_ADDRESS", "public_key": "ed25519-pub-0xRECORD_64_HEX_OPERATIONS_PUBLIC_KEY" },
+      "bootstrap_lp": { "profile_name": "cedra-reflect-bootstrap-lp", "address": "RECORD_BOOTSTRAP_LP_ADDRESS", "public_key": "ed25519-pub-0xRECORD_64_HEX_BOOTSTRAP_LP_PUBLIC_KEY" }
+    }
+  },
+  "build_environment": {
+    "repository_head_commit": "RECORD_40_HEX_CURRENT_CLEAN_HEAD_COMMIT",
+    "repository_head_tree": "RECORD_40_HEX_CURRENT_CLEAN_HEAD_TREE",
+    "release_executable_closure_file": "ops/evidence/release-executable-closure.json",
+    "release_executable_closure_sha256": "RECORD_64_HEX_REVIEWED_RELEASE_EXECUTABLE_CLOSURE_DIGEST",
+    "package_lock_file": "package-lock.json",
+    "package_lock_sha256": "RECORD_64_HEX_PACKAGE_LOCK_DIGEST",
+    "sdk_package": "@cedra-labs/ts-sdk",
+    "sdk_version": "2.2.8",
+    "sdk_lock_integrity": "sha512-RECORD_PACKAGE_LOCK_SDK_INTEGRITY",
+    "sdk_review_pin_file": "ops/evidence/reviewed-cedra-sdk-2.2.8.json",
+    "sdk_review_pin_sha256": "RECORD_64_HEX_REVIEWED_SDK_ARTIFACT_PIN_DIGEST",
+    "sdk_package_json_sha256": "RECORD_64_HEX_LOADED_SDK_PACKAGE_JSON_DIGEST",
+    "sdk_loaded_entrypoint": "RECORD_RELATIVE_LOADED_SDK_ENTRYPOINT",
+    "sdk_loaded_entrypoint_sha256": "RECORD_64_HEX_LOADED_SDK_ENTRYPOINT_DIGEST",
+    "sdk_package_tree_sha256": "RECORD_64_HEX_LOADED_SDK_PACKAGE_TREE_DIGEST",
+    "sdk_package_file_count": 1,
+    "sdk_review_attestation_sha256": "RECORD_64_HEX_SIGNED_SDK_REVIEW_ATTESTATION_DIGEST",
+    "sdk_review_signature_sha256": "RECORD_64_HEX_SDK_REVIEW_SIGNATURE_DIGEST",
+    "sdk_review_signature_namespace": "cedra-reflect-sdk-review-v1",
+    "sdk_review_reviewer_identity": "RECORD_EXTERNAL_SDK_REVIEWER_IDENTITY",
+    "sdk_review_trusted_signers_sha256": "RECORD_64_HEX_SDK_REVIEW_TRUST_ANCHOR_DIGEST"
+  },
+  "roles": {
+    "core_publisher": "RECORD_CORE_PUBLISHER_ADDRESS",
+    "assets_publisher": "RECORD_ASSETS_PUBLISHER_ADDRESS",
+    "amm_publisher": "RECORD_AMM_PUBLISHER_ADDRESS",
+    "operations": "RECORD_OPERATIONS_ADDRESS",
+    "bootstrap_lp": "RECORD_BOOTSTRAP_LP_ADDRESS"
+  },
+  "transaction_kind": "package_publish",
+  "operation_key": "core_publish",
+  "transaction": {
+    "sender": "RECORD_CORE_PUBLISHER_ADDRESS",
+    "secondary_signers": [],
+    "sequence_number": "RECORD_DECIMAL_SEQUENCE_NUMBER",
+    "expiration_timestamp_secs": "RECORD_DECIMAL_EXPIRATION_TIMESTAMP_SECS",
+    "max_gas_amount": "RECORD_DECIMAL_MAX_GAS_AMOUNT",
+    "gas_unit_price": "RECORD_DECIMAL_GAS_UNIT_PRICE",
+    "payload": {
+      "type": "entry_function_payload",
+      "function": "0x1::code::publish_package_txn",
+      "type_arguments": [],
+      "arguments": [
+        "RECORD_EXACT_0X_HEX_PACKAGE_METADATA",
+        ["RECORD_EXACT_ORDERED_0X_HEX_MODULE_BYTES"]
+      ]
+    }
+  },
+  "transaction_identity": {
+    "transactionType": "single-signer",
+    "senderAddress": "RECORD_CANONICAL_64_NYBBLE_CORE_PUBLISHER_ADDRESS",
+    "secondarySignerAddresses": [],
+    "feePayerAddress": null,
+    "sequenceNumber": "RECORD_SAME_DECIMAL_SEQUENCE_NUMBER",
+    "maxGasAmount": "RECORD_SAME_DECIMAL_MAX_GAS_AMOUNT",
+    "gasUnitPrice": "RECORD_SAME_DECIMAL_GAS_UNIT_PRICE",
+    "expirationTimestampSeconds": "RECORD_SAME_DECIMAL_EXPIRATION_TIMESTAMP_SECS",
+    "chainId": 2,
+    "fungibleAssetGasType": "0x1::cedra_coin::CedraCoin",
+    "rawTransactionBcsHex": "RECORD_EXACT_0X_HEX_RAW_TRANSACTION_BCS",
+    "rawTransactionSha256": "RECORD_64_HEX_RAW_TRANSACTION_BCS_DIGEST",
+    "transactionBcsHex": "RECORD_EXACT_0X_HEX_SINGLE_OR_MULTI_AGENT_TRANSACTION_BCS",
+    "transactionSha256": "RECORD_64_HEX_SINGLE_OR_MULTI_AGENT_TRANSACTION_BCS_DIGEST",
+    "signingMessageHex": "RECORD_EXACT_0X_HEX_SDK_SIGNING_MESSAGE",
+    "signingMessageSha256": "RECORD_64_HEX_SDK_SIGNING_MESSAGE_DIGEST"
+  },
+  "transaction_semantics_sha256": "RECORD_64_HEX_CANONICAL_TRANSACTION_SEMANTICS_DIGEST",
+  "gas_budget": {
+    "approved_max_gas_amount": "RECORD_DECIMAL_MAX_GAS_AMOUNT",
+    "approved_max_gas_unit_price": "RECORD_DECIMAL_MAX_GAS_UNIT_PRICE",
+    "approved_max_total_fee_base_units": "RECORD_DECIMAL_WORST_CASE_TOTAL_FEE"
+  },
+  "simulation": {
+    "captured_at": "RECORD_RFC3339_TIMESTAMP",
+    "success": true,
+    "vm_status": "RECORD_SIMULATION_VM_STATUS",
+    "gas_used": "RECORD_DECIMAL_SIMULATED_GAS_USED",
+    "raw_response_file": "simulation-response.json",
+    "raw_response_sha256": "RECORD_64_HEX_SIMULATION_RESPONSE_DIGEST",
+    "transaction_semantics_sha256": "RECORD_SAME_64_HEX_TRANSACTION_SEMANTICS_DIGEST"
+  },
+  "publish_binding": {
+    "package_key": "reflection_core",
+    "publish_payload_sha256": "RECORD_64_HEX_EXACT_PUBLISH_PAYLOAD_DIGEST",
+    "compiled_package_files_manifest_sha256": "RECORD_64_HEX_COMPILED_PACKAGE_FILE_MANIFEST_DIGEST"
+  }
+}

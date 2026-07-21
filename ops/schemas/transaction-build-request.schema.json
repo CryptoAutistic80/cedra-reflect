@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/CryptoAutistic80/cedra-reflect/ops/schemas/transaction-build-request.schema.json",
+  "title": "Cedra Reflect keyless Testnet transaction build request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "evidence_scope",
+    "network",
+    "api_url",
+    "chain_id",
+    "gas_asset",
+    "deployment_id",
+    "operation_key",
+    "application_commit",
+    "exact_address_artifacts_sha256",
+    "public_profile_evidence_sha256",
+    "roles",
+    "profile_public_keys",
+    "transaction_controls",
+    "gas_budget",
+    "seed_amounts"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "evidence_scope": { "const": "testnet-transaction-build-request" },
+    "network": { "const": "cedra-testnet" },
+    "api_url": { "const": "https://testnet.cedra.dev/v1" },
+    "chain_id": { "const": "2" },
+    "gas_asset": { "const": "0x1::cedra_coin::CedraCoin" },
+    "deployment_id": { "type": "string", "pattern": "^[A-Za-z0-9._-]{1,80}$" },
+    "operation_key": {
+      "enum": [
+        "core_publish",
+        "core_initialize",
+        "assets_publish",
+        "amm_publish",
+        "faucet_initialize",
+        "amm_tusd_claim",
+        "pool_initialize",
+        "atomic_operational_handoff",
+        "pool_seed"
+      ]
+    },
+    "application_commit": { "$ref": "#/$defs/commit" },
+    "exact_address_artifacts_sha256": { "$ref": "#/$defs/sha256" },
+    "public_profile_evidence_sha256": { "$ref": "#/$defs/sha256" },
+    "roles": { "$ref": "#/$defs/roles" },
+    "profile_public_keys": { "$ref": "#/$defs/public_keys" },
+    "transaction_controls": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sequence_number", "max_gas_amount", "gas_unit_price", "expiration_timestamp_secs"],
+      "properties": {
+        "sequence_number": { "$ref": "#/$defs/decimal" },
+        "max_gas_amount": { "$ref": "#/$defs/positive_decimal" },
+        "gas_unit_price": { "$ref": "#/$defs/positive_decimal" },
+        "expiration_timestamp_secs": { "$ref": "#/$defs/positive_decimal" }
+      }
+    },
+    "gas_budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["approved_max_gas_amount", "approved_max_gas_unit_price", "approved_max_total_fee_base_units"],
+      "properties": {
+        "approved_max_gas_amount": { "$ref": "#/$defs/positive_decimal" },
+        "approved_max_gas_unit_price": { "$ref": "#/$defs/positive_decimal" },
+        "approved_max_total_fee_base_units": { "$ref": "#/$defs/positive_decimal" }
+      }
+    },
+    "seed_amounts": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/seed_amounts" }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "operation_key": { "const": "pool_seed" } },
+        "required": ["operation_key"]
+      },
+      "then": { "properties": { "seed_amounts": { "$ref": "#/$defs/seed_amounts" } } },
+      "else": { "properties": { "seed_amounts": { "type": "null" } } }
+    }
+  ],
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "address": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{1,64}$",
+      "not": { "pattern": "^0x0+$" }
+    },
+    "decimal": { "type": "string", "pattern": "^(0|[1-9][0-9]*)$" },
+    "positive_decimal": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+    "public_key": { "type": "string", "pattern": "^ed25519-pub-0x[0-9a-f]{64}$" },
+    "roles": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["core_publisher", "assets_publisher", "amm_publisher", "operations", "bootstrap_lp"],
+      "properties": {
+        "core_publisher": { "$ref": "#/$defs/address" },
+        "assets_publisher": { "$ref": "#/$defs/address" },
+        "amm_publisher": { "$ref": "#/$defs/address" },
+        "operations": { "$ref": "#/$defs/address" },
+        "bootstrap_lp": { "$ref": "#/$defs/address" }
+      }
+    },
+    "public_keys": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["core_publisher", "assets_publisher", "amm_publisher", "operations", "bootstrap_lp"],
+      "properties": {
+        "core_publisher": { "$ref": "#/$defs/public_key" },
+        "assets_publisher": { "$ref": "#/$defs/public_key" },
+        "amm_publisher": { "$ref": "#/$defs/public_key" },
+        "operations": { "$ref": "#/$defs/public_key" },
+        "bootstrap_lp": { "$ref": "#/$defs/public_key" }
+      }
+    },
+    "seed_amounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rfl_amount", "usd_amount", "min_lp_shares"],
+      "properties": {
+        "rfl_amount": { "$ref": "#/$defs/positive_decimal" },
+        "usd_amount": { "$ref": "#/$defs/positive_decimal" },
+        "min_lp_shares": { "$ref": "#/$defs/positive_decimal" }
+      }
+    }
+  }
+}

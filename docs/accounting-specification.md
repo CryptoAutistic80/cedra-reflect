@@ -6,7 +6,10 @@ suite.  It deliberately does not prescribe Cedra object layouts or hook APIs.
 
 ## Scope and units
 
-All tRFL and tUSD values are non-negative integer base units.  A percentage is
+All tRFL/tUSD amounts, store balances, reserves, swap inputs/outputs, and vault
+base units are `u64`. LP share amounts and both global/LP share totals are
+`u128`; indexes, lifetime counters, and magnified correction arithmetic are
+bounded to `u256`. A percentage is
 expressed in basis points (bps), with `10_000 bps = 100%`. The initial reflection
 fee is configurable only from `0` through `100 bps`; the normal setting is
 `100 bps` (1%).  No minimum fee is imposed: a fee that rounds below one base
@@ -24,8 +27,14 @@ shares:
 - `distribution_vault`, which holds undistributed fixed supply;
 - `reward_vault`, which physically backs every reflection fee;
 - every LP reward vault;
-- the core, faucet, and AMM operator primary stores; and
-- explicitly registered contract/escrow primary stores.
+- the three package-publisher primary stores; and
+- every current or former operational primary store.
+
+The asset and AMM publisher exclusions consume exactly two finite bootstrap
+slots and require those publishers to co-sign while their stores are empty and
+unregistered. Operational exclusions use a separate permanent path: every new
+operations signer must have an empty, unregistered tRFL primary store, and role
+rotation never re-enables an old operations store.
 
 There are exactly two global-share position classes:
 
@@ -57,6 +66,19 @@ store has zero pending reward regardless of raw balance. A position first
 becoming eligible is attached at the current index and cannot claim earlier
 fees.
 
+An account-controlled vault may use that controller account's canonical
+primary store and register it as one wallet position. In that case the entire
+store accrues to that single account address; the protocol neither discovers
+depositors nor apportions the account's reward among them. A custom or
+secondary vault store remains unsupported and fails closed. Only the canonical
+AMM adapter performs reviewed beneficial-owner passthrough to LP positions.
+
+The first successful registration emits exactly one
+`WalletRegistered { account, primary_store, registered_wallet_count }` event.
+Explicit registration is idempotent, and implicit signer-authenticated receipt
+paths use the same helper, so replay never observes a second registration event
+for the same account.
+
 The pool has no generic transfer entry point. Its tRFL reserve can change only
 through authenticated bootstrap, canonical `buy`/`sell`, proportional liquidity
 operations, and epoch shutdown/reseed. The core reward vault releases tRFL only
@@ -67,16 +89,39 @@ an untaxed direct reserve or vault transfer from bypassing accounting.
 ## Publisher and operational authority
 
 The core, test-assets, and AMM package publishers are cold authorities for
-package-owned resources and narrow capability issuance. Each publisher may set
-a non-zero operational address through an evented entry function. Routine
-reflection-fee, pause, faucet, shutdown, swap-limit, and liquidity-limit calls
-authenticate that operational address instead of the publisher after handoff.
+package-owned resources and narrow capability issuance. An operational handoff
+requires the destination account's signer, not a bare address. The normal path
+is one atomic four-signer AMM-coordinator entry that authenticates all three
+publishers plus the new operations signer and rolls every authority change back
+if any package check fails. Individual package handoffs exist only as explicit
+recovery surfaces and retain the same destination-signature requirement.
+Routine reflection-fee, pause, faucet, shutdown, swap-limit, and
+liquidity-limit calls authenticate that operational address instead of the
+publisher after handoff.
 
-The publisher may rotate the operational address, but the old operational key
-loses authority immediately and the publisher does not implicitly retain
-routine authority. Every handoff is replayed by the indexer and compared with
-the three on-chain operational-admin views. This separation changes no balance,
-index, correction, reserve, vault, or LP state.
+The new operations account must be distinct from every publisher, must never
+have registered or funded its tRFL primary store, and must never have held LP
+shares. Its primary store is permanently excluded in the same transaction.
+Pool seed, reseed, add-liquidity, and LP-transfer paths reject the operations
+role, so neutrality remains true after handoff. A later atomic rotation removes
+the old key's authority while leaving both old and new primary stores excluded.
+Every authority and exclusion event is replayed by the indexer and compared
+with the three on-chain operational-admin views. This separation changes no
+balance, index, correction, reserve, vault, or LP entitlement.
+
+Initial seed and later reseed operations authenticate the LP beneficiary as a
+signer. The signer must be non-excluded and must not be any publisher or current
+operational authority. Seed/reseed then registers a fresh authenticated wallet
+atomically before minting its LP position; an already registered eligible wallet
+is accepted idempotently. This prevents permanent LP ownership from being
+assigned to a typo, an excluded control account, or an address whose control was
+not proved in the transaction.
+
+`begin_shutdown` is permitted only while LP claims are unpaused. Shutdown
+locks pause reconfiguration, and full-position removal may need to auto-pay an
+LP claim; accepting a claims-paused shutdown would therefore create a permanent
+operator-induced exit deadlock. The preflight occurs before any pause or
+shutdown field changes, so rejection is atomic.
 
 ## State and position formula
 
@@ -85,7 +130,7 @@ The global state contains:
 ```text
 index: u256                    // magnified reward per eligible raw tRFL
 index_remainder: u256          // carried integer-division residue
-total_shares: u256             // sum of eligible raw tRFL
+total_shares: u128             // sum of eligible raw tRFL
 aggregate_correction: signed   // sum of per-position corrections
 unallocated_fees: u128         // fees collected while total_shares was zero
 rounding_reserve: u128         // whole vault units not yet indexed liability
@@ -211,9 +256,10 @@ this automatic materialisation path; a transfer or sell backed entirely by raw
 balance remains possible. In claim-backed mode, withdrawal and deposit hooks
 still maintain corrections for standard transfers, the derived hook returns raw
 balance, and a spend requires enough raw balance until an explicit on-chain
-claim materialises pending rewards. The mode is selected by the one-time
-post-publication initializer and has no setter, conversion resource, or
-migration path in this package version. The published core, asset, and AMM
+claim materialises pending rewards. The publishable Testnet initializer hardcodes
+claim-backed mode after the compatibility probe; automatic mode is exercised
+only in test bytecode. There is no setter, conversion resource, or migration
+path in this package version. The publishable core, asset, and AMM
 packages use immutable upgrade policy; changing this logic requires a visibly
 fresh deployment and a new release manifest.
 
@@ -236,8 +282,8 @@ the pool correction. The downstream LP index then accounts for the received
 funds exactly.
 
 Only the active epoch vault bound to the canonical adapter may receive current
-custody rewards. An old claim-only epoch remains withdrawable by its existing
-positions but never receives a current-pool checkpoint.
+custody rewards. A terminal claim-only epoch never receives a current-pool
+checkpoint and has no remaining indexed liability.
 
 ## LP reward epochs
 
@@ -248,10 +294,12 @@ excluded reward vault:
 status: ACTIVE | CLAIM_ONLY
 index: u256
 index_remainder: u256
-total_lp_shares: u256
+total_lp_shares: u128
 aggregate_correction: signed
 unallocated_rewards: u128
 rounding_reserve: u128
+terminal_rounding_reserve: u128
+retired_residue_magnified: u256
 lifetime_received: u256
 lifetime_claimed: u256
 ```
@@ -273,27 +321,80 @@ lp_reward_vault[e]
 ```
 
 An active epoch receiving `x` advances its index with the same magnified
-remainder algorithm as the core. A zero-denominator receipt is recorded in
-`unallocated_rewards`, pauses LP mutation, and is never silently assigned to a
-later provider. Mint, burn, and module-mediated transfer apply signed
+remainder algorithm as the core. A defense-in-depth zero-denominator receipt is
+recorded in `unallocated_rewards`, sets the epoch's quarantine flag, freezes
+share/index mutation, and is never silently assigned to a later provider. A
+claim against entitlement indexed before quarantine skips active checkpointing
+and remains payable; the quarantined receipt itself never enters the index.
+Mint, burn, and module-mediated transfer apply signed
 corrections at one LP index, so new shares receive no historical reward and
 removed shares retain everything already earned.
 
 An LP claim increments only that position's settled amount and
 `lifetime_claimed`, then moves the exact tRFL from that epoch vault into the
 claimant's registered wallet at the current global index. It does not change LP
-shares or raw reserves. Claiming from `CLAIM_ONLY` epoch `e` never checkpoints
-the active pool and cannot mutate any other epoch.
+shares or raw reserves.
 
-At shutdown, the active epoch routes custody pending before the final burn and
-returns every residual reserve unit on the final withdrawal. It then becomes
-`CLAIM_ONLY`; old zero-share positions keep their indexed claims. Reseeding is
-allowed only after raw reserve, custody shares, and custody pending are zero,
-and creates a fresh epoch state/table/vault. `CLAIM_ONLY` is terminal. Because
-separate sub-base-unit position fractions can sum to a whole aggregate unit,
-an old vault may retain named aggregate liability even when each individual
-pending view is zero. That residue stays backed in the old vault and is never
-swept, reassigned, or carried into a fresh epoch.
+Before a burn or module-mediated transfer takes an owner's LP shares to zero,
+the pool pays every whole pending unit into that owner's registered wallet. If
+payment is required while LP claims are paused, the complete transaction aborts
+and all checkpoint, payout, reserve, and share mutations roll back. A zero-pending
+exit remains available while paused because it moves no reward-vault value.
+
+After the whole payout, a zero-share position must satisfy:
+
+```text
+claimed[q] * M <= correction[q] < (claimed[q] + 1) * M
+residue[q] = correction[q] - claimed[q] * M
+correction[q] -= residue[q]
+aggregate_correction[e] -= residue[q]
+retired_residue_magnified[e] += residue[q]
+```
+
+Only the fractional magnified residue is removed. Recomputing the physical
+three-bucket identity may reclassify one or more combined whole base units from
+aggregate liability into `rounding_reserve`; those units are not paid to the
+admin, the last LP, a transferee, or a later cohort.
+
+At shutdown, the active epoch routes custody pending before each burn. Every
+shutdown removal bypasses `max_withdrawal_share_bps`, so an operator cannot set
+a tiny cap and strand fragmented holders after pause configuration is locked.
+A non-final proportional burn may return exactly one zero asset when the other
+asset is nonzero; the pool conditionally moves only the nonzero assets. Both-zero
+output remains invalid, and both caller-supplied minimums remain binding. The
+final withdrawal returns every residual reserve unit. Closure requires
+`total_lp_shares == 0`, indexed liability `== 0`, and
+`unallocated_rewards == 0`. It records the remaining physical vault balance as
+immutable `terminal_rounding_reserve`, emits exact terminal evidence, and then
+becomes `CLAIM_ONLY`. Reseeding is allowed only after raw reserve, custody
+shares, and custody pending are zero. A fresh epoch state/table/vault is
+created; before fresh custody shares enter, the route opener normalizes the
+zero-share custody correction to
+`lifetime_custody_routed * M`, subtracts the exact sub-base-unit residue from
+both custody and aggregate corrections, recomputes core rounding, and emits
+`CustodyEpochRouteOpened.retired_residue_magnified`. No sweep or migration
+surface exists, and no later epoch can address the old vault.
+
+Replay consumes two unit-explicit events:
+
+```text
+LpFractionalResidueRetired {
+  epoch: u64, owner: address, residue_magnified: u256,
+  cumulative_retired_residue_magnified: u256,
+  rounding_reserve_base_units: u128
+}
+LpEpochTerminalDustClassified {
+  epoch: u64, reward_vault: address,
+  terminal_rounding_base_units: u128,
+  retired_residue_magnified: u256,
+  lifetime_received_base_units: u256,
+  lifetime_claimed_base_units: u256
+}
+```
+
+`pool::lp_epoch_terminal_dust(epoch)` returns
+`(terminal_rounding_base_units: u128, retired_residue_magnified: u256)`. The
+existing nine-field `lp_epoch_accounting` return shape is unchanged.
 
 The canonical pool uses a controlled project bootstrap instead of burned
 minimum-liquidity shares. Public liquidity cannot be first. Thus every issued
@@ -336,13 +437,19 @@ usd_out = floor(burn × U / T)
 The final `burn == T` shutdown withdrawal returns all remaining `R` and `U`
 rather than flooring. It is available only in shutdown mode after the custody
 checkpoint. Minimum-output and deadline checks occur in the same atomic
-transaction.
+transaction. Outside shutdown, a non-final removal still requires both outputs
+to be positive. During shutdown, exactly one side may floor to zero, provided
+the other is positive and both explicit minima are satisfied; each nonzero side
+is settled independently.
 
 ## Canonical AMM settlement
 
 The only initial pool is a project-managed constant-product `tRFL/tUSD` pool. Its
-AMM fee is a distinct configurable value (the reference model defaults to
-30 bps).  The AMM fee remains in the reserve; pricing uses only:
+AMM fee is a distinct configurable value bounded to `0..100 bps` (default
+`30 bps`). Gross input is also bounded by the configured absolute maximum and
+by `max_reserve_bps` of the input reserve (defaults: `100_000_000_000` base
+units and `2_000 bps`). The same reserve-percentage cap is checked against gross
+output. The AMM fee remains in the reserve; pricing uses only:
 
 ```text
 invariant_input = floor(net_input × (10_000 - amm_fee_bps) / 10_000)
@@ -360,8 +467,9 @@ would round the invariant input up and is not conformant.
 
 For a seller's `gross_rfl`:
 
-1. Materialise only the pending shortfall if necessary, then debit seller raw
-   tRFL by `gross_rfl`.
+1. Require the seller's raw balance to cover `gross_rfl`, then debit it. The
+   publishable immutable Testnet mode does not auto-materialise a pending
+   shortfall; the holder must claim first.
 2. Compute `reflection_fee` and `net_rfl` from gross input.
 3. Credit `reflection_fee` to the reward vault and advance the global index
    across the seller's remaining wallet units and the pre-trade pool custody
@@ -406,10 +514,13 @@ Every implementation and the indexer must enforce or continuously verify:
 6. A custody checkpoint reduces core accounted funds and increases the active
    LP epoch's accounted funds by the same amount without changing reserves.
 7. `sum(LP position shares) == total_lp_shares` for every epoch.
-8. Only `ACTIVE` epoch can mutate its index/shares; `CLAIM_ONLY` epochs can only
-   satisfy existing claims; new epochs reuse no old vault, table, or liability.
-9. Zero active LP shares implies zero pool raw reserve, zero custody shares, and
-   zero custody pending.
+8. Only an `ACTIVE` epoch can mutate its index/shares. A normal `CLAIM_ONLY`
+   epoch has zero indexed liability and unallocated rewards, an immutable
+   terminal dust balance, and no path into a new epoch.
+9. Zero active LP shares normally implies zero pool raw reserve, zero custody
+   shares, and zero custody pending. The sole exception is a quarantined
+   defense-in-depth receipt: it has positive named `unallocated_rewards`, zero
+   custody pending, and all pool/share/index mutation is frozen.
 10. `0 <= fee_bps <= 100`; no successful supported swap charges more than 1%.
 11. Wallet and LP claims preserve combined effective value exactly.
 12. Wallet transfer and wallet/custody representation changes preserve all
@@ -419,6 +530,16 @@ Every implementation and the indexer must enforce or continuously verify:
     decreases it by gross pool output and credits the buyer exactly net output.
 14. LP checkpoints and claims never alter raw reserves, quotes, or `R × U`.
 15. No direct pool, custody, LP-share, or reward-vault bypass succeeds.
+16. Every zero-share LP position is normalized to `claimed * M`; only its
+    fractional residue is retired from the aggregate correction.
+17. Epoch closure emits exactly one terminal classification whose physical base
+    units equal the old vault balance. There is no admin, last-LP, transferee,
+    or future-cohort redirect.
+18. `0 <= amm_fee_bps <= 100`; every token/reserve amount is within `u64`, while
+    LP share state remains within `u128`.
+19. Shutdown cannot begin while LP claims are paused; once begun, every
+    non-final burn is independent of the operator withdrawal-share cap, rejects
+    both-zero output, and enforces both user minima.
 
 ## Initial schema and fresh-deployment recovery
 
@@ -439,10 +560,18 @@ contract retains no migration or privileged balance-edit surface.
 
 The hand-authored deterministic reference vector is
 [`python/test_vectors/basic_accounting.json`](../python/test_vectors/basic_accounting.json).
+It uses the deployment's exact fixed supply
+`1_000_000_000_000_000`, so its distribution-vault balance requires no hidden
+offset when compared with Move.
 The fixed-seed mixed-operation witness is
 [`python/test_vectors/seeded_mixed_accounting.json`](../python/test_vectors/seeded_mixed_accounting.json),
 and its generated Move replay is
 [`move/integration-tests/tests/seeded_conformance_generated.move`](../move/integration-tests/tests/seeded_conformance_generated.move).
+The same generator also emits
+[`python/test_vectors/lifecycle_accounting.json`](../python/test_vectors/lifecycle_accounting.json),
+whose Move replay proves shutdown through epoch-two reseed, custody route
+residue, wallet correction/materialised values, historical and active epoch
+state, terminal dust, and a separately quarantined zero-denominator receipt.
 The generator executes the independent model, validates every intermediate
 state, and emits both artifacts. The verification gate rejects drift:
 
@@ -463,7 +592,7 @@ operations and a periodic full invariant audit:
 
 ```bash
 REFLECTION_MODEL_OPERATIONS=1000000 REFLECTION_MODEL_HOLDERS=1024 \
-PYTHONPATH=python python3 -m unittest python.tests.test_accounting_model.RandomizedPropertyTests.test_seeded_randomized_accounting -v
+PYTHONPATH=python python3 scripts/run_model_gate.py
 ```
 
 The large-model random seed is fixed in the test source and the operation count

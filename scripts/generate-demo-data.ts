@@ -13,12 +13,16 @@ const event: ProtocolEvent = {
   timestampUnixMilliseconds: 1_700_000_000_000n,
   source: "fixture",
   type: "ProtocolInitialized",
+  deploymentId: "reflection-pilot-001",
+  networkLabel: "cedra-testnet",
+  tokenMetadata: "0x1000",
   automaticMaterialization: false,
   feeBps: 100n,
   initialIndex: 0n,
   packageVersion: "testnet-v0.1.0",
   rewardVault: "0x1001",
   distributionVault: "0x1002",
+  protocolExclusionSlots: 2n,
 };
 
 const store = new InMemoryIndexerStore();

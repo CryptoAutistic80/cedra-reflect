@@ -11,7 +11,9 @@ export const TEST_ACCOUNT = "0xa11ce" as Address;
 export const TEST_BOB = "0xb0b" as Address;
 export const CORE_REWARD_VAULT = "0x1001" as Address;
 export const DISTRIBUTION_VAULT = "0x1002" as Address;
+export const TOKEN_METADATA = "0x1000" as Address;
 export const CUSTODY_RESERVE = "0x2001" as Address;
+export const USD_RESERVE = "0x2002" as Address;
 export const LP_REWARD_VAULT = "0x3001" as Address;
 
 export function baseEvent(overrides: Partial<EventBase> = {}): EventBase {
@@ -89,7 +91,14 @@ export function mockReadState(): MockReadState {
 
 export function observationFixture(): ObservedAccountingSnapshot {
   return {
+    chainId: 2,
     ledgerVersion: 2n,
+    deploymentId: "reflection-pilot-001",
+    networkLabel: "cedra-testnet",
+    tokenMetadata: TOKEN_METADATA,
+    protocolExclusionsRemaining: 2n,
+    registeredWalletCount: 0n,
+    registeredWalletAccounts: [],
     automaticMaterialization: false,
     rewardVault: CORE_REWARD_VAULT,
     rewardVaultBalance: 0n,
@@ -105,6 +114,9 @@ export function observationFixture(): ObservedAccountingSnapshot {
     lifetimeCustodyRouted: 0n,
     custodyAdapterId: 1n,
     custodyReserveStore: CUSTODY_RESERVE,
+    poolRflReserveStore: CUSTODY_RESERVE,
+    poolUsdReserveStore: USD_RESERVE,
+    mockUsdPoolReserve: USD_RESERVE,
     custodyReserveBalance: 0n,
     custodyShares: 0n,
     custodyCorrection: 0n,

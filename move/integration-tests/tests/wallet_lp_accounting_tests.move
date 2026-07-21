@@ -12,6 +12,7 @@ module integration_tests::wallet_lp_accounting_tests {
     use test_assets::test_faucet;
 
     const ONE: u64 = 1_000_000;
+    const TRILLION: u64 = 1_000_000_000_000;
 
     fun setup(core: &signer, assets: &signer, amm: &signer, framework: &signer) {
         timestamp::set_time_has_started_for_testing(framework);
@@ -20,6 +21,199 @@ module integration_tests::wallet_lp_accounting_tests {
         test_faucet::initialize(core, assets);
         pool::initialize(core, assets, amm);
         test_faucet::configure(assets, 1_000 * ONE, 1_000 * ONE, 0);
+    }
+
+    fun setup_claim_backed(
+        core: &signer,
+        assets: &signer,
+        amm: &signer,
+        framework: &signer,
+    ) {
+        timestamp::set_time_has_started_for_testing(framework);
+        reflection_token::initialize_claim_backed_for_test(core);
+        mock_usd::initialize_for_test(assets);
+        test_faucet::initialize(core, assets);
+        pool::initialize(core, assets, amm);
+    }
+
+    #[test(
+        core = @0xcafe,
+        assets = @0xbabe,
+        amm = @0xdead,
+        framework = @0x1,
+        alice = @0xa11ce,
+        bob = @0xb0b,
+    )]
+    fun full_lp_transfer_auto_pays_sender_before_zeroing(
+        core: &signer,
+        assets: &signer,
+        amm: &signer,
+        framework: &signer,
+        alice: &signer,
+        bob: &signer,
+    ) {
+        setup_claim_backed(core, assets, amm, framework);
+        test_faucet::configure(assets, 10 * ONE, 100 * ONE, 0);
+        test_faucet::claim_trfl(alice);
+        test_faucet::claim_tusd(amm);
+        reflection_token::register_wallet(bob);
+        pool::seed_liquidity(core, amm, alice, 100 * ONE, 100 * ONE, 1);
+        pool::sell_trfl(alice, 10 * ONE, 0, 1_000);
+        pool::checkpoint_lp_rewards(bob);
+        let pending = pool::pending_lp_rewards(1, signer::address_of(alice));
+        assert!(pending > 0, 901);
+        let alice_raw = reflection_token::raw_balance(signer::address_of(alice));
+        let shares = pool::lp_shares(1, signer::address_of(alice));
+
+        pool::transfer_lp_shares(alice, signer::address_of(bob), shares);
+
+        assert!(pool::lp_shares(1, signer::address_of(alice)) == 0, 902);
+        assert!(pool::pending_lp_rewards(1, signer::address_of(alice)) == 0, 903);
+        assert!(reflection_token::raw_balance(signer::address_of(alice)) == alice_raw + pending, 904);
+        assert!(pool::pending_lp_rewards(1, signer::address_of(bob)) == 0, 905);
+        reflection_token::assert_accounting_backing();
+    }
+
+    #[test(
+        core = @0xcafe,
+        assets = @0xbabe,
+        amm = @0xdead,
+        framework = @0x1,
+        lp0 = @0x1000,
+        lp1 = @0x1001,
+        lp2 = @0x1002,
+        lp3 = @0x1003,
+        lp4 = @0x1004,
+        lp5 = @0x1005,
+        lp6 = @0x1006,
+        lp7 = @0x1007,
+        lp8 = @0x1008,
+        lp9 = @0x1009,
+        trader = @0x7ade,
+        fresh_lp = @0xf123,
+    )]
+    fun ten_fragmented_positions_classify_nine_terminal_units(
+        core: &signer,
+        assets: &signer,
+        amm: &signer,
+        framework: &signer,
+        lp0: &signer,
+        lp1: &signer,
+        lp2: &signer,
+        lp3: &signer,
+        lp4: &signer,
+        lp5: &signer,
+        lp6: &signer,
+        lp7: &signer,
+        lp8: &signer,
+        lp9: &signer,
+        trader: &signer,
+        fresh_lp: &signer,
+    ) {
+        setup_claim_backed(core, assets, amm, framework);
+        test_faucet::configure(assets, 900, 1_010, 0);
+        test_faucet::claim_trfl(trader);
+        test_faucet::claim_tusd(amm);
+        pool::seed_liquidity(core, amm, lp0, 1_000, 1_000, 1);
+        reflection_token::register_wallet(lp1);
+        reflection_token::register_wallet(lp2);
+        reflection_token::register_wallet(lp3);
+        reflection_token::register_wallet(lp4);
+        reflection_token::register_wallet(lp5);
+        reflection_token::register_wallet(lp6);
+        reflection_token::register_wallet(lp7);
+        reflection_token::register_wallet(lp8);
+        reflection_token::register_wallet(lp9);
+        pool::transfer_lp_shares(lp0, signer::address_of(lp1), 100);
+        pool::transfer_lp_shares(lp0, signer::address_of(lp2), 100);
+        pool::transfer_lp_shares(lp0, signer::address_of(lp3), 100);
+        pool::transfer_lp_shares(lp0, signer::address_of(lp4), 100);
+        pool::transfer_lp_shares(lp0, signer::address_of(lp5), 100);
+        pool::transfer_lp_shares(lp0, signer::address_of(lp6), 100);
+        pool::transfer_lp_shares(lp0, signer::address_of(lp7), 100);
+        pool::transfer_lp_shares(lp0, signer::address_of(lp8), 100);
+        pool::transfer_lp_shares(lp0, signer::address_of(lp9), 100);
+
+        pool::configure_limits(amm, 30, 10_000, 1_000);
+        pool::sell_trfl(trader, 900, 0, 1_000);
+        pool::checkpoint_lp_rewards(lp0);
+        let (_, _, _, shares_before, _, _, received_before, _, liability_before) =
+            pool::lp_epoch_accounting(1);
+        assert!(shares_before == 1_000, 920);
+        assert!(received_before == 9 && liability_before == 9, 921);
+        assert!(pool::pending_lp_rewards(1, signer::address_of(lp0)) == 0, 922);
+        assert!(pool::pending_lp_rewards(1, signer::address_of(lp1)) == 0, 923);
+        assert!(pool::pending_lp_rewards(1, signer::address_of(lp2)) == 0, 924);
+        assert!(pool::pending_lp_rewards(1, signer::address_of(lp3)) == 0, 925);
+        assert!(pool::pending_lp_rewards(1, signer::address_of(lp4)) == 0, 926);
+        assert!(pool::pending_lp_rewards(1, signer::address_of(lp5)) == 0, 927);
+        assert!(pool::pending_lp_rewards(1, signer::address_of(lp6)) == 0, 928);
+        assert!(pool::pending_lp_rewards(1, signer::address_of(lp7)) == 0, 929);
+        assert!(pool::pending_lp_rewards(1, signer::address_of(lp8)) == 0, 930);
+        assert!(pool::pending_lp_rewards(1, signer::address_of(lp9)) == 0, 931);
+
+        pool::begin_shutdown(amm);
+        pool::remove_liquidity(lp1, 100, 1, 1, 1_000);
+        pool::remove_liquidity(lp2, 100, 1, 1, 1_000);
+        pool::remove_liquidity(lp3, 100, 1, 1, 1_000);
+        pool::remove_liquidity(lp4, 100, 1, 1, 1_000);
+        pool::remove_liquidity(lp5, 100, 1, 1, 1_000);
+        pool::remove_liquidity(lp6, 100, 1, 1, 1_000);
+        pool::remove_liquidity(lp7, 100, 1, 1, 1_000);
+        pool::remove_liquidity(lp8, 100, 1, 1, 1_000);
+        pool::remove_liquidity(lp9, 100, 1, 1, 1_000);
+        pool::remove_liquidity(lp0, 100, 1, 1, 1_000);
+
+        let (status, _, _, terminal_shares, unallocated, rounding, received,
+            claimed, liability) = pool::lp_epoch_accounting(1);
+        assert!(status == 2 && terminal_shares == 0, 932);
+        assert!(unallocated == 0 && rounding == 9 && liability == 0, 933);
+        assert!(received == 9 && claimed == 0, 934);
+        let (terminal_rounding, retired_residue_magnified) =
+            pool::lp_epoch_terminal_dust(1);
+        assert!(terminal_rounding == 9, 935);
+        assert!(
+            retired_residue_magnified
+                == 9 * reflection_math::magnitude(),
+            936,
+        );
+        assert!(pool::lp_reward_vault_balance(1) == 9, 937);
+
+        pool::reseed_liquidity(core, amm, fresh_lp, 10, 10, 1);
+        assert!(pool::active_epoch() == 2, 938);
+        assert!(pool::pending_lp_rewards(2, signer::address_of(fresh_lp)) == 0, 939);
+        assert!(pool::lp_reward_vault_balance(2) == 0, 940);
+        assert!(pool::lp_reward_vault_balance(1) == 9, 941);
+    }
+
+    #[test(
+        core = @0xcafe,
+        assets = @0xbabe,
+        amm = @0xdead,
+        framework = @0x1,
+        alice = @0xa11ce,
+        bob = @0xb0b,
+    )]
+    #[expected_failure(abort_code = 12, location = test_amm::pool)]
+    fun lp_claim_pause_blocks_full_transfer_that_requires_auto_payment(
+        core: &signer,
+        assets: &signer,
+        amm: &signer,
+        framework: &signer,
+        alice: &signer,
+        bob: &signer,
+    ) {
+        setup_claim_backed(core, assets, amm, framework);
+        test_faucet::configure(assets, 10 * ONE, 100 * ONE, 0);
+        test_faucet::claim_trfl(alice);
+        test_faucet::claim_tusd(amm);
+        reflection_token::register_wallet(bob);
+        pool::seed_liquidity(core, amm, alice, 100 * ONE, 100 * ONE, 1);
+        pool::sell_trfl(alice, 10 * ONE, 0, 1_000);
+        pool::checkpoint_lp_rewards(bob);
+        pool::configure_pauses(amm, false, false, true);
+        let shares = pool::lp_shares(1, signer::address_of(alice));
+        pool::transfer_lp_shares(alice, signer::address_of(bob), shares);
     }
 
     #[test(
@@ -43,7 +237,7 @@ module integration_tests::wallet_lp_accounting_tests {
         test_faucet::claim_trfl(alice);
         test_faucet::claim_tusd(amm);
         pool::seed_liquidity(
-            core, amm, signer::address_of(alice), 100 * ONE, 100 * ONE, 1,
+            core, amm, alice, 100 * ONE, 100 * ONE, 1,
         );
 
         // Selling Alice's complete wallet position leaves the pre-trade pool
@@ -118,7 +312,7 @@ module integration_tests::wallet_lp_accounting_tests {
         test_faucet::claim_tusd(amm);
         test_faucet::claim_tusd(buyer);
         pool::seed_liquidity(
-            core, amm, signer::address_of(alice), 100 * ONE, 100 * ONE, 1,
+            core, amm, alice, 100 * ONE, 100 * ONE, 1,
         );
 
         let (net_output, fee, _) = pool::quote_buy(ONE);
@@ -159,7 +353,7 @@ module integration_tests::wallet_lp_accounting_tests {
         test_faucet::claim_tusd(amm);
         test_faucet::claim_tusd(bob);
         pool::seed_liquidity(
-            core, amm, signer::address_of(alice), 100 * ONE, 100 * ONE, 1,
+            core, amm, alice, 100 * ONE, 100 * ONE, 1,
         );
 
         pool::sell_trfl(alice, 10 * ONE, 0, 1_000);
@@ -205,7 +399,7 @@ module integration_tests::wallet_lp_accounting_tests {
         bob = @0xb0b,
         trader = @0x7ade,
     )]
-    fun proportional_burn_preserves_pre_burn_lp_reward(
+    fun full_position_burn_auto_pays_pre_burn_lp_reward(
         core: &signer,
         assets: &signer,
         amm: &signer,
@@ -221,7 +415,7 @@ module integration_tests::wallet_lp_accounting_tests {
         test_faucet::claim_tusd(amm);
         test_faucet::claim_tusd(bob);
         pool::seed_liquidity(
-            core, amm, signer::address_of(alice), 100 * ONE, 100 * ONE, 1,
+            core, amm, alice, 100 * ONE, 100 * ONE, 1,
         );
         pool::add_liquidity(bob, 100 * ONE, 100 * ONE, 1, 1_000);
         let bob_shares = pool::lp_shares(1, signer::address_of(bob));
@@ -231,12 +425,19 @@ module integration_tests::wallet_lp_accounting_tests {
         pool::checkpoint_lp_rewards(trader);
         let pending_before_burn = pool::pending_lp_rewards(1, signer::address_of(bob));
         assert!(pending_before_burn > 0, 51);
+        let bob_raw_before = reflection_token::raw_balance(signer::address_of(bob));
+        let (reserve_before, _) = pool::reserves_view();
 
         pool::remove_liquidity(bob, bob_shares, 1, 1, 1_000);
         assert!(pool::lp_shares(1, signer::address_of(bob)) == 0, 52);
-        assert!(pool::pending_lp_rewards(1, signer::address_of(bob)) == pending_before_burn, 53);
+        assert!(pool::pending_lp_rewards(1, signer::address_of(bob)) == 0, 53);
         assert!(pool::total_lp_shares() == pool::lp_shares(1, signer::address_of(alice)), 54);
         let (raw_reserve, _) = pool::reserves_view();
+        assert!(
+            reflection_token::raw_balance(signer::address_of(bob))
+                == bob_raw_before + (reserve_before - raw_reserve) + pending_before_burn,
+            531,
+        );
         let (custody_shares, _, _) = reflection_token::custody_accounting();
         assert!((raw_reserve as u128) == custody_shares, 55);
     }
@@ -248,7 +449,7 @@ module integration_tests::wallet_lp_accounting_tests {
         framework = @0x1,
         alice = @0xa11ce,
     )]
-    fun same_owner_keeps_old_epoch_claim_when_joining_fresh_epoch(
+    fun same_owner_receives_old_epoch_claim_before_joining_fresh_epoch(
         core: &signer,
         assets: &signer,
         amm: &signer,
@@ -259,7 +460,7 @@ module integration_tests::wallet_lp_accounting_tests {
         test_faucet::claim_trfl(alice);
         test_faucet::claim_tusd(amm);
         pool::seed_liquidity(
-            core, amm, signer::address_of(alice), 100 * ONE, 100 * ONE, 1,
+            core, amm, alice, 100 * ONE, 100 * ONE, 1,
         );
         pool::sell_trfl(alice, 10 * ONE, 0, 1_000);
 
@@ -272,14 +473,14 @@ module integration_tests::wallet_lp_accounting_tests {
         let (custody_after_exit, _, _) = reflection_token::custody_accounting();
         assert!(custody_after_exit == 0 && reflection_token::pool_pending_rewards() == 0, 62);
         let old_pending = pool::pending_lp_rewards(1, signer::address_of(alice));
-        assert!(old_pending > 0, 63);
+        assert!(old_pending == 0, 63);
         let (_, old_negative, old_correction, old_routed, _) =
             reflection_token::custody_position_accounting();
         let old_normalized = old_routed * reflection_math::magnitude();
         assert!(!old_negative && old_correction > old_normalized, 631);
 
         pool::reseed_liquidity(
-            core, amm, signer::address_of(alice), 50 * ONE, 50 * ONE, 1,
+            core, amm, alice, 50 * ONE, 50 * ONE, 1,
         );
         assert!(pool::active_epoch() == 2, 64);
         let (status, index, remainder, shares, unallocated, rounding, received, claimed, liability) =
@@ -305,9 +506,7 @@ module integration_tests::wallet_lp_accounting_tests {
         assert!(new_pending == 0, 682);
 
         let (fresh_rfl, fresh_usd) = pool::reserves_view();
-        pool::claim_lp_rewards(alice, 1, 0);
-        let (rfl_after_claim, usd_after_claim) = pool::reserves_view();
-        assert!(rfl_after_claim == fresh_rfl && usd_after_claim == fresh_usd, 69);
+        assert!(fresh_rfl == 50 * ONE && fresh_usd == 50 * ONE, 69);
         assert!(pool::pending_lp_rewards(1, signer::address_of(alice)) == 0, 70);
         assert!(pool::lp_reward_vault_balance(1) == 0, 71);
         let (_, index_after, remainder_after, _, _, _, received_after, _, liability_after) =
@@ -334,7 +533,7 @@ module integration_tests::wallet_lp_accounting_tests {
         test_faucet::claim_trfl(alice);
         test_faucet::claim_tusd(amm);
         pool::seed_liquidity(
-            core, amm, signer::address_of(alice), 100 * ONE, 100 * ONE, 1,
+            core, amm, alice, 100 * ONE, 100 * ONE, 1,
         );
 
         let i = 0;
@@ -415,7 +614,7 @@ module integration_tests::wallet_lp_accounting_tests {
         test_faucet::claim_tusd(carol);
 
         pool::seed_liquidity(
-            core, amm, signer::address_of(alice), 400_000, 800_000, 1,
+            core, amm, alice, 400_000, 800_000, 1,
         );
         pool::sell_trfl(bob, 10_000, 0, 1_000);
         pool::checkpoint_lp_rewards(bob);
@@ -510,7 +709,7 @@ module integration_tests::wallet_lp_accounting_tests {
         test_faucet::configure(assets, 100 * ONE, 200 * ONE, 0);
         test_faucet::claim_tusd(amm);
         pool::seed_liquidity(
-            core, amm, signer::address_of(alice), 100 * ONE, 100 * ONE, 1,
+            core, amm, alice, 100 * ONE, 100 * ONE, 1,
         );
         pool::add_liquidity(bob, 100 * ONE, 100 * ONE, 1, 1_000);
         let alice_shares = pool::lp_shares(1, signer::address_of(alice));
@@ -535,9 +734,9 @@ module integration_tests::wallet_lp_accounting_tests {
         assert!(received == 1 && claimed == 0 && liability == 1, 92);
         assert!(pool::lp_reward_vault_balance(1) == 1, 93);
 
-        // Burning both positions preserves their fractional corrections. The
-        // old epoch is terminal claim-only with one aggregate-liability unit;
-        // it is neither swept nor made claimable by a future LP cohort.
+        // Burning both positions retires only their sub-base-unit corrections.
+        // The old epoch becomes terminal with zero liability and one physical
+        // dust unit; it is neither swept nor made claimable by a future cohort.
         pool::begin_shutdown(amm);
         pool::remove_liquidity(bob, bob_shares, 1, 1, 1_000);
         pool::remove_liquidity(alice, alice_shares, 1, 1, 1_000);
@@ -545,14 +744,18 @@ module integration_tests::wallet_lp_accounting_tests {
         let (old_status, _, _, old_shares, old_unallocated, old_rounding, old_received, old_claimed, old_liability) =
             pool::lp_epoch_accounting(1);
         assert!(old_status == 2 && old_shares == 0, 95);
-        assert!(old_unallocated == 0 && old_rounding == 0, 96);
-        assert!(old_received == 1 && old_claimed == 0 && old_liability == 1, 97);
+        assert!(old_unallocated == 0 && old_rounding == 1, 96);
+        assert!(old_received == 1 && old_claimed == 0 && old_liability == 0, 97);
+        let (terminal_rounding, retired_residue_magnified) =
+            pool::lp_epoch_terminal_dust(1);
+        assert!(terminal_rounding == 1, 109);
+        assert!(retired_residue_magnified == 1_000_000_000_000_000_000_000_000, 110);
         assert!(pool::lp_reward_vault_balance(1) == 1, 98);
         assert!(pool::pending_lp_rewards(1, signer::address_of(alice)) == 0, 99);
         assert!(pool::pending_lp_rewards(1, signer::address_of(bob)) == 0, 100);
 
         pool::reseed_liquidity(
-            core, amm, signer::address_of(carol), 50 * ONE, 50 * ONE, 1,
+            core, amm, carol, 50 * ONE, 50 * ONE, 1,
         );
         assert!(pool::active_epoch() == 2, 101);
         let (fresh_status, fresh_index, fresh_remainder, fresh_shares, fresh_unallocated,
@@ -611,7 +814,7 @@ module integration_tests::wallet_lp_accounting_tests {
         test_faucet::claim_trfl(alice);
         test_faucet::claim_tusd(amm);
         pool::seed_liquidity(
-            core, amm, signer::address_of(alice), 100 * ONE, 100 * ONE, 1,
+            core, amm, alice, 100 * ONE, 100 * ONE, 1,
         );
         let destination = primary_fungible_store::primary_store(
             signer::address_of(alice), reflection_token::metadata(),
@@ -642,7 +845,7 @@ module integration_tests::wallet_lp_accounting_tests {
         test_faucet::claim_trfl(alice);
         test_faucet::claim_tusd(amm);
         pool::seed_liquidity(
-            core, amm, signer::address_of(alice), 100 * ONE, 100 * ONE, 1,
+            core, amm, alice, 100 * ONE, 100 * ONE, 1,
         );
         pool::transfer_lp_shares(alice, signer::address_of(stranger), 1);
     }
@@ -654,8 +857,7 @@ module integration_tests::wallet_lp_accounting_tests {
         framework = @0x1,
         alice = @0xa11ce,
     )]
-    #[expected_failure(abort_code = 6, location = reflection_core::reflection_token)]
-    fun core_claim_pause_blocks_custody_to_lp_routing(
+    fun wallet_claim_pause_does_not_block_custody_routing_or_lp_payout(
         core: &signer,
         assets: &signer,
         amm: &signer,
@@ -667,12 +869,75 @@ module integration_tests::wallet_lp_accounting_tests {
         test_faucet::claim_trfl(alice);
         test_faucet::claim_tusd(amm);
         pool::seed_liquidity(
-            core, amm, signer::address_of(alice), 100 * ONE, 100 * ONE, 1,
+            core, amm, alice, 100 * ONE, 100 * ONE, 1,
         );
         pool::sell_trfl(alice, 10 * ONE, 0, 1_000);
         assert!(reflection_token::pool_pending_rewards() > 0, 140);
         reflection_token::set_pause_state(core, false, true);
         pool::checkpoint_lp_rewards(alice);
+        let pending = pool::pending_lp_rewards(1, signer::address_of(alice));
+        assert!(pending > 0, 141);
+        pool::claim_lp_rewards(alice, 1, pending);
+        assert!(pool::pending_lp_rewards(1, signer::address_of(alice)) == 0, 142);
+    }
+
+    #[test(
+        core = @0xcafe,
+        assets = @0xbabe,
+        amm = @0xdead,
+        framework = @0x1,
+        alice = @0xa11ce,
+    )]
+    fun zero_denominator_receipt_is_named_and_quarantined(
+        core: &signer,
+        assets: &signer,
+        amm: &signer,
+        framework: &signer,
+        alice: &signer,
+    ) {
+        setup(core, assets, amm, framework);
+        test_faucet::configure(assets, 10 * ONE, 1_000 * ONE, 0);
+        test_faucet::claim_trfl(alice);
+        test_faucet::claim_tusd(amm);
+        pool::seed_liquidity(
+            core, amm, alice, 100 * ONE, 100 * ONE, 1,
+        );
+        pool::sell_trfl(alice, 5 * ONE, 0, 1_000);
+        pool::checkpoint_lp_rewards(alice);
+        let pre_quarantine_claim = pool::pending_lp_rewards(
+            1, signer::address_of(alice),
+        );
+        let pre_quarantine_vault = pool::lp_reward_vault_balance(1);
+        assert!(pre_quarantine_claim > 0, 150);
+        pool::claim_lp_rewards(alice, 1, pre_quarantine_claim);
+        assert!(pool::lp_reward_vault_balance(1) == 0, 1501);
+        pool::sell_trfl(alice, 5 * ONE, 0, 1_000);
+        let pending = reflection_token::pool_pending_rewards();
+        assert!(pending > 0, 151);
+        let routed = pool::force_zero_denominator_receipt_for_test(
+            signer::address_of(alice),
+        );
+        assert!(routed == pending, 152);
+        let (_, _, _, total_shares, unallocated, rounding, received, claimed, liability) =
+            pool::lp_epoch_accounting(1);
+        let (_, _, _, quarantined) = lp_rewards::epoch_identity(1);
+        assert!(total_shares == 0, 153);
+        assert!(unallocated == (routed as u128), 154);
+        assert!(received == ((pre_quarantine_vault + routed) as u256), 155);
+        assert!(claimed == (pre_quarantine_claim as u256) && liability == 0, 156);
+        assert!(quarantined && pool::lp_reward_vault_balance(1) == routed, 157);
+
+        // Quarantine freezes mutation and never assigns `unallocated` to a
+        // future denominator. The pre-quarantine whole claim was paid before
+        // the test-only denominator removal, matching the production exit rule.
+        let (_, _, _, shares_after, unallocated_after, rounding_after, _, claimed_after, liability_after) =
+            pool::lp_epoch_accounting(1);
+        assert!(shares_after == 0 && unallocated_after == unallocated, 158);
+        assert!(rounding_after == rounding, 159);
+        assert!(claimed_after == (pre_quarantine_claim as u256), 160);
+        assert!(liability_after == liability, 161);
+        assert!(pool::pending_lp_rewards(1, signer::address_of(alice)) == 0, 162);
+        assert!(pool::lp_reward_vault_balance(1) == routed, 163);
     }
 
     #[test(
@@ -695,13 +960,139 @@ module integration_tests::wallet_lp_accounting_tests {
         test_faucet::claim_trfl(alice);
         test_faucet::claim_tusd(amm);
         pool::seed_liquidity(
-            core, amm, signer::address_of(alice), 100 * ONE, 100 * ONE, 1,
+            core, amm, alice, 100 * ONE, 100 * ONE, 1,
         );
         pool::sell_trfl(alice, 10 * ONE, 0, 1_000);
         pool::checkpoint_lp_rewards(alice);
         assert!(pool::pending_lp_rewards(1, signer::address_of(alice)) > 0, 141);
         pool::configure_pauses(amm, false, false, true);
         pool::claim_lp_rewards(alice, 1, 0);
+    }
+
+    // Exercises the published claim-backed design with balances close to this
+    // deployment's fixed-supply and configured reserve limits. The sequence
+    // crosses wallet/custody and LP correction signs, routes large fees, moves
+    // LP ownership, claims both layers, and then proves every physical tRFL
+    // unit still belongs to one named store.
+    #[test(
+        core = @0xcafe,
+        assets = @0xbabe,
+        amm = @0xdead,
+        framework = @0x1,
+        alice = @0xa11ce,
+        bob = @0xb0b,
+    )]
+    fun deployment_scale_claim_backed_accounting_stays_exact(
+        core: &signer,
+        assets: &signer,
+        amm: &signer,
+        framework: &signer,
+        alice: &signer,
+        bob: &signer,
+    ) {
+        setup_claim_backed(core, assets, amm, framework);
+        test_faucet::configure(
+            assets, 450 * TRILLION, 600 * TRILLION, 0,
+        );
+        test_faucet::claim_trfl(alice);
+        test_faucet::claim_tusd(amm);
+        test_faucet::configure(
+            assets, 100 * TRILLION, 200 * TRILLION, 0,
+        );
+        test_faucet::claim_trfl(bob);
+        test_faucet::claim_tusd(bob);
+
+        pool::configure_limits(amm, 100, 5_000, 100 * TRILLION);
+        pool::configure_liquidity_limits(
+            amm, 100 * TRILLION, 200 * TRILLION, 5_000,
+        );
+        pool::seed_liquidity(
+            core,
+            amm,
+            alice,
+            400 * TRILLION,
+            600 * TRILLION,
+            1,
+        );
+
+        pool::sell_trfl(alice, 50 * TRILLION, 0, 1_000);
+        pool::checkpoint_lp_rewards(bob);
+        assert!(pool::pending_lp_rewards(1, signer::address_of(alice)) > 0, 200);
+
+        let (net_buy, _, _) = pool::quote_buy(50 * TRILLION);
+        pool::buy_trfl(bob, 50 * TRILLION, net_buy, 1_000);
+        pool::add_liquidity(
+            bob, 20 * TRILLION, 40 * TRILLION, 1, 1_000,
+        );
+        pool::transfer_lp_shares(
+            alice, signer::address_of(bob), (50 * TRILLION as u128),
+        );
+
+        pool::sell_trfl(alice, 20 * TRILLION, 0, 1_000);
+        pool::checkpoint_lp_rewards(bob);
+        let bob_lp_pending = pool::pending_lp_rewards(
+            1, signer::address_of(bob),
+        );
+        assert!(bob_lp_pending > 0, 201);
+        pool::claim_lp_rewards(bob, 1, bob_lp_pending);
+
+        let alice_wallet_pending = reflection_token::pending_rewards(
+            signer::address_of(alice),
+        );
+        assert!(alice_wallet_pending > 0, 202);
+        reflection_token::claim(alice, alice_wallet_pending);
+
+        let bob_shares = pool::lp_shares(1, signer::address_of(bob));
+        assert!(bob_shares > 4, 203);
+        pool::remove_liquidity(
+            bob, bob_shares / 4, 1, 1, 1_000,
+        );
+        primary_fungible_store::transfer(
+            alice,
+            reflection_token::metadata(),
+            signer::address_of(bob),
+            TRILLION,
+        );
+
+        let (reserve_rfl, _) = pool::reserves_view();
+        let (custody_shares, routed, core_rounding) =
+            reflection_token::custody_accounting();
+        assert!((reserve_rfl as u128) == custody_shares, 204);
+        assert!(routed > 0 && core_rounding <= (TRILLION as u128), 205);
+
+        let (_, _, global_shares, _, lifetime_fees, lifetime_materialized) =
+            reflection_token::global_accounting();
+        let wallet_raw = reflection_token::raw_balance(
+            signer::address_of(alice),
+        ) + reflection_token::raw_balance(signer::address_of(bob));
+        assert!(global_shares == ((wallet_raw + reserve_rfl) as u128), 206);
+        assert!(lifetime_fees > 0 && lifetime_materialized > 0, 207);
+        assert!(reflection_token::registered_wallet_count() == 2, 208);
+        assert!(!reflection_token::automatic_materialization_enabled(), 209);
+
+        let (_, aggregate_correction) = reflection_token::aggregate_correction();
+        let (_, lp_correction) = lp_rewards::epoch_aggregate_correction(1);
+        assert!(aggregate_correction > 0 && lp_correction > 0, 210);
+
+        let (_, _, _, _, lp_unallocated, lp_rounding, lp_received,
+            lp_claimed, lp_liability) = pool::lp_epoch_accounting(1);
+        let lp_vault = pool::lp_reward_vault_balance(1);
+        assert!(lp_received > 0 && lp_claimed > 0, 211);
+        assert!(
+            (lp_vault as u256)
+                == lp_liability
+                    + (lp_unallocated as u256)
+                    + (lp_rounding as u256),
+            212,
+        );
+
+        let physical_supply = reflection_token::distribution_vault_balance()
+            + reflection_token::reward_vault_balance()
+            + reserve_rfl
+            + lp_vault
+            + wallet_raw;
+        assert!(physical_supply == reflection_token::fixed_supply(), 213);
+        reflection_token::assert_accounting_backing();
     }
 
     #[test(
@@ -725,7 +1116,7 @@ module integration_tests::wallet_lp_accounting_tests {
         pool::seed_liquidity(
             core,
             amm,
-            signer::address_of(alice),
+            alice,
             100 * ONE,
             100 * ONE,
             (100 * ONE as u128) + 1,
@@ -752,7 +1143,7 @@ module integration_tests::wallet_lp_accounting_tests {
         test_faucet::claim_trfl(alice);
         test_faucet::claim_tusd(amm);
         pool::seed_liquidity(
-            core, amm, signer::address_of(alice), 100 * ONE, 100 * ONE, 1,
+            core, amm, alice, 100 * ONE, 100 * ONE, 1,
         );
         pool::sell_trfl(alice, 10 * ONE, 0, 1_000);
         pool::checkpoint_lp_rewards(alice);
@@ -781,7 +1172,7 @@ module integration_tests::wallet_lp_accounting_tests {
         test_faucet::claim_trfl(alice);
         test_faucet::claim_tusd(amm);
         pool::seed_liquidity(
-            core, amm, signer::address_of(alice), 100 * ONE, 100 * ONE, 1,
+            core, amm, alice, 100 * ONE, 100 * ONE, 1,
         );
         let all_shares = pool::lp_shares(1, signer::address_of(alice));
         pool::remove_liquidity(alice, all_shares, 1, 1, 1_000);

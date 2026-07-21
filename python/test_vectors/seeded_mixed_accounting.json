@@ -1,14 +1,22 @@
 {
-  "name": "seeded_mixed_wallet_custody_lp_conformance",
+  "name": "seeded_mixed_wallet_custody_lp_conformance_1",
   "generator": {
     "seed": 227436237555488,
     "generated_operation_count": 64,
-    "algorithm": "Python random.Random fixed-seed valid-operation sampler"
+    "attempt_count": 76,
+    "unavailable_candidate_count": 12,
+    "rejected_candidate_count": 0,
+    "no_op_candidate_count": 0,
+    "algorithm": "Python random.Random fixed-seed valid-operation sampler",
+    "admission_rule": "accepted operations must change non-event model state"
   },
   "initial": {
     "fixed_supply": 1000000000000000,
     "fee_bps": 100,
-    "amm_fee_bps": 30
+    "amm_fee_bps": 30,
+    "automatic_materialization": false,
+    "max_reserve_bps": 2000,
+    "max_gross_swap": 100000000000
   },
   "operations": [
     {
@@ -229,12 +237,6 @@
       "op": "checkpoint_pool"
     },
     {
-      "op": "checkpoint_pool"
-    },
-    {
-      "op": "checkpoint_pool"
-    },
-    {
       "op": "buy",
       "buyer": "dave",
       "quote_in": 3513,
@@ -417,9 +419,6 @@
       "min_lp_shares": 1
     },
     {
-      "op": "checkpoint_pool"
-    },
-    {
       "op": "sell",
       "seller": "bob",
       "gross_rfl": 1356,
@@ -442,10 +441,33 @@
       "seller": "dave",
       "gross_rfl": 2297,
       "min_quote_out": 0
+    },
+    {
+      "op": "transfer_lp_shares",
+      "sender": "alice",
+      "recipient": "carol",
+      "shares": 2598
+    },
+    {
+      "op": "set_fee_bps",
+      "actor": "admin",
+      "fee_bps": 7
+    },
+    {
+      "op": "transfer",
+      "sender": "bob",
+      "recipient": "carol",
+      "amount": 1198
     }
   ],
   "expect": {
-    "fee_bps": 89,
+    "fee_bps": 7,
+    "automatic_materialization": false,
+    "swap_limits": {
+      "amm_fee_bps": 30,
+      "max_reserve_bps": 2000,
+      "max_gross_swap": 100000000000
+    },
     "index": 145621074240505212689,
     "index_remainder": 1699388,
     "total_shares": 3999609,
@@ -456,31 +478,31 @@
     "unallocated_fees": 0,
     "lifetime_fees": 582,
     "lifetime_materialized": 98,
-    "lifetime_custody_routed": 244,
+    "lifetime_custody_routed": 291,
     "rounding_reserve": 1,
     "custody_shares": 1994424,
     "custody_correction": {
       "negative": false,
       "magnitude": 732304249739815834002303
     },
-    "custody_settled": 244,
-    "custody_pending": 47,
+    "custody_settled": 291,
+    "custody_pending": 0,
     "raw": {
       "alice": 512732,
-      "bob": 492305,
-      "carol": 501801,
+      "bob": 491107,
+      "carol": 502999,
       "dave": 498347,
       "pool": 1994424,
-      "reward_vault": 240,
+      "reward_vault": 193,
       "distribution_vault": 999999996000000,
-      "lp_reward_vault:1": 151
+      "lp_reward_vault:1": 198
     },
     "pending": {
       "alice": 42,
       "bob": 51,
       "carol": 66,
       "dave": 32,
-      "pool": 47
+      "pool": 0
     },
     "quote": {
       "alice": 997968,
@@ -492,8 +514,8 @@
     },
     "lp_epoch": {
       "status": "ACTIVE",
-      "index": 121909165358824845043,
-      "index_remainder": 891470,
+      "index": 145412643873645038432,
+      "index_remainder": 134614,
       "total_shares": 1999704,
       "aggregate_correction": {
         "negative": false,
@@ -501,19 +523,21 @@
       },
       "unallocated_rewards": 0,
       "rounding_reserve": 1,
-      "lifetime_received": 244,
+      "terminal_rounding_reserve": 0,
+      "retired_residue_magnified": 0,
+      "lifetime_received": 291,
       "lifetime_claimed": 93,
-      "liability": 150,
-      "vault_balance": 151,
+      "liability": 197,
+      "vault_balance": 198,
       "positions": {
         "alice": {
-          "shares": 1997074,
+          "shares": 1994476,
           "correction": {
             "negative": false,
-            "magnitude": 426181019977608556576012
+            "magnitude": 803963068761338366422348
           },
           "claimed": 93,
-          "pending": 150
+          "pending": 197
         },
         "bob": {
           "shares": 332,
@@ -525,10 +549,10 @@
           "pending": 0
         },
         "carol": {
-          "shares": 72,
+          "shares": 2670,
           "correction": {
             "negative": true,
-            "magnitude": 3145141162725921819313
+            "magnitude": 380927189946455731665649
           },
           "claimed": 0,
           "pending": 0

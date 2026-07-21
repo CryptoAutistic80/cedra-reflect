@@ -26,6 +26,12 @@ stage is limited to transaction generation, independent replay, and accounting
 evidence. Later UI requirements remain pilot scope, not the current critical
 path.
 
+**Single-token boundary:** this release creates exactly one address-bound
+`tRFL` instance across three immutable packages. It is the reference contract
+for a later reflection-token factory, not the factory itself. A factory will
+need object-scoped accounting, vault capabilities, custody bindings,
+instance-qualified events, and a separate architecture and security review.
+
 **Local implementation status — July 20, 2026:** the workspace now contains a
 clean initial core custody design, exact-store custody registry and routing
 capability, proportional canonical AMM liquidity, account-bound checkpointed LP
@@ -35,8 +41,9 @@ historical-capture prevention, partial LP claims, proportional burns, the same
 owner participating across isolated reward epochs, tiny-fee bucket accounting,
 claim-only epoch reseeding, terminal fractional-dust isolation, guarded quote
 failure, independent claim pauses, and configurable public-liquidity limits.
-Both the hand-authored accounting vector and a fixed-seed witness containing 64
-generated mixed operations are executed by Move and Python and produce the same
+The hand-authored accounting vector, three independent fixed-seed witnesses of
+64 generated mixed operations each, and 27 AMM arithmetic boundary vectors are
+executed by Move and Python and produce the same
 indexes, balances, liabilities, custody route, AMM reserves, and LP snapshot.
 That generated witness exposed and corrected a non-divisible AMM-fee rounding
 mismatch across Move, the SDK mock, and the indexer. Focused adversarial Move
@@ -50,28 +57,71 @@ withdrawals. An evented publisher-authorized handoff now separates the cold
 core, asset, and AMM publishers from the operational key used for routine fee,
 pause, faucet, shutdown, and limit actions. The contract is one clean initial
 schema with no legacy-state conversion surface. Its one-time post-publication
-initializer now records one-time automatic-versus-claim-backed behavior; the
-selected initial mode is claim-backed, so pending wallet rewards require an
-explicit on-chain claim while canonical LP rewards remain separately claimable
-by beneficial owners. There is no mode setter or state-conversion path in this
-package, and all three release packages now use immutable publication policy.
+initializer hardcodes the probe-selected claim-backed behavior, so pending
+wallet rewards require an explicit on-chain claim while canonical LP rewards
+remain separately claimable by beneficial owners. The only production
+initializer passes `false`; only a `#[test_only]` caller can select the private
+implementation's automatic-mode branch. There is no public mode setter or
+state-conversion path in this package, and all three release packages now use
+immutable publication policy.
 Any later contract change requires a fresh deployment and manifest. This
 paragraph is local source and deterministic test
 evidence only. The isolated hook-probe publication is separately preserved in
 `ops/evidence/hook-probe-testnet.json`; it is not a deployment of the core,
 test-assets, or AMM packages and is not participant or public-pilot evidence.
 
-**Local contract gate — passed July 20, 2026:** `make verify` passes all Move
-packages including **59/59 integration tests**, **6/6 core tests**, and the AMM
-rounding unit test, the independent Python model, evidence-template, and
-Move-surface checks pass **39/39 tests**, and the TypeScript
-contract-support witness passes **27/27 deterministic tests**. The generated
-Python/Move witness drift check also passes. The expanded reference-model gate
-passes **1,000,000 operations across 1,024 holders**. `make release-artifacts` also
-compiles every package with Cedra CLI 1.0.4, records local source digests, and
-fails closed if any publishable package's module bytecode plus sparse metadata
-exceeds the normal 65,536-byte publication boundary.
-These results authorize no publication or live transaction.
+**Latest local dirty-tree gate — passed July 21, 2026:** the Cedra CLI passes
+**118/118 Move tests**: 2 hook-probe, 8 reflection-core, 0 asset-local, 5 AMM,
+and **103/103 integration tests**. The independent Python model,
+evidence-template, workload-harness, conformance, and Move-surface checks pass
+**60/60 tests**. The TypeScript SDK/indexer suite passes **78/78 deterministic
+tests**, and the release-candidate assembler suite passes **21/21**. Generated
+Python/Move conformance is current. The latest claim-backed reference-model gate
+completes exactly **1,000,000 applied state changes across 1,024 holders** from
+1,071,570 attempts, recording 70,626 no-op draws and 944 rejected operations
+separately while performing 2,002 full invariant audits. It records
+`automatic_materialization=false` and final SHA-256 state digest
+`a40abf6fd8f4b91c7152ba8a63016ef2ef49d2be6c698fdb4dcd87f6c16d90e9`.
+These are local dirty-tree results, not release-bound evidence. The complete
+gate, including the million-operation workload, must run again from the final
+clean exact commit; `make release-artifacts` then compiles every package with
+Cedra CLI 1.0.4, records
+local source digests, and fails closed if any publishable package's module
+bytecode plus sparse metadata exceeds the normal 65,536-byte publication
+boundary. These results authorize no funding, publication, or live transaction.
+
+Independent local code re-audits report **GO** for the contract (no remaining
+Critical, High, Medium, or Low finding), the SDK/indexer parity surface, and the
+release tooling. Those reviews are source-level engineering evidence, not the
+external human source/bytecode or SDK-review attestations required for release.
+Candidate, approval, and finalized-evidence commands still require an
+externally isolated, different-owner, read-only exact-commit release root, the
+exact executable closure, a real signed SDK-review attestation and external
+trust anchor, and two independent transaction approvals.
+
+## Generated Testnet role candidates
+
+The following Cedra CLI profiles were generated locally under operator
+authorization on July 20, 2026. Their private keys exist only in the external
+CLI configuration; the repository records public role data only.
+
+| Role | CLI profile | Public address |
+|---|---|---|
+| Core publisher | `cedra-reflect-core-publisher` | `0x14110b05c8b667577e2ffefab66b01fa2f48bca8091f51af33b1a6c6762773db` |
+| Test-assets publisher | `cedra-reflect-assets-publisher` | `0x445292601c73f8542d576908c67e8a28a861575bdc8841e02753651f56492f8f` |
+| Test-AMM publisher | `cedra-reflect-amm-publisher` | `0x47f0e7670e63258035b0f71fea8a80d9e24ed118d5262a47a97a555bc6506721` |
+| Operations | `cedra-reflect-operations` | `0xb736430fcbb1b1f3d7dac953dcc11fa6cb033efcbc52a36816f1be32ed28ffa3` |
+| Bootstrap LP | `cedra-reflect-bootstrap-lp` | `0x0b1cd21450f8b849a1235494c1646e3d338a332d286ba6aef79030d92e7b1f82` |
+
+All five profiles report `Testnet`, `https://testnet.cedra.dev`, and the exact
+addresses above through the CLI's public-only profile view. The public-profile
+evidence uses OpenSSL SHA3-256 to confirm that each public key maps to its
+recorded address; the keyless assembler later repeats that check with the
+reviewed Cedra SDK 2.2.8. That local evidence does not establish funding,
+account existence, private-key control, release authorization, or any finalized
+on-chain release state.
+Funding is forbidden until the final contract, exact-address artifacts, and
+independent human source/bytecode review gates pass.
 
 ---
 
@@ -79,7 +129,7 @@ These results authorize no publication or live transaction.
 
 | Mainnet-oriented decision | Cedra testnet decision |
 |---|---|
-| Predeployment contract schema | **One clean initial package with no state-transition machinery** |
+| Predeployment contract schema | **One clean initial schema across three immutable packages, with no state-transition machinery** |
 | Multiple third-party DEX integrations | **One canonical reflection-aware AMM** |
 | Public liquidity provision | **Admin-seeded bootstrap, then controlled public LP positions** |
 | Permanent token supply ceremony | **Fixed supply per deployment, distributed through a test faucet** |
@@ -90,7 +140,7 @@ These results authorize no publication or live transaction.
 | Broad wallet compatibility | **Cedra TypeScript SDK plus one documented wallet integration first** |
 | Mainnet-grade infrastructure redundancy | **Monitored indexer, reproducible deployment, RPC fallback** |
 | General-purpose DEX compatibility | **Exact integration with the AMM we control** |
-| Delegated custody | **Canonical LP passthrough in core; other vaults require an explicit reviewed adapter** |
+| Delegated custody | **Canonical LP passthrough only; another vault requires a fresh deployment and review** |
 
 Because no contract state exists yet, this release defines the intended schema
 directly. Transitional resources, conversion entry points, secondary transition
@@ -127,8 +177,10 @@ The first externally usable release should provide:
 - A 1% fee on swaps through the canonical pool.
 - Lazy proportional reflection rewards for eligible holders.
 - Untaxed wallet-to-wallet transfers.
-- An explicit reward claim function.
-- Automatic reward materialisation when holders spend pending rewards, provided Cedra’s dispatchable balance hooks behave as expected on Testnet.
+- Explicit on-chain wallet and LP reward claims.
+- A claim-backed wallet path: raw balance is spendable, while pending wallet
+  reflections must be claimed before spending. Automatic materialisation is
+  compiler-excluded test coverage, not publishable release behavior.
 - One `tRFL/tUSD` constant-product pool.
 - Admin-seeded bootstrap liquidity with controlled public LP positions.
 - A canonical pool custody position whose underlying `tRFL` participates in
@@ -206,6 +258,7 @@ move/
 │   ├── reflection_math.move
 │   ├── reflection_token.move
 │   ├── reflection_hooks.move
+│   ├── reflection_router.move
 │   ├── reflection_registry.move
 │   ├── custody_registry.move
 │   ├── custody_settlement.move
@@ -225,15 +278,18 @@ move/
 │
 └── integration-tests/
     ├── protocol_integration_tests.move
-    └── wallet_lp_accounting_tests.move
+    ├── wallet_lp_accounting_tests.move
+    └── seeded_conformance_generated.move
 ```
 
-The reflection core should remain free of test-only cheats. It owns the global
+The publishable reflection-core bytecode must remain free of test escape
+hatches. Source-level `#[test_only]` helpers are compiler-excluded and checked
+structurally. The core owns the global
 wallet-and-custody eligibility accounting and a narrow reward-routing
 capability. The AMM owns LP shares and the downstream LP reward index. Faucet
 behaviour, mock assets, and distribution controls remain separate. This avoids
 a dependency from the core into a particular AMM while making the canonical
-pool the first approved custody adapter.
+pool the deployment's sole approved custody adapter.
 
 ---
 
@@ -275,74 +331,25 @@ The accounting model should remain the production-shaped vault-backed design fro
 
 ## Required state
 
-```move
-struct ReflectionState has key {
-    index: u256,
-    total_shares: u256,
-    aggregate_correction: SignedU256,
-    index_remainder: u256,
+The Move source and `docs/accounting-specification.md` are normative.
+`ReflectionState` owns the wallet/global index, vault buckets, configuration,
+and wallet positions. `CustodyAccounting` owns exactly one canonical pool
+position. `CustodyRegistry` immutably binds that reserve to epoch-qualified LP
+reward vaults. `LpEpochRegistry` stores account-bound LP epochs, `u128` share
+supply and positions, immutable vault/state identities, and permanent
+historical-LP participation.
 
-    wallet_eligible_raw_balance: u128,
-    custody_eligible_raw_balance: u128,
-    unallocated_fees: u128,
-    rounding_reserve: u128,
-    lifetime_fees: u256,
-    lifetime_materialized: u256,
-    lifetime_custody_routed: u256,
+Each LP epoch has a distinct position table and reward vault. A shutdown makes
+the old epoch `CLAIM_ONLY`: no index or share mutation is allowed, but owners
+can still claim already-indexed rewards. Reseeding opens a clean epoch, so the
+same address can keep an old claim and receive a new position without state
+collision. Sub-base-unit position fractions may sum to aggregate liability
+even when no individual has a whole base unit to claim; that residue remains
+named and backed in the old vault and is never swept or carried forward.
 
-    fee_bps: u64,
-    swaps_paused: bool,
-    claims_paused: bool,
-
-    positions: Table<address, Position>,
-    custody_adapters: Table<address, CustodyAdapter>,
-    exclusions: Table<address, bool>,
-
-    reward_vault: Object<FungibleStore>,
-    distribution_vault: Object<FungibleStore>
-}
-```
-
-`positions` contains both wallet positions and approved custody positions. A
-custody position is keyed by its exact `tRFL` store and binds that store to one
-immutable reward-routing capability and one excluded payout vault. The
-canonical AMM reserve is the first such position.
-
-The AMM separately maintains:
-
-```move
-struct LpEpochRegistry has key {
-    active_epoch: u64,
-    active_state: address,
-    next_epoch: u64
-}
-
-struct LpEpoch has store {
-    epoch_id: u64,
-    status: u8, // ACTIVE or CLAIM_ONLY
-    index: u256,
-    total_lp_shares: u256,
-    aggregate_correction: SignedU256,
-    index_remainder: u256,
-    unallocated_rewards: u128,
-    rounding_reserve: u128,
-    lifetime_received: u256,
-    lifetime_claimed: u256,
-    positions: Table<address, LpPosition>,
-    reward_vault: Object<FungibleStore>
-}
-```
-
-Each LP epoch owns a distinct immutable `LpEpoch` state record, position
-table, and reward vault. The registry points new liquidity operations at the
-single active epoch. A shutdown changes the old epoch to `CLAIM_ONLY`: no index
-or share mutation is allowed, but zero-share positions can still claim their
-already-indexed rewards. Reseeding creates a fresh state object and table, so
-the same owner address can have an old claim and a clean new position without
-state collision. `CLAIM_ONLY` is terminal. Sub-base-unit position fractions can
-sum to aggregate liability even when no individual has a whole base unit to
-claim; that residue remains named and backed in the old immutable vault and is
-never swept or carried into a new epoch.
+This deployment publishes no general custody-adapter registrar. Any additional
+vault, pool, or delegated-custody adapter requires a fresh separately reviewed
+deployment with its own exact-store and beneficial-ownership proof.
 
 The LP index is downstream accounting. It never makes the pool reserve itself
 grow, so AMM quotations always use raw reserves.
@@ -391,13 +398,9 @@ Core eligibility:
 - Testnet admin stores: excluded.
 - Unregistered contract, escrow, secondary, and delegated-custody stores:
   rejected or excluded; they never silently become wallet positions.
-- Other delegated-custody stores: eligible only through an explicit reviewed
-  adapter that routes the custody position's rewards to beneficial owners.
-
-An adapter may be registered only while its underlying store and downstream
-reward liabilities are empty. Once funded, its store binding, payout vault,
-and routing capability cannot be replaced in place. This prevents an admin or
-vault from switching beneficiary accounting after rewards have accrued.
+- Other delegated-custody stores: unsupported by this deployment. Supporting
+  one requires a fresh release with an explicit reviewed adapter that proves
+  beneficial ownership and checkpoints every ownership mutation.
 
 The canonical pool adapter is registered atomically during pool initialization,
 before bootstrap funding, public deposits, or swaps are possible. Registration
@@ -406,8 +409,11 @@ already exist, or if the store is already classified as a wallet or another
 custody position. No retroactive entitlement is inferred at registration.
 
 The core cannot infer beneficial ownership inside an arbitrary third-party
-vault. Unsupported vaults therefore fail closed rather than crediting the vault
-operator as though it were the economic holder.
+vault. A vault controlled by an account can explicitly register that account's
+canonical primary store and accrue as one wallet address, but this deployment
+cannot apportion that entitlement among the vault's depositors. Custom or
+secondary unregistered stores fail closed. Only the canonical AMM has reviewed
+beneficial-owner passthrough accounting for its LP positions.
 
 ## Exact-once invariants
 
@@ -522,6 +528,21 @@ Liquidity withdrawal is the reverse atomic sequence:
 8. Assert raw reserve = custody units and emit the complete transition.
 ```
 
+Shutdown cannot begin while LP claims are paused. Once shutdown begins, every
+burn bypasses the operator's non-final withdrawal-share cap so a small cap
+cannot strand fragmented LP positions after configuration is locked. Outside
+shutdown, both proportional asset outputs must be positive. During shutdown,
+exactly one output may floor to zero; both-zero is rejected, each nonzero asset
+is settled independently, and both caller minima remain enforced.
+
+Before a position reaches zero, all whole pending LP reward is paid and only
+its sub-base-unit magnified correction is retired. Final epoch closure emits
+`LpFractionalResidueRetired` as applicable and exactly one
+`LpEpochTerminalDustClassified`; the immutable
+`pool::lp_epoch_terminal_dust(epoch)` view exposes physical `u128` terminal
+rounding units separately from `u256` retired magnified residue. There is no
+sweep or reassignment path for either terminal classification.
+
 The correction updates in steps 4–5 preserve the wallet's pre-deposit global
 entitlement and the pool's pre-withdrawal entitlement. The LP checkpoint before
 mint or burn preserves the old LP owners' entitlement. Neither representation
@@ -530,12 +551,11 @@ reward-vault tokens back into an eligible wallet increases it.
 
 An LP share transfer similarly routes pool custody pending reward, checkpoints
 sender and recipient, and then applies equal-and-opposite LP corrections at one
-LP index. The initial release permits transfers only between registered signer-owned primary LP
-stores. Secondary stores, contract custody, wrappers, and vault deposits fail
-closed; LP-share custody adapters are deferred. If Cedra's dispatch hooks cannot
-enforce even the primary-store rule reproducibly, initial LP shares remain
-account-bound and only mint, burn, claim, and proportional withdrawal are
-enabled.
+LP index. LP positions are account-bound table entries, not fungible assets.
+They move only between registered signer-owned primary accounts through the
+canonical transfer entry point, which checkpoints both owners at one index.
+Secondary stores, contract custody, wrappers, and vault deposits fail closed;
+LP-share custody adapters are not part of this deployment.
 
 If `total_lp_shares == 0`, normal execution requires the raw tRFL reserve,
 custody units, and custody pending reward all to be zero. An unexpected reward
@@ -588,8 +608,8 @@ Test:
 6. Secondary fungible stores behave as expected.
 7. The TypeScript SDK reads the effective balance correctly.
 8. The chosen wallet displays either the derived balance or a documented fallback.
-9. If LP shares are transferable, their transfer hook checkpoints both LP
-   positions without re-entrancy or historical-reward leakage.
+9. The separate canonical LP transfer entry point checkpoints both account-bound
+   positions without relying on a fungible-asset transfer hook.
 
 ## Recorded Testnet result — 2026-07-20
 
@@ -610,16 +630,17 @@ fresh-deployment option only after distinct-balance wallet evidence succeeds;
 it is not a migration or post-deployment toggle. LP shares remain account-bound
 and LP beneficial owners claim from the separately backed LP reward vault.
 
-## Gate result A: full hook support
+## Gate result A: full hook support — not selected for this deployment
 
 Proceed with:
 
 - Effective balances that grow automatically.
 - Spending pending reflections without a separate claim.
 - Explicit claim as an optional operation.
-- Checkpoint-aware transferable LP shares if their separate hook probe passes.
+- No change to LP-share representation; LP shares are not fungible assets and
+  do not have transfer hooks.
 
-## Gate result B: partial or incompatible support
+## Gate result B: claim-backed support — selected for this deployment
 
 Proceed with a claim-backed pilot:
 
@@ -627,8 +648,8 @@ Proceed with a claim-backed pilot:
 - Pending rewards are exposed through a view.
 - Users call `claim()` before spending reflected tokens.
 - Swap economics and reward distribution remain unchanged.
-- LP shares remain account-bound if their checkpoint cannot be enforced on
-  arbitrary transfers; LP mint, burn, claim, and withdrawal still operate.
+- LP shares remain account-bound and can transfer only through the canonical
+  checkpointed entry point; LP mint, burn, claim, and withdrawal still operate.
 
 This fallback still validates the core reflection model. It merely loses the old-school “wallet number quietly climbs” experience.
 
@@ -644,7 +665,7 @@ Model: constant product
 Bootstrap liquidity provider: project-controlled Testnet account
 Public operations: buy, sell, proportional add liquidity, proportional remove liquidity, claim LP reflections
 LP accounting: checkpointed shares plus downstream reflection index
-LP share transfer: enabled only if the dedicated hook gate passes; otherwise account-bound
+LP share transfer: account-bound; enabled only through the checkpointed canonical entry point
 Multi-hop routing: disabled
 Flash operations: disabled
 Oracle integration: disabled
@@ -658,13 +679,16 @@ Bootstrap reserve funding, custody-share creation, and the initial LP-share
 mint are one atomic operation. No completed state may contain a positive raw
 pool reserve without a positive, fully assigned LP-share supply.
 
-The initial LP beneficiary must be a dedicated, non-privileged pilot account
-or an explicitly labelled protocol LP escrow. It must not be the excluded core,
-asset, or AMM operator wallet. Bootstrap administration and beneficial LP
-ownership are separate roles.
+The initial LP beneficiary must be the dedicated, non-privileged bootstrap-LP
+signer or an explicitly labelled protocol LP escrow signer. It must not be any
+package publisher, the current operations account, or a historical operations
+or LP-conflicted address. Bootstrap administration and beneficial LP ownership
+are separate authenticated roles.
 
 - Proportional two-sided deposits only.
-- No one-sided liquidity bypass.
+- No one-sided liquidity deposit or discretionary withdrawal bypass. The only
+  rounded-zero output exception is a proportional shutdown exit, as specified
+  above; both-zero remains invalid.
 - No donation-based share minting.
 - Minimum-liquidity lock or equivalent first-depositor protection. Any locked
   shares remain in an explicit checkpointed escrow position; LP supply is never
@@ -767,7 +791,8 @@ state that is actually live at that time.
 
 ## Stable hook surface
 
-Registered hook functions should remain thin and stable:
+Within this immutable deployment, registered wallet hook functions are thin
+wrappers around fixed code:
 
 ```move
 withdraw_hook(...)
@@ -775,16 +800,9 @@ deposit_hook(...)
 derived_balance_hook(...)
 ```
 
-Each delegates to the current accounting implementation.
-
-If transferable LP shares pass their separate compatibility gate, their
-checkpoint hooks are equally stable and thin:
-
-```move
-lp_withdraw_hook(...)
-lp_deposit_hook(...)
-lp_derived_balance_hook(...)
-```
+They are not an upgrade or migration seam. LP shares are account-bound table
+entries and transfer only through the checkpointed canonical entry point;
+there is no LP fungible asset or LP transfer hook.
 
 ## Deployment identity
 
@@ -815,36 +833,27 @@ testnet-v0.1.1
 testnet-v0.2.0
 ```
 
-Each release manifest should record:
+`ops/release-manifest.template.json`, its schema, and
+`ops/DEPLOYMENT_EXECUTION.md` are normative. The initial release has exactly
+nine ordered state-changing operations:
 
-```json
-{
-  "network": "cedra-testnet",
-  "deployment_id": "reflection-pilot-001",
-  "framework_commit": "...",
-  "application_commit": "...",
-  "packages": {
-    "reflection_core": { "publisher": "0x...", "source_digest": "...", "compiled_package_digest": "..." },
-    "test_assets": { "publisher": "0x...", "source_digest": "...", "compiled_package_digest": "..." },
-    "test_amm": { "publisher": "0x...", "source_digest": "...", "compiled_package_digest": "..." }
-  },
-  "operational_authority": { "address": "0x...", "handoff_transactions": ["0x...", "0x...", "0x..."] },
-  "objects": {
-    "token_metadata": "0x...",
-    "reward_vault": "0x...",
-    "distribution_vault": "0x...",
-    "pool": "0x...",
-    "pool_custody_store": "0x...",
-    "lp_share_representation": "account-bound-table",
-    "lp_epoch_registry": "0x...",
-    "active_lp_epoch": "1",
-    "active_lp_state": "0x...",
-    "lp_reward_vault": "0x...",
-    "mock_usd_metadata": "0x..."
-  },
-  "initialization": { "finalized_ledger_version": "...", "zero_discrepancy_snapshot": "..." }
-}
+```text
+core_publish
+core_initialize
+assets_publish
+amm_publish
+faucet_initialize
+amm_tusd_claim
+pool_initialize
+atomic_operational_handoff
+pool_seed
 ```
+
+Authority transfer is one atomic four-signer transaction. Each exact
+transaction candidate requires two verified detached OpenSSH approvals from
+distinct trusted identities and keys. Those approvals are separate from Cedra
+account signatures; the finalized manifest later cross-binds all approval
+envelopes and finalized chain evidence.
 
 No automatic Testnet publication should occur from CI. CI builds and verifies
 the artifact; an approved release operator publishes it.
@@ -886,31 +895,50 @@ The admin may not:
 
 Use:
 
-- A dedicated publisher key.
+- Three distinct cold package-publisher keys.
 - A separate operational key for routine pause and faucet actions.
-- Two-person approval for package publication.
-- A signed release manifest.
+- A separate, non-privileged bootstrap-LP key.
+- Two verified detached OpenSSH approvals from distinct trusted identities and
+  keys for every exact state-changing transaction candidate.
+- A finalized manifest that later cross-binds those per-transaction approvals,
+  Cedra signatures, and chain evidence.
 - A changelog for every release.
 
 For a Testnet pilot, this process is more valuable than building an elaborate governance contract whose own complexity would overshadow the token experiment.
 
 Each package publisher initially owns its package's routine control only long
-enough to perform an evented handoff to a non-zero operational address. After
-handoff, the publisher can rotate that address but cannot execute routine fee,
-pause, faucet, shutdown, or limit calls unless it performs another visible
-handoff. The core, asset, and AMM handoffs are separate transactions and the
-indexer reconciles all three current operational addresses against their
-on-chain views.
+enough to participate in an evented handoff to the same operations signer. The
+preferred handoff is one atomic four-signer transaction: core publisher as the
+primary sender, followed by the asset publisher, AMM publisher, and new
+operations account as ordered secondary signers. A failure in any package rolls
+the whole authority change back. Individual package handoffs remain explicit
+recovery surfaces and require both the relevant publisher and the operations
+signer; they are not the normal release path.
+
+The core handoff requires the new operations primary store to be empty and
+unregistered, excludes it permanently without consuming the two publisher
+bootstrap slots, and emits that classification. The AMM additionally rejects
+any address that has ever held LP shares. Once aligned, the publisher accounts
+cannot execute routine fee, pause, faucet, shutdown, or limit calls unless an
+evented rotation is completed. The indexer reconciles all three operational
+views and the permanent exclusion event.
 
 ---
 
-# 10. SDK and interface
+# 10. SDK and interface — deferred pilot backlog
+
+Contract-facing SDK, candidate-construction, finalized-read, and independent
+indexer work remain in the current evidence path. Browser UI, wallet
+integration, and participant journey work are deferred until the contract and
+release boundary are frozen. The existing static dashboard is not browser,
+wallet, or participant evidence.
 
 Cedra provides an official TypeScript SDK for building, submitting, and querying Testnet transactions. Use that as the client foundation.
 
-## Public interface
+## Deferred public interface
 
-The initial web application should contain five screens:
+After the contract and release evidence are frozen, a later web application
+should contain five screens:
 
 ### Faucet
 
@@ -996,8 +1024,11 @@ Emit:
 ```text
 ProtocolInitialized
 FaucetGrant
+MockUsdMinted
 FaucetConfigured
+PoolReserveBound
 WalletTransfer
+WalletRegistered
 EligibleBalanceDebited
 EligibleBalanceCredited
 SwapExecuted
@@ -1015,6 +1046,8 @@ LpSharesTransferred
 LpRewardIndexAdvanced
 LpRewardsClaimed
 LpRewardQuarantined
+LpFractionalResidueRetired
+LpEpochTerminalDustClassified
 LpEpochOpened
 LpEpochStatusChanged
 FeeConfigurationChanged
@@ -1023,7 +1056,11 @@ SwapLimitsChanged
 LiquidityLimitsChanged
 PauseStateChanged
 PoolPauseChanged
-OperationalAdminChanged
+OperationalAdminChanged (reflection-core scope)
+OperationalAdminChanged (test-assets scope)
+OperationalAdminChanged (test-AMM scope)
+ProtocolPrimaryStoreExcluded
+OperationalPrimaryStoreExcluded
 LiquiditySeeded
 LiquidityAdded
 LiquidityRemoved
@@ -1051,7 +1088,13 @@ After each indexed transaction:
     sufficient provenance.
 13. Reject an unknown event schema version instead of attempting best-effort
     replay.
-14. Record any discrepancy as a critical alert.
+14. Reconcile each event-known epoch's
+    `pool::lp_epoch_terminal_dust(epoch)` view, keeping physical `u128` terminal
+    rounding units separate from magnified `u256` retired residue.
+15. Require every positive LP owner to be a registered wallet and enforce the
+    Move `u256` domain at each arithmetic intermediate, not only at stored
+    transaction-end values.
+16. Record any discrepancy as a critical alert.
 ```
 
 ## Snapshots
@@ -1090,7 +1133,7 @@ Cover:
 - Wallet-to-canonical-pool eligibility movement.
 - Canonical pool custody-position accrual.
 - Custody reward checkpoint into the LP reward vault.
-- LP share mint, burn, optional transfer, and reward claim.
+- LP share mint, burn, canonical checkpointed transfer, and reward claim.
 - First/last LP and minimum-liquidity protection.
 - Two-provider deposits and exits immediately before and after fee events.
 - Partial and final exits across repeated global and LP rounding checkpoints.
@@ -1101,7 +1144,8 @@ Cover:
 - Sell.
 - Partial claim.
 - Full claim.
-- Auto-materialisation.
+- The compiler-excluded test-only automatic-materialisation branch and the
+  production claim-backed rejection of spending pending rewards before claim.
 - Zero-fee mode.
 - Tiny-amount rounding.
 - Maximum amount arithmetic.
@@ -1297,17 +1341,24 @@ shares, both reward vaults, both indexes, and every liability transfer.
 
 ## Phase 4: client and indexer
 
-Deliver:
+Current local deliverables:
 
 - TypeScript SDK wrapper.
-- Web application.
-- Wallet integration.
 - Event processor.
 - Reconciliation worker.
-- Public dashboard.
-- Alerting.
+- Durable local store/worker and alert journal.
+- Keyless nine-operation release-candidate assembler.
 
-**Exit condition:** A new user can obtain gas, claim test assets, trade, transfer, observe reflections, and claim rewards without manual CLI work.
+Deferred live/interface deliverables:
+
+- Web application and public dashboard.
+- Wallet integration.
+- External alert delivery.
+
+**Exit condition:** Local SDK/indexer/release tooling passes from the exact
+commit, and later a new user can obtain gas, claim test assets, trade, transfer,
+observe reflections, and claim rewards without manual CLI work. The second
+condition remains live/deferred evidence.
 
 ## Phase 5: closed Testnet pilot
 
@@ -1321,7 +1372,7 @@ Exercise:
 - Claims.
 - Transfers.
 - LP deposits, proportional withdrawals, and reward claims.
-- LP share transfers when enabled by the hook gate.
+- LP share transfers through the checkpointed canonical entry point.
 - Pool custody checkpoints before and after burst trading.
 - Pauses.
 - Indexer recovery.
@@ -1391,7 +1442,9 @@ Before calling the Testnet build successful, require:
 | Indexer recovery from snapshot | Demonstrated |
 | Unresolved critical or high findings | 0 |
 
-These numbers are not measures of commercial adoption. They are test coverage expressed through real chain activity.
+These numbers are not measures of commercial adoption. The one-million-operation
+reference-model gate is local evidence; the remaining quantitative targets
+require finalized real-chain activity.
 
 ---
 
@@ -1467,7 +1520,8 @@ The full contract package is complete when:
 - `tRFL` has a fixed supply for the deployment.
 - The distribution, core reward, and LP reward vaults are excluded.
 - Wallet-to-wallet transfers are untaxed.
-- Supported buys and sells charge exactly 1%.
+- Supported buys and sells charge the configured reflection fee, defaulting to
+  1% and never exceeding 1%.
 - The reward vault physically receives every reflection fee.
 - Wallet-held and canonical-pool `tRFL` are each counted exactly once in the
   O(1) global index.
@@ -1478,7 +1532,9 @@ The full contract package is complete when:
 - Claims preserve effective holder balances.
 - LP share mint, burn, transfer, and claim checkpointing preserves accrued
   ownership and cannot capture historical rewards.
-- Pending rewards can be spent automatically when hooks permit.
+- Pending wallet rewards can always be materialised by explicit on-chain claim.
+  Automatic pending-balance spending is not authorized for this claim-backed
+  release and would require a separately probed fresh deployment.
 - The AMM prices sells from net reserve input.
 - AMM settlement and quotation use the authoritative raw-store accessor, with
   raw store balance, cached reserve, and custody shares equal after every call.
@@ -1490,14 +1546,18 @@ The full contract package is complete when:
   primary stores; unsupported LP-share custody fails closed.
 - Zero LP-share supply implies zero raw reserve, zero custody units, and zero
   custody pending; a new LP epoch cannot inherit old liabilities.
-- Unsupported delegated-custody stores do not silently accrue rewards; every
-  supported adapter is explicit, reviewed, and bound to an exact store.
+- Unsupported delegated-custody stores do not silently accrue rewards. This
+  deployment supports only the canonical pool; another adapter requires a
+  fresh, separately reviewed deployment.
 - The initial package contains no speculative legacy-state transition surface.
 - Routine operational controls are separated from publisher accounts through
-  evented, publisher-authorized handoffs.
+  a co-signed, evented, atomic all-package handoff; publisher and current or
+  former operations primary stores are permanently reward-excluded.
+- Initial and replacement LP bootstrap ownership requires the dedicated
+  beneficiary signer; a bare address cannot receive irreversible LP ownership.
 - Every economic operation emits sufficient events for replay.
-- The independent model reproduces on-chain accounting exactly in deterministic
-  and randomized local tests.
+- The independent model reproduces the Move implementation exactly in
+  deterministic and randomized local tests.
 - The contract code is structurally suitable for later mainnet hardening.
 
 Passing this gate is local contract evidence. It is not Testnet deployment,
@@ -1537,4 +1597,9 @@ public accounting dashboard
 fresh-deployment recovery rehearsal
 ```
 
-The first concrete deliverable should be the **dispatchable-hook compatibility probe plus the written reflection accounting specification**. Those two artifacts determine whether the pilot gets seamless growing balances or the explicit-claim fallback, and they prevent the rest of the project from building a cathedral on a trapdoor.
+The compatibility probe and accounting specification are complete. The current
+next deliverable is a final green clean-commit verification record, an
+exact-address human-review bundle, and the first validator-accepted keyless
+Testnet candidate. Funding/account-control proof, independent human review,
+per-transaction approvals, external signing/submission, and finalized Testnet
+evidence remain separate gates.

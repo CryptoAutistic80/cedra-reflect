@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "evidence_scope": "local-public-role-candidate",
+  "recorded_date": "2026-07-20",
+  "network_intent": "cedra-testnet",
+  "source": "Cedra CLI-generated public account addresses recorded under explicit operator authorization",
+  "funding_status": "not-checked",
+  "on_chain_status": "not-checked",
+  "release_approval_status": "candidate-only",
+  "contains_private_key_material": false,
+  "roles": {
+    "core_publisher": {
+      "profile_name": "cedra-reflect-core-publisher",
+      "address": "0x14110b05c8b667577e2ffefab66b01fa2f48bca8091f51af33b1a6c6762773db",
+      "intended_use": "immutable reflection-core publication and publisher-only bootstrap"
+    },
+    "assets_publisher": {
+      "profile_name": "cedra-reflect-assets-publisher",
+      "address": "0x445292601c73f8542d576908c67e8a28a861575bdc8841e02753651f56492f8f",
+      "intended_use": "immutable test-assets publication and publisher-only bootstrap"
+    },
+    "amm_publisher": {
+      "profile_name": "cedra-reflect-amm-publisher",
+      "address": "0x47f0e7670e63258035b0f71fea8a80d9e24ed118d5262a47a97a555bc6506721",
+      "intended_use": "immutable test-amm publication and publisher-only bootstrap"
+    },
+    "operations": {
+      "profile_name": "cedra-reflect-operations",
+      "address": "0xb736430fcbb1b1f3d7dac953dcc11fa6cb033efcbc52a36816f1be32ed28ffa3",
+      "intended_use": "post-bootstrap routine operational controls"
+    },
+    "bootstrap_lp": {
+      "profile_name": "cedra-reflect-bootstrap-lp",
+      "address": "0x0b1cd21450f8b849a1235494c1646e3d338a332d286ba6aef79030d92e7b1f82",
+      "intended_use": "controlled initial LP beneficiary"
+    }
+  },
+  "evidence_boundaries": {
+    "profile_state_read_by_release_tooling": false,
+    "accounts_funded": false,
+    "accounts_observed_on_chain": false,
+    "release_authorized": false
+  }
+}

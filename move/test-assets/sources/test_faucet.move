@@ -55,7 +55,7 @@ module test_assets::test_faucet {
     public entry fun initialize(core_admin: &signer, faucet_admin: &signer) {
         assert!(!exists<FaucetState>(@test_assets), E_ALREADY_INITIALIZED);
         assert!(signer::address_of(faucet_admin) == @test_assets, E_WRONG_FAUCET_ADDRESS);
-        reflection_token::register_excluded_primary_store(core_admin, signer::address_of(faucet_admin));
+        reflection_token::register_protocol_publisher_store(core_admin, faucet_admin);
         let rfl_cap = reflection_token::issue_faucet_capability(core_admin);
         let usd_cap = mock_usd::issue_faucet_capability(faucet_admin);
         move_to(faucet_admin, FaucetState {
@@ -106,18 +106,31 @@ module test_assets::test_faucet {
         event::emit(FaucetConfigured { trfl_grant, tusd_grant, cooldown_seconds });
     }
 
+    /// Recovery-only faucet-role handoff. Normal cross-package rotations use
+    /// the AMM coordinator so every operational authority changes atomically.
     public entry fun set_operational_admin(
         publisher: &signer,
-        new_operational_admin: address,
+        new_operational_admin: &signer,
     ) acquires FaucetState {
-        assert!(new_operational_admin != @0x0, E_INVALID_OPERATIONAL_ADMIN);
         let state = borrow_global_mut<FaucetState>(@test_assets);
         assert!(signer::address_of(publisher) == state.admin, E_NOT_ADMIN);
+        let new_operational_admin_address = signer::address_of(new_operational_admin);
+        assert!(
+            new_operational_admin_address != @0x0
+                && new_operational_admin_address != @reflection_core
+                && new_operational_admin_address != @test_assets
+                && new_operational_admin_address != @test_amm
+                && new_operational_admin_address == reflection_token::operational_admin()
+                && reflection_token::primary_store_is_excluded(
+                    new_operational_admin_address,
+                ),
+            E_INVALID_OPERATIONAL_ADMIN,
+        );
         let old_operational_admin = state.operational_admin;
-        state.operational_admin = new_operational_admin;
+        state.operational_admin = new_operational_admin_address;
         event::emit(OperationalAdminChanged {
             old_operational_admin,
-            new_operational_admin,
+            new_operational_admin: new_operational_admin_address,
         });
     }
 
@@ -142,6 +155,14 @@ module test_assets::test_faucet {
     #[view]
     public fun paused(): bool acquires FaucetState {
         borrow_global<FaucetState>(@test_assets).paused
+    }
+
+    #[view]
+    public fun last_claim(account: address, trfl: bool): (bool, u64) acquires FaucetState {
+        let state = borrow_global<FaucetState>(@test_assets);
+        let claims = if (trfl) &state.last_trfl_claim else &state.last_tusd_claim;
+        if (!table::contains(claims, account)) return (false, 0);
+        (true, *table::borrow(claims, account))
     }
 
     fun assert_available(last_claims: &mut Table<address, u64>, account: address, cooldown: u64) {

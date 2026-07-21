@@ -55,8 +55,22 @@ class MoveVisibilitySurfaceTests(unittest.TestCase):
         self.assertNotRegex(source, r"\bfun\s+init_module\s*\(")
         self.assertRegex(
             source,
-            r"public\s+entry\s+fun\s+initialize\s*\(\s*admin:\s*&signer,\s*automatic_materialization:\s*bool",
+            r"public\s+entry\s+fun\s+initialize\s*\(\s*admin:\s*&signer\s*\)",
         )
+        self.assertNotRegex(
+            source,
+            r"public\s+entry\s+fun\s+initialize\s*\([^)]*\bbool\b",
+        )
+        self.assertRegex(
+            source,
+            r"(?m)^\s*fun\s+initialize_with_mode\s*\(\s*admin:\s*&signer,"
+            r"\s*automatic_materialization:\s*bool",
+        )
+        self.assertNotRegex(
+            source,
+            r"(?m)^\s*public(?:\([^)]*\))?\s+(?:entry\s+)?fun\s+initialize_with_mode\s*\(",
+        )
+        self.assertIn("initialize_with_mode(admin, false)", source)
         self.assertIn("automatic_materialization_enabled", source)
         self.assertNotRegex(source, r"fun\s+set_automatic_materialization\s*\(")
 

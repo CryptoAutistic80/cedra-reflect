@@ -10,9 +10,10 @@ boundary between the core reflection contract and the canonical AMM:
 * each LP epoch has its own reward index, positions, and physical vault; and
 * an LP payout enters a registered wallet at the current core index.
 
-All quantities are base units.  Python's arbitrary-precision arithmetic is
-used for intermediate calculations, but the model rejects values outside the
-u128/u256 bounds used by the protocol design.
+All token and reserve quantities are u64 base units. Python's
+arbitrary-precision arithmetic is used only for intermediate calculations;
+LP shares and magnified accounting remain bounded to the on-chain u128/u256
+domains.
 """
 
 from __future__ import annotations
@@ -25,9 +26,12 @@ from typing import Any, Dict, Iterable, Iterator, Mapping, Optional
 
 
 MAGNITUDE = 10**24
+MAX_U64 = (1 << 64) - 1
 MAX_U128 = (1 << 128) - 1
 MAX_U256 = (1 << 256) - 1
 BPS_DENOMINATOR = 10_000
+DEFAULT_MAX_RESERVE_BPS = 2_000
+DEFAULT_MAX_GROSS_SWAP = 100_000_000_000
 DEFAULT_MAX_LIQUIDITY_RFL = 100_000_000_000
 DEFAULT_MAX_LIQUIDITY_USD = 100_000_000_000
 DEFAULT_MAX_WITHDRAWAL_SHARE_BPS = BPS_DENOMINATOR
@@ -108,6 +112,8 @@ class LpEpoch:
     aggregate_correction: int = 0
     unallocated_rewards: int = 0
     rounding_reserve: int = 0
+    terminal_rounding_reserve: int = 0
+    retired_residue_magnified: int = 0
     lifetime_received: int = 0
     lifetime_claimed: int = 0
     quarantined: bool = False
@@ -150,7 +156,8 @@ class ReflectionModel:
     per-epoch index and cumulative claims as their settled amount.
     """
 
-    CORE_STORES = frozenset({"reward_vault", "distribution_vault", "pool", "admin"})
+    CORE_STORES = frozenset({"reward_vault", "distribution_vault", "pool"})
+    PROTOCOL_ACCOUNTS = frozenset({"reflection_core", "test_assets", "test_amm"})
 
     def __init__(
         self,
@@ -158,17 +165,37 @@ class ReflectionModel:
         fixed_supply: int,
         fee_bps: int = 100,
         amm_fee_bps: int = 30,
+        automatic_materialization: bool = False,
+        max_reserve_bps: int = DEFAULT_MAX_RESERVE_BPS,
+        max_gross_swap: int = DEFAULT_MAX_GROSS_SWAP,
         admin: str = "admin",
         extra_exclusions: Iterable[str] = (),
     ) -> None:
-        self._require_amount(fixed_supply, "fixed_supply", allow_zero=False)
+        self._require_token_amount(fixed_supply, "fixed_supply", allow_zero=False)
         self._require_bps(fee_bps, "fee_bps", maximum=100)
-        self._require_bps(amm_fee_bps, "amm_fee_bps", maximum=1_000)
+        self._require_bps(amm_fee_bps, "amm_fee_bps", maximum=100)
+        self._require_bps(
+            max_reserve_bps,
+            "max_reserve_bps",
+            maximum=BPS_DENOMINATOR,
+        )
+        if max_reserve_bps == 0:
+            raise AccountingError("max_reserve_bps must be positive")
+        self._require_token_amount(
+            max_gross_swap,
+            "max_gross_swap",
+            allow_zero=False,
+        )
+        if not isinstance(automatic_materialization, bool):
+            raise AccountingError("automatic_materialization must be a boolean")
 
         self.admin = admin
         self.fixed_supply = fixed_supply
         self.fee_bps = fee_bps
         self.amm_fee_bps = amm_fee_bps
+        self._automatic_materialization = automatic_materialization
+        self.max_reserve_bps = max_reserve_bps
+        self.max_gross_swap = max_gross_swap
         self.max_liquidity_rfl = DEFAULT_MAX_LIQUIDITY_RFL
         self.max_liquidity_usd = DEFAULT_MAX_LIQUIDITY_USD
         self.max_withdrawal_share_bps = DEFAULT_MAX_WITHDRAWAL_SHARE_BPS
@@ -194,7 +221,7 @@ class ReflectionModel:
         # Wallet positions are explicitly registered.  Protocol stores and any
         # unregistered/delegated store are never silently interpreted as a
         # wallet reward position.
-        self.exclusions = set(self.CORE_STORES)
+        self.exclusions = set(self.CORE_STORES | self.PROTOCOL_ACCOUNTS)
         self.exclusions.add(admin)
         self.exclusions.update(extra_exclusions)
         self.registered_wallets: set[str] = set()
@@ -222,13 +249,23 @@ class ReflectionModel:
         self._transaction_depth = 0
 
         self.raw["distribution_vault"] = fixed_supply
-        self._event("ProtocolInitialized", fixed_supply=fixed_supply, fee_bps=fee_bps)
+        self._event(
+            "ProtocolInitialized",
+            fixed_supply=fixed_supply,
+            fee_bps=fee_bps,
+            automatic_materialization=automatic_materialization,
+        )
 
     # ------------------------------------------------------------------
     # Public core and LP views
     # ------------------------------------------------------------------
     def raw_balance(self, account: str) -> int:
         return self.raw.get(account, 0)
+
+    @property
+    def automatic_materialization(self) -> bool:
+        """Immutable dispatcher materialization mode selected at construction."""
+        return self._automatic_materialization
 
     def quote_balance(self, account: str) -> int:
         return self.quote.get(account, 0)
@@ -350,7 +387,6 @@ class ReflectionModel:
         if actor != account:
             raise AuthorizationError("wallet registration requires the account signer")
         self._register_wallet(account)
-        self._event("WalletRegistered", account=account)
 
     def set_fee_bps(self, actor: str, fee_bps: int) -> None:
         self._require_admin(actor)
@@ -390,6 +426,41 @@ class ReflectionModel:
             shutdown_mode=self.shutdown_mode,
         )
 
+    def configure_swap_limits(
+        self,
+        actor: str,
+        amm_fee_bps: int,
+        max_reserve_bps: int,
+        max_gross_swap: int,
+    ) -> None:
+        """Mirror the canonical AMM's bounded operator configuration."""
+        self._require_admin(actor)
+        self._require_bps(amm_fee_bps, "amm_fee_bps", maximum=100)
+        self._require_bps(
+            max_reserve_bps,
+            "max_reserve_bps",
+            maximum=BPS_DENOMINATOR,
+        )
+        if max_reserve_bps == 0:
+            raise AccountingError("max_reserve_bps must be positive")
+        self._require_token_amount(
+            max_gross_swap,
+            "max_gross_swap",
+            allow_zero=False,
+        )
+        self.amm_fee_bps = amm_fee_bps
+        self.max_reserve_bps = max_reserve_bps
+        self.max_gross_swap = max_gross_swap
+        self._event(
+            "SwapLimitsChanged",
+            amm_fee_bps=amm_fee_bps,
+            max_reserve_bps=max_reserve_bps,
+            max_gross_swap=max_gross_swap,
+        )
+
+    def swap_limits(self) -> tuple[int, int, int]:
+        return (self.amm_fee_bps, self.max_reserve_bps, self.max_gross_swap)
+
     def configure_liquidity_limits(
         self,
         actor: str,
@@ -399,10 +470,10 @@ class ReflectionModel:
     ) -> None:
         """Set caps on actual liquidity inputs and non-final LP burns."""
         self._require_admin(actor)
-        self._require_amount(
+        self._require_token_amount(
             max_rfl_contribution, "max_rfl_contribution", allow_zero=False
         )
-        self._require_amount(
+        self._require_token_amount(
             max_usd_contribution, "max_usd_contribution", allow_zero=False
         )
         self._require_amount(
@@ -431,14 +502,14 @@ class ReflectionModel:
 
     def mint_quote(self, actor: str, recipient: str, amount: int) -> None:
         self._require_admin(actor)
-        self._require_amount(amount, "amount", allow_zero=False)
-        self.quote[recipient] = self.quote_balance(recipient) + amount
+        self._require_token_amount(amount, "amount", allow_zero=False)
+        self._credit_quote(recipient, amount)
         self._event("MockUsdMinted", recipient=recipient, amount=amount)
 
     def faucet_grant(self, actor: str, recipient: str, amount: int) -> None:
         """Untaxed grant that also authenticates/registers the recipient."""
         self._require_admin(actor)
-        self._require_amount(amount, "amount", allow_zero=False)
+        self._require_token_amount(amount, "amount", allow_zero=False)
         if amount > self.distribution_vault_balance:
             raise AccountingError("insufficient distribution-vault balance")
         self._validate_wallet_registration(recipient)
@@ -472,10 +543,11 @@ class ReflectionModel:
         if usd_amount > self.quote_balance(actor):
             raise AccountingError("insufficient admin mock USD")
 
+        self._register_wallet(beneficiary)
         self._debit_excluded("distribution_vault", rfl_amount)
         self._credit_custody(rfl_amount)
-        self.quote[actor] = self.quote_balance(actor) - usd_amount
-        self.quote["pool"] = self.pool_usd_reserve + usd_amount
+        self._debit_quote(actor, usd_amount)
+        self._credit_quote("pool", usd_amount)
         self._mint_lp(epoch, beneficiary, shares)
         self.seeded = True
         result = LiquidityResult(epoch.epoch_id, shares, rfl_amount, usd_amount)
@@ -505,7 +577,9 @@ class ReflectionModel:
             raise AccountingError("insufficient distribution-vault balance")
         if usd_amount > self.quote_balance(actor):
             raise AccountingError("insufficient admin mock USD")
+        route_residue = self._custody_epoch_route_residue()
 
+        self._register_wallet(beneficiary)
         epoch_id = self.next_epoch
         self.next_epoch += 1
         vault = self._lp_vault_name(epoch_id)
@@ -514,14 +588,15 @@ class ReflectionModel:
         epoch = LpEpoch(epoch_id, vault)
         self.lp_epochs[epoch_id] = epoch
         self.active_epoch = epoch_id
+        self._event("LpEpochOpened", epoch=epoch_id, vault=vault)
+        self._open_custody_epoch_route(epoch, expected_residue=route_residue)
         self._debit_excluded("distribution_vault", rfl_amount)
         self._credit_custody(rfl_amount)
-        self.quote[actor] = self.quote_balance(actor) - usd_amount
-        self.quote["pool"] = self.pool_usd_reserve + usd_amount
+        self._debit_quote(actor, usd_amount)
+        self._credit_quote("pool", usd_amount)
         self._mint_lp(epoch, beneficiary, shares)
         self.seeded = True
         result = LiquidityResult(epoch_id, shares, rfl_amount, usd_amount)
-        self._event("LpEpochOpened", epoch=epoch_id, vault=vault)
         self._event("LiquiditySeeded", provider=beneficiary, **result.__dict__)
         return result
 
@@ -529,6 +604,8 @@ class ReflectionModel:
         self._require_admin(actor)
         if not self.seeded:
             raise AccountingError("pool is not seeded")
+        if self.lp_claims_paused:
+            raise AccountingError("LP claims must be live before shutdown")
         self.pool_paused = True
         self.shutdown_mode = True
         self.liquidity_paused = False
@@ -537,13 +614,13 @@ class ReflectionModel:
     # ------------------------------------------------------------------
     # Wallet operations
     # ------------------------------------------------------------------
-    def transfer(self, sender: str, recipient: str, amount: int, *, auto_materialize: bool = True) -> None:
+    def transfer(self, sender: str, recipient: str, amount: int) -> None:
         """Untaxed primary-wallet transfer; unsupported custody fails closed."""
         self._require_unlocked()
-        self._require_amount(amount, "amount", allow_zero=False)
+        self._require_token_amount(amount, "amount", allow_zero=False)
         if sender not in self.registered_wallets or recipient not in self.registered_wallets:
             raise PoolBypassError("both endpoints must be registered primary wallets")
-        self._ensure_spendable(sender, amount, auto_materialize=auto_materialize)
+        self._ensure_spendable(sender, amount)
         self._debit_wallet(sender, amount)
         self._credit_wallet(recipient, amount)
         self._event("WalletTransfer", sender=sender, recipient=recipient, amount=amount)
@@ -556,7 +633,7 @@ class ReflectionModel:
         self._require_registered_wallet(account)
         available = self.pending(account)
         amount = available if amount is None else amount
-        self._require_amount(amount, "amount", allow_zero=False)
+        self._require_token_amount(amount, "amount", allow_zero=False)
         if amount > available:
             raise AccountingError("claim exceeds pending rewards")
         self._materialize(account, amount, event_name="RewardsClaimed")
@@ -568,12 +645,21 @@ class ReflectionModel:
     def sell(self, seller: str, gross_rfl: int, *, min_quote_out: int = 0) -> SwapResult:
         """Sell tRFL; the pre-trade custody reserve participates exactly once."""
         self._require_swaps_live()
-        self._require_amount(gross_rfl, "gross_rfl", allow_zero=False)
-        self._require_amount(min_quote_out, "min_quote_out")
+        self._require_token_amount(gross_rfl, "gross_rfl", allow_zero=False)
+        self._require_token_amount(min_quote_out, "min_quote_out")
         with self._guard("swap"):
             self._require_registered_wallet(seller)
-            self._validate_spendable(seller, gross_rfl, auto_materialize=True)
+            self._assert_swap_bounds(gross_rfl, is_sell=True)
+            self._validate_spendable(seller, gross_rfl)
             reflection_fee = self._reflection_fee(gross_rfl)
+            # Move aborts the whole transaction if its u256 lifetime counter
+            # is exhausted.  Preflight before any wallet/vault mutation so the
+            # Python oracle has the same atomic boundary.
+            self._require_u256_sum(
+                self.lifetime_fees,
+                reflection_fee,
+                "lifetime reflection fees",
+            )
             net_rfl = gross_rfl - reflection_fee
             invariant_input = self._amm_invariant_input(net_rfl)
             quote_out = self._constant_product_output(
@@ -581,19 +667,21 @@ class ReflectionModel:
             )
             if quote_out <= 0:
                 raise AccountingError("swap output rounds to zero")
+            self._assert_reserve_output_cap(quote_out, self.pool_usd_reserve)
             if quote_out < min_quote_out:
                 raise AccountingError("slippage: net quote output below minimum")
+            self._require_u64_sum(self.quote_balance(seller), quote_out, "seller quote balance")
 
             # Debit gross first.  The fee advances across the seller's remaining
             # wallet units and the pre-trade custody units.  New reserve units
             # are attached only after that advance and receive no historical fee.
-            self._ensure_spendable(seller, gross_rfl, auto_materialize=True)
+            self._ensure_spendable(seller, gross_rfl)
             self._debit_wallet(seller, gross_rfl)
             self._credit_excluded("reward_vault", reflection_fee)
             self._advance_index(reflection_fee)
             self._credit_custody(net_rfl)
-            self.quote["pool"] = self.pool_usd_reserve - quote_out
-            self.quote[seller] = self.quote_balance(seller) + quote_out
+            self._debit_quote("pool", quote_out)
+            self._credit_quote(seller, quote_out)
             result = SwapResult(
                 direction="sell",
                 gross_amount=gross_rfl,
@@ -609,9 +697,10 @@ class ReflectionModel:
     def buy(self, buyer: str, quote_in: int, *, min_net_rfl_out: int = 0) -> SwapResult:
         """Buy tRFL; purchased units cannot capture their own reflection fee."""
         self._require_swaps_live()
-        self._require_amount(quote_in, "quote_in", allow_zero=False)
-        self._require_amount(min_net_rfl_out, "min_net_rfl_out")
+        self._require_token_amount(quote_in, "quote_in", allow_zero=False)
+        self._require_token_amount(min_net_rfl_out, "min_net_rfl_out")
         with self._guard("swap"):
+            self._assert_swap_bounds(quote_in, is_sell=False)
             if quote_in > self.quote_balance(buyer):
                 raise AccountingError("insufficient mock USD")
             self._validate_wallet_registration(buyer)
@@ -621,13 +710,20 @@ class ReflectionModel:
             )
             if gross_rfl <= 0:
                 raise AccountingError("swap output rounds to zero")
+            self._assert_reserve_output_cap(gross_rfl, self.pool_rfl_reserve)
             reflection_fee = self._reflection_fee(gross_rfl)
+            self._require_u256_sum(
+                self.lifetime_fees,
+                reflection_fee,
+                "lifetime reflection fees",
+            )
             net_rfl = gross_rfl - reflection_fee
             if net_rfl <= 0 or net_rfl < min_net_rfl_out:
                 raise AccountingError("slippage: net tRFL receipt below minimum")
 
-            self.quote[buyer] = self.quote_balance(buyer) - quote_in
-            self.quote["pool"] = self.pool_usd_reserve + quote_in
+            self._require_u64_sum(self.pool_usd_reserve, quote_in, "pool quote reserve")
+            self._debit_quote(buyer, quote_in)
+            self._credit_quote("pool", quote_in)
             self._debit_custody(gross_rfl)
             self._credit_excluded("reward_vault", reflection_fee)
             self._advance_index(reflection_fee)
@@ -656,6 +752,46 @@ class ReflectionModel:
         with self._atomic(epoch_ids=(self.active_epoch,)), self._guard("checkpoint"):
             return self._checkpoint_active()
 
+    def force_zero_denominator_receipt_for_test(self, owner: str) -> int:
+        """Mirror the Move test-only defense path for a routed zero denominator.
+
+        Canonical entry points preflight a healthy active epoch. This helper is
+        deliberately test-only evidence: it removes the final denominator
+        without auto-payment, then routes a real custody receipt so the
+        defense-in-depth unallocated/quarantine branch is exercised exactly.
+        """
+        self._require_unlocked()
+        self._require_registered_wallet(owner)
+        if not self.seeded:
+            raise AccountingError("pool is not seeded")
+        with self._atomic(
+            accounts=(owner,), epoch_ids=(self.active_epoch,)
+        ), self._guard("zero-denominator-test"):
+            epoch = self.active_lp_epoch()
+            self._assert_lp_mutable(epoch)
+            shares = self.lp_shares(epoch.epoch_id, owner)
+            if shares <= 0:
+                raise AccountingError("test owner has no active LP shares")
+            self._burn_lp(epoch, owner, shares)
+
+            amount = self.pool_pending_rewards()
+            if amount <= 0:
+                raise AccountingError("zero-denominator test requires a routed receipt")
+            if amount > self.reward_vault_balance:
+                raise AssertionError("custody reward is missing from core vault")
+            if self.custody_settled + amount > MAX_U256:
+                raise AccountingError("custody settlement exceeds u256")
+            if self.lifetime_custody_routed + amount > MAX_U256:
+                raise AccountingError("lifetime custody route exceeds u256")
+
+            self._debit_excluded("reward_vault", amount)
+            self._credit_excluded(epoch.vault, amount)
+            self.custody_settled += amount
+            self.lifetime_custody_routed += amount
+            self._receive_lp_reward(epoch, amount)
+            self._event("CustodyRewardsRouted", epoch=epoch.epoch_id, amount=amount)
+            return amount
+
     def add_liquidity(
         self,
         provider: str,
@@ -665,8 +801,8 @@ class ReflectionModel:
         min_lp_shares: int = 1,
     ) -> LiquidityResult:
         self._require_unlocked()
-        self._require_amount(max_rfl, "max_rfl", allow_zero=False)
-        self._require_amount(max_usd, "max_usd", allow_zero=False)
+        self._require_token_amount(max_rfl, "max_rfl", allow_zero=False)
+        self._require_token_amount(max_usd, "max_usd", allow_zero=False)
         self._require_amount(min_lp_shares, "min_lp_shares", allow_zero=False)
         self._require_registered_wallet(provider)
         if not self.seeded or self.liquidity_paused or self.shutdown_mode:
@@ -687,13 +823,13 @@ class ReflectionModel:
                 raise AccountingError("actual liquidity contribution exceeds configured limit")
             if shares < min_lp_shares:
                 raise AccountingError("minted LP shares are below the minimum")
-            self._ensure_spendable(provider, rfl_used, auto_materialize=True)
+            self._ensure_spendable(provider, rfl_used)
             if usd_used > self.quote_balance(provider):
                 raise AccountingError("insufficient mock USD")
             self._debit_wallet(provider, rfl_used)
             self._credit_custody(rfl_used)
-            self.quote[provider] = self.quote_balance(provider) - usd_used
-            self.quote["pool"] = self.pool_usd_reserve + usd_used
+            self._debit_quote(provider, usd_used)
+            self._credit_quote("pool", usd_used)
             self._mint_lp(epoch, provider, shares)
             result = LiquidityResult(epoch.epoch_id, shares, rfl_used, usd_used)
             self._event("LiquidityAdded", provider=provider, **result.__dict__)
@@ -709,8 +845,8 @@ class ReflectionModel:
     ) -> LiquidityResult:
         self._require_unlocked()
         self._require_amount(shares, "shares", allow_zero=False)
-        self._require_amount(min_rfl_output, "min_rfl_output")
-        self._require_amount(min_usd_output, "min_usd_output")
+        self._require_token_amount(min_rfl_output, "min_rfl_output")
+        self._require_token_amount(min_usd_output, "min_usd_output")
         if not self.seeded or (self.liquidity_paused and not self.shutdown_mode):
             raise AccountingError("liquidity removals are not live")
         with self._atomic(
@@ -726,6 +862,7 @@ class ReflectionModel:
                 raise AccountingError("final reserve exit requires shutdown mode")
             if (
                 not final_exit
+                and not self.shutdown_mode
                 and shares * BPS_DENOMINATOR
                 > total * self.max_withdrawal_share_bps
             ):
@@ -736,24 +873,45 @@ class ReflectionModel:
                 self.pool_rfl_reserve,
                 self.pool_usd_reserve,
             )
-            if rfl_out <= 0 or usd_out <= 0:
-                raise AccountingError("liquidity output rounds to zero")
+            if self.shutdown_mode:
+                if rfl_out <= 0 and usd_out <= 0:
+                    raise AccountingError("both liquidity outputs round to zero")
+            elif rfl_out <= 0 or usd_out <= 0:
+                raise AccountingError("one liquidity output rounds to zero outside shutdown")
             if rfl_out < min_rfl_output or usd_out < min_usd_output:
                 raise AccountingError("liquidity output is below the minimum")
 
+            self._auto_pay_before_position_exit(epoch, provider, shares)
             self._burn_lp(epoch, provider, shares)
-            self._debit_custody(rfl_out)
-            self._register_wallet(provider)
-            self._credit_wallet(provider, rfl_out)
-            self.quote["pool"] = self.pool_usd_reserve - usd_out
-            self.quote[provider] = self.quote_balance(provider) + usd_out
+            if rfl_out:
+                self._debit_custody(rfl_out)
+                self._register_wallet(provider)
+                self._credit_wallet(provider, rfl_out)
+            if usd_out:
+                self._debit_quote("pool", usd_out)
+                self._credit_quote(provider, usd_out)
             if final_exit:
                 if self.pool_rfl_reserve or self.pool_usd_reserve or self.pool_pending_rewards():
                     raise AssertionError("final exit left custody state behind")
+                self._recompute_lp_rounding(epoch)
+                if epoch.quarantined or epoch.aggregate_liability() or epoch.unallocated_rewards:
+                    raise AssertionError("terminal LP epoch retains claimable or unallocated value")
+                if self.lp_vault_balance(epoch.epoch_id) != epoch.rounding_reserve:
+                    raise AssertionError("terminal LP dust is not physically exact")
+                epoch.terminal_rounding_reserve = epoch.rounding_reserve
                 epoch.status = LP_CLAIM_ONLY
                 self.active_epoch = None
                 self.seeded = False
                 self.shutdown_mode = False
+                self._event(
+                    "LpEpochTerminalDustClassified",
+                    epoch=epoch.epoch_id,
+                    reward_vault=epoch.vault,
+                    terminal_rounding_base_units=epoch.terminal_rounding_reserve,
+                    retired_residue_magnified=epoch.retired_residue_magnified,
+                    lifetime_received_base_units=epoch.lifetime_received,
+                    lifetime_claimed_base_units=epoch.lifetime_claimed,
+                )
             result = LiquidityResult(epoch.epoch_id, shares, rfl_out, usd_out, final_exit)
             self._event("LiquidityRemoved", provider=provider, **result.__dict__)
             return result
@@ -772,6 +930,7 @@ class ReflectionModel:
         ), self._guard("lp-transfer"):
             self._checkpoint_active()
             epoch = self.active_lp_epoch()
+            self._auto_pay_before_position_exit(epoch, sender, shares)
             self._transfer_lp(epoch, sender, recipient, shares)
             self._event(
                 "LpSharesTransferred",
@@ -790,20 +949,28 @@ class ReflectionModel:
         with self._atomic(
             accounts=(owner,), epoch_ids=(epoch_id, self.active_epoch)
         ), self._guard("lp-claim"):
-            if self.active_epoch == epoch_id:
+            if self.active_epoch == epoch_id and not self.lp_epoch(epoch_id).quarantined:
                 self._checkpoint_active()
             epoch = self.lp_epoch(epoch_id)
             if epoch.status not in {LP_ACTIVE, LP_CLAIM_ONLY}:
                 raise AccountingError("LP epoch is not claimable")
             available = epoch.pending(owner)
             amount = available if amount in {None, 0} else amount
-            self._require_amount(amount, "amount", allow_zero=False)
+            self._require_token_amount(amount, "amount", allow_zero=False)
             if amount > available:
                 raise AccountingError("LP claim exceeds pending rewards")
 
             position = epoch.positions[owner]
-            position.claimed += amount
-            epoch.lifetime_claimed += amount
+            position.claimed = self._require_u256_sum(
+                position.claimed,
+                amount,
+                "LP position claimed rewards",
+            )
+            epoch.lifetime_claimed = self._require_u256_sum(
+                epoch.lifetime_claimed,
+                amount,
+                "LP lifetime claimed rewards",
+            )
             self._debit_excluded(epoch.vault, amount)
             # Correction on this core wallet credit excludes every historical
             # core index increment, including the one that funded the LP claim.
@@ -870,11 +1037,15 @@ class ReflectionModel:
             "sell": self.sell,
             "buy": self.buy,
             "checkpoint_pool": self.checkpoint_pool,
+            "force_zero_denominator_receipt_for_test": (
+                self.force_zero_denominator_receipt_for_test
+            ),
             "add_liquidity": self.add_liquidity,
             "remove_liquidity": self.remove_liquidity,
             "transfer_lp_shares": self.transfer_lp_shares,
             "claim_lp": self.claim_lp,
             "begin_shutdown": self.begin_shutdown,
+            "configure_swap_limits": self.configure_swap_limits,
             "configure_liquidity_limits": self.configure_liquidity_limits,
             "set_fee_bps": self.set_fee_bps,
             "set_swaps_paused": self.set_swaps_paused,
@@ -890,6 +1061,14 @@ class ReflectionModel:
         """O(epochs) checks suitable for every randomized operation."""
         if not 0 <= self.fee_bps <= 100:
             raise AssertionError("reflection fee is outside the 0-100 bps policy")
+        if not 0 <= self.amm_fee_bps <= 100:
+            raise AssertionError("AMM fee is outside the 0-100 bps policy")
+        if not 0 < self.max_reserve_bps <= BPS_DENOMINATOR:
+            raise AssertionError("swap reserve limit is outside 1-10,000 bps")
+        if not 0 < self.max_gross_swap <= MAX_U64:
+            raise AssertionError("gross swap limit is outside u64")
+        if not isinstance(self.automatic_materialization, bool):
+            raise AssertionError("materialization mode is not immutable boolean state")
         if self.max_liquidity_rfl <= 0 or self.max_liquidity_usd <= 0:
             raise AssertionError("liquidity contribution limits must be positive")
         if not 0 < self.max_withdrawal_share_bps <= BPS_DENOMINATOR:
@@ -925,6 +1104,14 @@ class ReflectionModel:
                 + epoch.rounding_reserve
             ):
                 raise AssertionError("LP vault does not equal its named buckets")
+            if epoch.status == LP_CLAIM_ONLY and (
+                epoch.aggregate_liability() != 0
+                or epoch.unallocated_rewards != 0
+                or epoch.terminal_rounding_reserve != epoch.rounding_reserve
+                or self.lp_vault_balance(epoch.epoch_id)
+                != epoch.terminal_rounding_reserve
+            ):
+                raise AssertionError("claim-only epoch is not exact terminal dust")
 
     def assert_invariants(self) -> None:
         """Complete O(wallets + LP positions) invariant audit."""
@@ -964,6 +1151,12 @@ class ReflectionModel:
                     raise AssertionError("active LP status is not the routed epoch")
             elif epoch.status != LP_CLAIM_ONLY:
                 raise AssertionError("unknown LP epoch status")
+            if epoch.quarantined and (
+                epoch.status != LP_ACTIVE
+                or epoch.total_shares != 0
+                or epoch.unallocated_rewards <= 0
+            ):
+                raise AssertionError("LP quarantine is not a zero-denominator active receipt")
             calculated_shares = sum(position.shares for position in epoch.positions.values())
             calculated_lp_correction = sum(position.correction for position in epoch.positions.values())
             if calculated_shares != epoch.total_shares:
@@ -980,11 +1173,19 @@ class ReflectionModel:
         if active_count != (1 if self.active_epoch is not None else 0):
             raise AssertionError("LP active-epoch registry drifted")
         if self.active_epoch is not None and self.active_lp_epoch().total_shares == 0:
-            if self.pool_rfl_reserve or self.custody_shares or self.pool_pending_rewards():
+            active = self.active_lp_epoch()
+            if active.quarantined:
+                if self.pool_pending_rewards() != 0:
+                    raise AssertionError("quarantined receipt left custody pending")
+            elif self.pool_rfl_reserve or self.custody_shares or self.pool_pending_rewards():
                 raise AssertionError("zero LP shares coexist with live custody")
         if self.seeded:
             epoch = self.active_lp_epoch()
-            if epoch.total_shares <= 0 or self.pool_rfl_reserve <= 0 or self.pool_usd_reserve <= 0:
+            if (
+                self.pool_rfl_reserve <= 0
+                or self.pool_usd_reserve <= 0
+                or (epoch.total_shares <= 0 and not epoch.quarantined)
+            ):
                 raise AssertionError("seeded pool lacks reserves or LP shares")
         elif self.pool_rfl_reserve or self.pool_usd_reserve:
             raise AssertionError("unseeded pool retains pricing reserves")
@@ -992,15 +1193,22 @@ class ReflectionModel:
     # ------------------------------------------------------------------
     # Internal core accounting primitives
     # ------------------------------------------------------------------
-    def _register_wallet(self, account: str) -> None:
+    def _register_wallet(self, account: str) -> bool:
         self._validate_wallet_registration(account)
         if account in self.registered_wallets:
-            return
+            return False
         self.registered_wallets.add(account)
         self.raw.setdefault(account, 0)
         self.quote.setdefault(account, 0)
         self.correction.setdefault(account, 0)
         self.materialized.setdefault(account, 0)
+        self._event(
+            "WalletRegistered",
+            account=account,
+            primary_store=f"primary_store:{account}",
+            registered_wallet_count=len(self.registered_wallets),
+        )
+        return True
 
     def _validate_wallet_registration(self, account: str) -> None:
         if account in self.registered_wallets:
@@ -1026,7 +1234,9 @@ class ReflectionModel:
 
     def _credit_wallet(self, account: str, amount: int) -> None:
         self._require_registered_wallet(account)
-        self.raw[account] = self.raw_balance(account) + amount
+        self.raw[account] = self._require_u64_sum(
+            self.raw_balance(account), amount, "wallet tRFL balance"
+        )
         self.total_shares += amount
         delta = _checked_u256_product(self.index, amount, "wallet credit correction")
         self._adjust_wallet_correction(account, -delta)
@@ -1043,7 +1253,9 @@ class ReflectionModel:
         self._adjust_aggregate_correction(delta)
 
     def _credit_custody(self, amount: int) -> None:
-        self.raw["pool"] = self.pool_rfl_reserve + amount
+        self.raw["pool"] = self._require_u64_sum(
+            self.pool_rfl_reserve, amount, "pool tRFL reserve"
+        )
         self.custody_shares += amount
         self.total_shares += amount
         delta = _checked_u256_product(self.index, amount, "custody credit correction")
@@ -1060,20 +1272,32 @@ class ReflectionModel:
     def _credit_excluded(self, account: str, amount: int) -> None:
         if account not in self.exclusions:
             raise AccountingError("expected excluded recipient")
-        self.raw[account] = self.raw_balance(account) + amount
+        self.raw[account] = self._require_u64_sum(
+            self.raw_balance(account), amount, f"{account} tRFL balance"
+        )
 
-    def _ensure_spendable(self, account: str, amount: int, *, auto_materialize: bool) -> None:
-        self._validate_spendable(account, amount, auto_materialize=auto_materialize)
+    def _debit_quote(self, account: str, amount: int) -> None:
+        if amount > self.quote_balance(account):
+            raise AccountingError("insufficient mock USD")
+        self.quote[account] = self.quote_balance(account) - amount
+
+    def _credit_quote(self, account: str, amount: int) -> None:
+        self.quote[account] = self._require_u64_sum(
+            self.quote_balance(account), amount, f"{account} mock USD balance"
+        )
+
+    def _ensure_spendable(self, account: str, amount: int) -> None:
+        self._validate_spendable(account, amount)
         shortfall = amount - self.raw_balance(account)
         if shortfall > 0:
             self._materialize(account, shortfall, event_name="RewardsMaterialized")
 
-    def _validate_spendable(self, account: str, amount: int, *, auto_materialize: bool) -> None:
+    def _validate_spendable(self, account: str, amount: int) -> None:
         self._require_registered_wallet(account)
         shortfall = amount - self.raw_balance(account)
         if shortfall <= 0:
             return
-        if not auto_materialize:
+        if not self.automatic_materialization:
             raise AccountingError("automatic materialisation is disabled")
         if self.claims_paused:
             raise AccountingError("claims are paused; pending balance cannot be spent")
@@ -1083,16 +1307,30 @@ class ReflectionModel:
     def _materialize(self, account: str, amount: int, *, event_name: str) -> None:
         if amount > self.pending(account) or amount > self.reward_vault_balance:
             raise AccountingError("materialisation exceeds backed pending rewards")
+        next_account_materialized = self._require_u256_sum(
+            self.materialized.get(account, 0),
+            amount,
+            "wallet materialized rewards",
+        )
+        next_lifetime_materialized = self._require_u256_sum(
+            self.lifetime_materialized,
+            amount,
+            "lifetime materialized rewards",
+        )
         self._debit_excluded("reward_vault", amount)
         self._credit_wallet(account, amount)
-        self.materialized[account] = self.materialized.get(account, 0) + amount
-        self.lifetime_materialized += amount
+        self.materialized[account] = next_account_materialized
+        self.lifetime_materialized = next_lifetime_materialized
         self._event(event_name, account=account, amount=amount)
 
     def _advance_index(self, fee: int) -> None:
         if fee == 0:
             return
-        self.lifetime_fees += fee
+        self.lifetime_fees = self._require_u256_sum(
+            self.lifetime_fees,
+            fee,
+            "lifetime reflection fees",
+        )
         if self.total_shares == 0:
             self.unallocated_fees += fee
             self._recompute_core_rounding()
@@ -1125,10 +1363,54 @@ class ReflectionModel:
     # ------------------------------------------------------------------
     # Internal custody and LP accounting primitives
     # ------------------------------------------------------------------
+    def _custody_epoch_route_residue(self) -> int:
+        """Preflight and return the exact zero-share custody fraction."""
+        if self.custody_shares or self.pool_rfl_reserve:
+            raise AccountingError("custody must be empty before opening a fresh route")
+        if self.pool_pending_rewards():
+            raise AccountingError("custody pending must be zero at epoch change")
+        normalized = _checked_u256_product(
+            self.custody_settled,
+            MAGNITUDE,
+            "normalized custody epoch correction",
+        )
+        if not normalized <= self.custody_correction < normalized + MAGNITUDE:
+            raise AccountingError("custody epoch correction is not a fractional residue")
+        return self.custody_correction - normalized
+
+    def _open_custody_epoch_route(
+        self,
+        epoch: LpEpoch,
+        *,
+        expected_residue: Optional[int] = None,
+    ) -> int:
+        """Retire only the prior zero-share custody fractional residue.
+
+        This is the Python counterpart of Move's
+        ``reflection_token::open_custody_epoch_route``. Whole routed
+        entitlement remains represented by ``custody_settled * MAGNITUDE``;
+        only the sub-base-unit residue is removed from the custody and global
+        corrections before fresh reserve shares enter the new epoch.
+        """
+        residue = self._custody_epoch_route_residue()
+        if expected_residue is not None and residue != expected_residue:
+            raise AssertionError("custody route residue changed after preflight")
+        if residue:
+            self._adjust_custody_correction(-residue)
+            self._adjust_aggregate_correction(-residue)
+        self._recompute_core_rounding()
+        self._event(
+            "CustodyEpochRouteOpened",
+            adapter_id=1,
+            epoch=epoch.epoch_id,
+            reserve_store="pool",
+            lp_reward_vault=epoch.vault,
+            retired_residue_magnified=residue,
+        )
+        return residue
+
     def _checkpoint_active(self) -> int:
         epoch = self._assert_active_epoch_healthy()
-        if self.claims_paused:
-            raise AccountingError("core claims and custody routing are paused")
         amount = self.pool_pending_rewards()
         if amount == 0:
             return 0
@@ -1138,8 +1420,16 @@ class ReflectionModel:
         before_reserves = (self.pool_rfl_reserve, self.pool_usd_reserve)
         self._debit_excluded("reward_vault", amount)
         self._credit_excluded(epoch.vault, amount)
-        self.custody_settled += amount
-        self.lifetime_custody_routed += amount
+        self.custody_settled = self._require_u256_sum(
+            self.custody_settled,
+            amount,
+            "custody settled rewards",
+        )
+        self.lifetime_custody_routed = self._require_u256_sum(
+            self.lifetime_custody_routed,
+            amount,
+            "lifetime custody routed rewards",
+        )
         self._receive_lp_reward(epoch, amount)
         if before_reserves != (self.pool_rfl_reserve, self.pool_usd_reserve):
             raise AssertionError("custody checkpoint mutated AMM reserves")
@@ -1147,8 +1437,29 @@ class ReflectionModel:
         return amount
 
     def _receive_lp_reward(self, epoch: LpEpoch, amount: int) -> None:
-        self._assert_epoch_healthy(epoch)
-        epoch.lifetime_received += amount
+        # Match Move's defense-in-depth receipt path: mutation still requires
+        # an ACTIVE, non-quarantined epoch, but a zero denominator names the
+        # already-moved receipt as unallocated and quarantines the epoch.
+        self._assert_lp_mutable(epoch)
+        epoch.lifetime_received = self._require_u256_sum(
+            epoch.lifetime_received,
+            amount,
+            "LP lifetime received rewards",
+        )
+        if epoch.total_shares == 0:
+            if epoch.unallocated_rewards + amount > MAX_U128:
+                raise AccountingError("LP unallocated rewards exceed u128")
+            epoch.unallocated_rewards += amount
+            epoch.quarantined = True
+            self._recompute_lp_rounding(epoch)
+            self._event(
+                "LpRewardQuarantined",
+                epoch=epoch.epoch_id,
+                amount=amount,
+                unallocated_rewards=epoch.unallocated_rewards,
+                reward_vault=epoch.vault,
+            )
+            return
         numerator = _checked_u256_product(amount, MAGNITUDE, "LP index numerator")
         if numerator + epoch.index_remainder > MAX_U256:
             raise AccountingError("LP index numerator exceeds u256")
@@ -1191,6 +1502,8 @@ class ReflectionModel:
         self._adjust_lp_position_correction(position, delta)
         epoch.total_shares -= amount
         self._adjust_lp_aggregate_correction(epoch, delta)
+        if position.shares == 0:
+            self._normalize_zero_lp_position(epoch, owner)
 
     def _transfer_lp(self, epoch: LpEpoch, sender: str, recipient: str, amount: int) -> None:
         self._assert_lp_mutable(epoch)
@@ -1203,6 +1516,69 @@ class ReflectionModel:
         self._adjust_lp_position_correction(sender_position, delta)
         recipient_position.shares += amount
         self._adjust_lp_position_correction(recipient_position, -delta)
+        if sender_position.shares == 0:
+            self._normalize_zero_lp_position(epoch, sender)
+
+    def _auto_pay_before_position_exit(
+        self,
+        epoch: LpEpoch,
+        owner: str,
+        shares_to_remove: int,
+    ) -> None:
+        position = epoch.positions.get(owner)
+        if position is None or position.shares != shares_to_remove:
+            return
+        pending = epoch.pending(owner)
+        if pending == 0:
+            return
+        if self.lp_claims_paused:
+            raise AccountingError("LP claims are paused; position exit requires payout")
+        position.claimed = self._require_u256_sum(
+            position.claimed,
+            pending,
+            "LP position claimed rewards",
+        )
+        epoch.lifetime_claimed = self._require_u256_sum(
+            epoch.lifetime_claimed,
+            pending,
+            "LP lifetime claimed rewards",
+        )
+        self._debit_excluded(epoch.vault, pending)
+        self._credit_wallet(owner, pending)
+        self._recompute_lp_rounding(epoch)
+        self._event(
+            "LpRewardsClaimed",
+            epoch=epoch.epoch_id,
+            owner=owner,
+            amount=pending,
+        )
+
+    def _normalize_zero_lp_position(self, epoch: LpEpoch, owner: str) -> None:
+        position = epoch.positions[owner]
+        if epoch.pending(owner) != 0:
+            raise AssertionError("zero-share LP position retains whole pending rewards")
+        normalized = position.claimed * MAGNITUDE
+        if not normalized <= position.correction < normalized + MAGNITUDE:
+            raise AssertionError("zero-share LP correction is not a fractional residue")
+        residue = position.correction - normalized
+        if residue == 0:
+            return
+        position.correction -= residue
+        self._adjust_lp_aggregate_correction(epoch, -residue)
+        epoch.retired_residue_magnified = self._require_u256_sum(
+            epoch.retired_residue_magnified,
+            residue,
+            "retired LP residue",
+        )
+        self._recompute_lp_rounding(epoch)
+        self._event(
+            "LpFractionalResidueRetired",
+            epoch=epoch.epoch_id,
+            owner=owner,
+            residue_magnified=residue,
+            cumulative_retired_residue_magnified=epoch.retired_residue_magnified,
+            rounding_reserve_base_units=epoch.rounding_reserve,
+        )
 
     def _recompute_lp_rounding(self, epoch: LpEpoch) -> None:
         named = epoch.aggregate_liability() + epoch.unallocated_rewards
@@ -1243,11 +1619,11 @@ class ReflectionModel:
         usd_amount: int,
         min_lp_shares: int,
     ) -> None:
-        self._require_amount(rfl_amount, "rfl_amount", allow_zero=False)
-        self._require_amount(usd_amount, "usd_amount", allow_zero=False)
+        self._require_token_amount(rfl_amount, "rfl_amount", allow_zero=False)
+        self._require_token_amount(usd_amount, "usd_amount", allow_zero=False)
         self._require_amount(min_lp_shares, "min_lp_shares", allow_zero=False)
-        self._require_registered_wallet(beneficiary)
-        if beneficiary == self.admin:
+        self._validate_wallet_registration(beneficiary)
+        if beneficiary == self.admin or beneficiary in self.exclusions:
             raise AccountingError("operator cannot be the bootstrap LP beneficiary")
 
     def _adjust_wallet_correction(self, account: str, delta: int) -> None:
@@ -1280,6 +1656,17 @@ class ReflectionModel:
 
     def _amm_invariant_input(self, gross_input: int) -> int:
         return gross_input * (10_000 - self.amm_fee_bps) // 10_000
+
+    def _assert_swap_bounds(self, amount: int, *, is_sell: bool) -> None:
+        if amount > self.max_gross_swap:
+            raise AccountingError("gross swap exceeds configured maximum")
+        reserve = self.pool_rfl_reserve if is_sell else self.pool_usd_reserve
+        if reserve <= 0 or amount * BPS_DENOMINATOR > reserve * self.max_reserve_bps:
+            raise AccountingError("swap input exceeds configured reserve percentage")
+
+    def _assert_reserve_output_cap(self, output: int, reserve_out: int) -> None:
+        if output * BPS_DENOMINATOR > reserve_out * self.max_reserve_bps:
+            raise AccountingError("swap output exceeds configured reserve percentage")
 
     @staticmethod
     def _constant_product_output(output_reserve: int, input_reserve: int, invariant_input: int) -> int:
@@ -1365,6 +1752,8 @@ class ReflectionModel:
             "aggregate_correction",
             "unallocated_rewards",
             "rounding_reserve",
+            "terminal_rounding_reserve",
+            "retired_residue_magnified",
             "lifetime_received",
             "lifetime_claimed",
             "quarantined",
@@ -1439,6 +1828,46 @@ class ReflectionModel:
         if value < 0 or value > MAX_U128 or (not allow_zero and value == 0):
             qualifier = "positive u128" if not allow_zero else "u128"
             raise AccountingError(f"{name} must be a {qualifier}")
+
+    @staticmethod
+    def _require_token_amount(
+        value: int,
+        name: str,
+        *,
+        allow_zero: bool = True,
+    ) -> None:
+        if not isinstance(value, int) or isinstance(value, bool):
+            raise AccountingError(f"{name} must be an integer")
+        if value < 0 or value > MAX_U64 or (not allow_zero and value == 0):
+            qualifier = "positive u64" if not allow_zero else "u64"
+            raise AccountingError(f"{name} must be a {qualifier}")
+
+    @staticmethod
+    def _require_u64_sum(left: int, right: int, name: str) -> int:
+        ReflectionModel._require_token_amount(left, name)
+        ReflectionModel._require_token_amount(right, name)
+        result = left + right
+        if result > MAX_U64:
+            raise AccountingError(f"{name} exceeds u64")
+        return result
+
+    @staticmethod
+    def _require_u256_sum(left: int, right: int, name: str) -> int:
+        if (
+            not isinstance(left, int)
+            or isinstance(left, bool)
+            or not isinstance(right, int)
+            or isinstance(right, bool)
+            or left < 0
+            or right < 0
+            or left > MAX_U256
+            or right > MAX_U256
+        ):
+            raise AccountingError(f"{name} must use u256 operands")
+        result = left + right
+        if result > MAX_U256:
+            raise AccountingError(f"{name} exceeds u256")
+        return result
 
     @staticmethod
     def _require_bps(value: int, name: str, *, maximum: int) -> None:

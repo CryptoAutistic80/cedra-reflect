@@ -22,16 +22,23 @@ module test_assets::mock_usd {
         transfer_ref: TransferRef,
         faucet_capability_issued: bool,
         pool_capability_issued: bool,
+        pool_reserve: address,
     }
 
     struct FaucetMintCapability has store { nonce: u64 }
-    struct PoolSettlementCapability has store { nonce: u64 }
+    struct PoolSettlementCapability has store { reserve_store: address, nonce: u64 }
 
     #[event]
     struct MockUsdMinted has drop, store {
         recipient: address,
         amount: u64,
         operator: address,
+    }
+
+    #[event]
+    struct PoolReserveBound has drop, store {
+        reserve_store: address,
+        custodian: address,
     }
 
     fun init_module(admin: &signer) {
@@ -56,6 +63,7 @@ module test_assets::mock_usd {
             transfer_ref,
             faucet_capability_issued: false,
             pool_capability_issued: false,
+            pool_reserve: @0x0,
         });
     }
 
@@ -77,29 +85,37 @@ module test_assets::mock_usd {
 
     /// Handed once to the canonical AMM. Its public surface can only move tUSD
     /// into or out of the frozen reserve, not mint it.
-    public fun issue_pool_settlement_capability(admin: &signer): PoolSettlementCapability acquires MockUsdState {
+    public fun issue_pool_settlement_capability(
+        admin: &signer,
+        custodian: &signer,
+        store: Object<FungibleStore>,
+    ): PoolSettlementCapability acquires MockUsdState {
         let state = borrow_global_mut<MockUsdState>(@test_assets);
         assert!(signer::address_of(admin) == state.admin, E_NOT_ADMIN);
         assert!(!state.pool_capability_issued, E_CAPABILITY_ALREADY_ISSUED);
-        state.pool_capability_issued = true;
-        PoolSettlementCapability { nonce: 1 }
-    }
-
-    public fun freeze_pool_reserve(cap: &PoolSettlementCapability, store: Object<FungibleStore>) acquires MockUsdState {
-        assert!(cap.nonce == 1, E_INVALID_CAP);
-        let state = borrow_global<MockUsdState>(@test_assets);
         assert!(fungible_asset::store_metadata(store) == state.metadata, E_INVALID_CAP);
+        assert!(object::owner(store) == signer::address_of(custodian), E_INVALID_CAP);
+        assert!(fungible_asset::balance(store) == 0, E_INVALID_CAP);
+        let reserve_store = object::object_address(&store);
+        state.pool_capability_issued = true;
+        state.pool_reserve = reserve_store;
         fungible_asset::set_frozen_flag(&state.transfer_ref, store, true);
+        event::emit(PoolReserveBound {
+            reserve_store,
+            custodian: signer::address_of(custodian),
+        });
+        PoolSettlementCapability { reserve_store, nonce: 1 }
     }
 
     public fun deposit_to_pool(cap: &PoolSettlementCapability, store: Object<FungibleStore>, asset: FungibleAsset) acquires MockUsdState {
-        assert!(cap.nonce == 1, E_INVALID_CAP);
+        assert!(fungible_asset::asset_metadata(&asset) == borrow_global<MockUsdState>(@test_assets).metadata, E_INVALID_CAP);
+        assert_pool_cap(cap, store);
         let state = borrow_global<MockUsdState>(@test_assets);
         fungible_asset::deposit_with_ref(&state.transfer_ref, store, asset);
     }
 
     public fun withdraw_from_pool(cap: &PoolSettlementCapability, store: Object<FungibleStore>, amount: u64): FungibleAsset acquires MockUsdState {
-        assert!(cap.nonce == 1, E_INVALID_CAP);
+        assert_pool_cap(cap, store);
         let state = borrow_global<MockUsdState>(@test_assets);
         fungible_asset::withdraw_with_ref(&state.transfer_ref, store, amount)
     }
@@ -107,10 +123,25 @@ module test_assets::mock_usd {
     #[view]
     public fun metadata(): Object<Metadata> acquires MockUsdState { borrow_global<MockUsdState>(@test_assets).metadata }
 
+    #[view]
+    public fun pool_reserve(): address acquires MockUsdState { borrow_global<MockUsdState>(@test_assets).pool_reserve }
+
+    fun assert_pool_cap(cap: &PoolSettlementCapability, store: Object<FungibleStore>) acquires MockUsdState {
+        let store_address = object::object_address(&store);
+        assert!(
+            cap.nonce == 1
+                && cap.reserve_store == store_address
+                && borrow_global<MockUsdState>(@test_assets).pool_reserve == store_address,
+            E_INVALID_CAP,
+        );
+    }
+
     #[test_only]
     public fun initialize_for_test(admin: &signer) { init_module(admin); }
     #[test_only]
     public fun destroy_faucet_capability_for_test(cap: FaucetMintCapability) { let FaucetMintCapability { nonce: _ } = cap; }
     #[test_only]
-    public fun destroy_pool_capability_for_test(cap: PoolSettlementCapability) { let PoolSettlementCapability { nonce: _ } = cap; }
+    public fun destroy_pool_capability_for_test(cap: PoolSettlementCapability) {
+        let PoolSettlementCapability { reserve_store: _, nonce: _ } = cap;
+    }
 }

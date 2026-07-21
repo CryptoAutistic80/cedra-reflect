@@ -14,9 +14,10 @@ class EvidenceTemplateTests(unittest.TestCase):
 
     def test_release_manifest_covers_every_package_authority_and_state_identity(self) -> None:
         manifest = self.load_json("ops/release-manifest.template.json")
-        self.assertEqual(manifest["schema_version"], 1)
+        self.assertEqual(manifest["schema_version"], 2)
         self.assertEqual(manifest["event_schema_version"], 1)
         self.assertEqual(manifest["network"], "cedra-testnet")
+        self.assertEqual(manifest["chain_id"], "2")
         self.assertEqual(manifest["release"], "testnet-v0.1.0")
         self.assertEqual(
             set(manifest["packages"]),
@@ -28,9 +29,15 @@ class EvidenceTemplateTests(unittest.TestCase):
                     "publisher",
                     "event_source_address",
                     "upgrade_policy",
-                    "source_digest",
-                    "compiled_package_digest",
-                    "publish_payload_bytes",
+                    "custom_package_source_sha256",
+                    "metadata_bcs_sha256",
+                    "compiled_package_files_manifest_sha256",
+                    "review_bundle_files_manifest_sha256",
+                    "publish_payload_sha256",
+                    "embedded_package_metadata_source_digest",
+                    "on_chain_package_metadata_source_digest",
+                    "on_chain_upgrade_number",
+                    "on_chain_upgrade_policy_number",
                     "publish_transaction",
                     "gas_used",
                     "finalized_ledger_version",
@@ -52,9 +59,7 @@ class EvidenceTemplateTests(unittest.TestCase):
         self.assertTrue(
             {
                 "address",
-                "core_handoff_transaction",
-                "faucet_handoff_transaction",
-                "amm_handoff_transaction",
+                "atomic_handoff_transaction",
                 "reconciled_ledger_version",
             }.issubset(manifest["operational_authority"])
         )
@@ -79,10 +84,27 @@ class EvidenceTemplateTests(unittest.TestCase):
         self.assertIn("core_transaction", manifest["initialization"])
         self.assertEqual(
             set(manifest["hook_probe"]),
-            {"testnet_report", "mode"},
+            {"file", "sha256", "mode"},
         )
-        self.assertEqual(len(manifest["approvals"]), 2)
-        self.assertEqual(len({entry["role"] for entry in manifest["approvals"]}), 2)
+        self.assertEqual(manifest["approval_policy"]["required_distinct_identities"], 2)
+        self.assertEqual(manifest["approval_policy"]["required_distinct_signing_keys"], 2)
+        expected_operations = {
+            "core_publish",
+            "core_initialize",
+            "assets_publish",
+            "amm_publish",
+            "faucet_initialize",
+            "amm_tusd_claim",
+            "pool_initialize",
+            "atomic_operational_handoff",
+            "pool_seed",
+        }
+        self.assertEqual(len(manifest["execution_order"]), 9)
+        self.assertEqual(set(manifest["execution_order"]), expected_operations)
+        self.assertEqual(set(manifest["transactions"]), expected_operations)
+        self.assertFalse(manifest["external_execution_boundary"]["repository_signs_transactions"])
+        self.assertFalse(manifest["external_execution_boundary"]["repository_submits_transactions"])
+        self.assertFalse(manifest["external_execution_boundary"]["repository_reads_private_keys"])
         self.assertEqual(manifest["review"]["unresolved_critical_findings"], 0)
         self.assertEqual(manifest["review"]["unresolved_high_findings"], 0)
 

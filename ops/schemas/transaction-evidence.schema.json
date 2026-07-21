@@ -1,0 +1,372 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/CryptoAutistic80/cedra-reflect/ops/schemas/transaction-evidence.schema.json",
+  "title": "Cedra Reflect exact transaction candidate or finalized evidence",
+  "oneOf": [
+    { "$ref": "#/$defs/candidate" },
+    { "$ref": "#/$defs/finalized" }
+  ],
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "address": { "type": "string", "pattern": "^0x[0-9a-f]{1,64}$", "not": { "pattern": "^0x0+$" } },
+    "decimal": { "type": "string", "pattern": "^(0|[1-9][0-9]*)$" },
+    "positive_decimal": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+    "tx_hash": { "type": "string", "pattern": "^0x[0-9a-f]{64}$" },
+    "timestamp": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$" },
+    "local_file": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$" },
+    "roles": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["core_publisher", "assets_publisher", "amm_publisher", "operations", "bootstrap_lp"],
+      "properties": {
+        "core_publisher": { "$ref": "#/$defs/address" },
+        "assets_publisher": { "$ref": "#/$defs/address" },
+        "amm_publisher": { "$ref": "#/$defs/address" },
+        "operations": { "$ref": "#/$defs/address" },
+        "bootstrap_lp": { "$ref": "#/$defs/address" }
+      }
+    },
+    "public_profile_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evidence_sha256", "public_role_candidate_sha256", "derivation_method", "derivation_tool", "assembler_revalidation_sdk_package", "assembler_revalidation_sdk_version", "profiles"],
+      "properties": {
+        "evidence_sha256": { "$ref": "#/$defs/sha256" },
+        "public_role_candidate_sha256": { "$ref": "#/$defs/sha256" },
+        "derivation_method": { "const": "sha3-256(ed25519_public_key_bytes || 0x00)" },
+        "derivation_tool": { "const": "OpenSSL dgst -sha3-256" },
+        "assembler_revalidation_sdk_package": { "const": "@cedra-labs/ts-sdk" },
+        "assembler_revalidation_sdk_version": { "const": "2.2.8" },
+        "profiles": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["core_publisher", "assets_publisher", "amm_publisher", "operations", "bootstrap_lp"],
+          "properties": {
+            "core_publisher": { "$ref": "#/$defs/core_profile" },
+            "assets_publisher": { "$ref": "#/$defs/assets_profile" },
+            "amm_publisher": { "$ref": "#/$defs/amm_profile" },
+            "operations": { "$ref": "#/$defs/operations_profile" },
+            "bootstrap_lp": { "$ref": "#/$defs/bootstrap_lp_profile" }
+          }
+        }
+      }
+    },
+    "build_environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository_head_commit", "repository_head_tree", "release_executable_closure_file", "release_executable_closure_sha256", "package_lock_file", "package_lock_sha256", "sdk_package", "sdk_version", "sdk_lock_integrity", "sdk_review_pin_file", "sdk_review_pin_sha256", "sdk_package_json_sha256", "sdk_loaded_entrypoint", "sdk_loaded_entrypoint_sha256", "sdk_package_tree_sha256", "sdk_package_file_count", "sdk_review_attestation_sha256", "sdk_review_signature_sha256", "sdk_review_signature_namespace", "sdk_review_reviewer_identity", "sdk_review_trusted_signers_sha256"],
+      "properties": {
+        "repository_head_commit": { "$ref": "#/$defs/commit" },
+        "repository_head_tree": { "$ref": "#/$defs/commit" },
+        "release_executable_closure_file": { "const": "ops/evidence/release-executable-closure.json" },
+        "release_executable_closure_sha256": { "$ref": "#/$defs/sha256" },
+        "package_lock_file": { "const": "package-lock.json" },
+        "package_lock_sha256": { "$ref": "#/$defs/sha256" },
+        "sdk_package": { "const": "@cedra-labs/ts-sdk" },
+        "sdk_version": { "const": "2.2.8" },
+        "sdk_lock_integrity": { "type": "string", "pattern": "^sha512-[A-Za-z0-9+/]+={0,2}$" },
+        "sdk_review_pin_file": { "const": "ops/evidence/reviewed-cedra-sdk-2.2.8.json" },
+        "sdk_review_pin_sha256": { "$ref": "#/$defs/sha256" },
+        "sdk_package_json_sha256": { "$ref": "#/$defs/sha256" },
+        "sdk_loaded_entrypoint": { "type": "string", "pattern": "^[A-Za-z0-9@._+/-]+$", "not": { "pattern": "(^/|(^|/)\\.\\.(/|$))" } },
+        "sdk_loaded_entrypoint_sha256": { "$ref": "#/$defs/sha256" },
+        "sdk_package_tree_sha256": { "$ref": "#/$defs/sha256" },
+        "sdk_package_file_count": { "type": "integer", "minimum": 1 },
+        "sdk_review_attestation_sha256": { "$ref": "#/$defs/sha256" },
+        "sdk_review_signature_sha256": { "$ref": "#/$defs/sha256" },
+        "sdk_review_signature_namespace": { "const": "cedra-reflect-sdk-review-v1" },
+        "sdk_review_reviewer_identity": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._@+-]{2,127}$" },
+        "sdk_review_trusted_signers_sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "function", "type_arguments", "arguments"],
+      "properties": {
+        "type": { "const": "entry_function_payload" },
+        "function": { "type": "string", "pattern": "^0x[0-9a-f]{1,64}::[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*$" },
+        "type_arguments": { "type": "array", "items": { "type": "string" } },
+        "arguments": { "type": "array" }
+      }
+    },
+    "transaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sender", "secondary_signers", "sequence_number", "expiration_timestamp_secs", "max_gas_amount", "gas_unit_price", "payload"],
+      "properties": {
+        "sender": { "$ref": "#/$defs/address" },
+        "secondary_signers": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/address" } },
+        "sequence_number": { "$ref": "#/$defs/decimal" },
+        "expiration_timestamp_secs": { "$ref": "#/$defs/positive_decimal" },
+        "max_gas_amount": { "$ref": "#/$defs/positive_decimal" },
+        "gas_unit_price": { "$ref": "#/$defs/positive_decimal" },
+        "payload": { "$ref": "#/$defs/payload" }
+      }
+    },
+    "transaction_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["transactionType", "senderAddress", "secondarySignerAddresses", "feePayerAddress", "sequenceNumber", "maxGasAmount", "gasUnitPrice", "expirationTimestampSeconds", "chainId", "fungibleAssetGasType", "rawTransactionBcsHex", "rawTransactionSha256", "transactionBcsHex", "transactionSha256", "signingMessageHex", "signingMessageSha256"],
+      "properties": {
+        "transactionType": { "enum": ["single-signer", "multi-agent"] },
+        "senderAddress": { "$ref": "#/$defs/address" },
+        "secondarySignerAddresses": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/address" } },
+        "feePayerAddress": { "type": "null" },
+        "sequenceNumber": { "$ref": "#/$defs/decimal" },
+        "maxGasAmount": { "$ref": "#/$defs/positive_decimal" },
+        "gasUnitPrice": { "$ref": "#/$defs/positive_decimal" },
+        "expirationTimestampSeconds": { "$ref": "#/$defs/positive_decimal" },
+        "chainId": { "const": 2 },
+        "fungibleAssetGasType": { "const": "0x1::cedra_coin::CedraCoin" },
+        "rawTransactionBcsHex": { "type": "string", "pattern": "^0x([0-9a-f]{2})+$" },
+        "rawTransactionSha256": { "$ref": "#/$defs/sha256" },
+        "transactionBcsHex": { "type": "string", "pattern": "^0x([0-9a-f]{2})+$" },
+        "transactionSha256": { "$ref": "#/$defs/sha256" },
+        "signingMessageHex": { "type": "string", "pattern": "^0x([0-9a-f]{2})+$" },
+        "signingMessageSha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "gas_budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["approved_max_gas_amount", "approved_max_gas_unit_price", "approved_max_total_fee_base_units"],
+      "properties": {
+        "approved_max_gas_amount": { "$ref": "#/$defs/positive_decimal" },
+        "approved_max_gas_unit_price": { "$ref": "#/$defs/positive_decimal" },
+        "approved_max_total_fee_base_units": { "$ref": "#/$defs/positive_decimal" }
+      }
+    },
+    "simulation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["captured_at", "success", "vm_status", "gas_used", "raw_response_file", "raw_response_sha256", "transaction_semantics_sha256"],
+      "properties": {
+        "captured_at": { "$ref": "#/$defs/timestamp" },
+        "success": { "const": true },
+        "vm_status": { "type": "string", "minLength": 1 },
+        "gas_used": { "$ref": "#/$defs/decimal" },
+        "raw_response_file": { "const": "simulation-response.json" },
+        "raw_response_sha256": { "$ref": "#/$defs/sha256" },
+        "transaction_semantics_sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "evidence_scope", "status", "network", "api_url", "chain_id", "deployment_id", "application_commit", "exact_address_artifacts_sha256", "public_profile_binding", "build_environment", "roles", "transaction_kind", "operation_key", "transaction", "transaction_identity", "transaction_semantics_sha256", "gas_budget", "simulation", "publish_binding"],
+      "properties": {
+        "schema_version": { "const": 2 },
+        "evidence_scope": { "const": "testnet-transaction-candidate" },
+        "status": { "const": "simulated-awaiting-detached-approvals" },
+        "network": { "const": "cedra-testnet" },
+        "api_url": { "const": "https://testnet.cedra.dev/v1" },
+        "chain_id": { "const": "2" },
+        "deployment_id": { "type": "string", "pattern": "^[A-Za-z0-9._-]{1,80}$" },
+        "application_commit": { "$ref": "#/$defs/commit" },
+        "exact_address_artifacts_sha256": { "$ref": "#/$defs/sha256" },
+        "public_profile_binding": { "$ref": "#/$defs/public_profile_binding" },
+        "build_environment": { "$ref": "#/$defs/build_environment" },
+        "roles": { "$ref": "#/$defs/roles" },
+        "transaction_kind": { "enum": ["package_publish", "core_initialize", "faucet_initialize", "pool_initialize", "faucet_claim", "operational_handoff", "pool_seed"] },
+        "operation_key": { "enum": ["core_publish", "assets_publish", "amm_publish", "core_initialize", "faucet_initialize", "amm_tusd_claim", "pool_initialize", "atomic_operational_handoff", "pool_seed"] },
+        "transaction": { "$ref": "#/$defs/transaction" },
+        "transaction_identity": { "$ref": "#/$defs/transaction_identity" },
+        "transaction_semantics_sha256": { "$ref": "#/$defs/sha256" },
+        "gas_budget": { "$ref": "#/$defs/gas_budget" },
+        "simulation": { "$ref": "#/$defs/simulation" },
+        "publish_binding": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["package_key", "publish_payload_sha256", "compiled_package_files_manifest_sha256"],
+              "properties": {
+                "package_key": { "enum": ["reflection_core", "test_assets", "test_amm"] },
+                "publish_payload_sha256": { "$ref": "#/$defs/sha256" },
+                "compiled_package_files_manifest_sha256": { "$ref": "#/$defs/sha256" }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile_name", "address", "public_key"],
+      "properties": {
+        "profile_name": { "type": "string" },
+        "address": { "$ref": "#/$defs/address" },
+        "public_key": { "type": "string", "pattern": "^ed25519-pub-0x[0-9a-f]{64}$" }
+      }
+    },
+    "core_profile": {
+      "allOf": [
+        { "$ref": "#/$defs/profile" },
+        { "properties": { "profile_name": { "const": "cedra-reflect-core-publisher" } } }
+      ]
+    },
+    "assets_profile": {
+      "allOf": [
+        { "$ref": "#/$defs/profile" },
+        { "properties": { "profile_name": { "const": "cedra-reflect-assets-publisher" } } }
+      ]
+    },
+    "amm_profile": {
+      "allOf": [
+        { "$ref": "#/$defs/profile" },
+        { "properties": { "profile_name": { "const": "cedra-reflect-amm-publisher" } } }
+      ]
+    },
+    "operations_profile": {
+      "allOf": [
+        { "$ref": "#/$defs/profile" },
+        { "properties": { "profile_name": { "const": "cedra-reflect-operations" } } }
+      ]
+    },
+    "bootstrap_lp_profile": {
+      "allOf": [
+        { "$ref": "#/$defs/profile" },
+        { "properties": { "profile_name": { "const": "cedra-reflect-bootstrap-lp" } } }
+      ]
+    },
+    "finalized": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "evidence_scope", "status", "network", "api_url", "chain_id", "deployment_id", "application_commit", "exact_address_artifacts_sha256", "public_profile_evidence_sha256", "public_role_candidate_sha256", "roles", "transaction_kind", "operation_key", "transaction_hash", "candidate", "simulation", "approval", "collection", "state_changes_performed_by_collector"],
+      "properties": {
+        "schema_version": { "const": 2 },
+        "evidence_scope": { "const": "finalized-testnet-transaction" },
+        "status": { "const": "finalized" },
+        "network": { "const": "cedra-testnet" },
+        "api_url": { "const": "https://testnet.cedra.dev/v1" },
+        "chain_id": { "const": "2" },
+        "deployment_id": { "type": "string", "pattern": "^[A-Za-z0-9._-]{1,80}$" },
+        "application_commit": { "$ref": "#/$defs/commit" },
+        "exact_address_artifacts_sha256": { "$ref": "#/$defs/sha256" },
+        "public_profile_evidence_sha256": { "$ref": "#/$defs/sha256" },
+        "public_role_candidate_sha256": { "$ref": "#/$defs/sha256" },
+        "roles": { "$ref": "#/$defs/roles" },
+        "transaction_kind": { "type": "string" },
+        "operation_key": { "type": "string" },
+        "transaction_hash": { "$ref": "#/$defs/tx_hash" },
+        "candidate": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["file", "sha256", "transaction_semantics_sha256", "transaction_identity_sha256", "raw_transaction_sha256", "transaction_sha256", "signing_message_sha256"],
+          "properties": {
+            "file": { "const": "transaction-candidate.json" },
+            "sha256": { "$ref": "#/$defs/sha256" },
+            "transaction_semantics_sha256": { "$ref": "#/$defs/sha256" },
+            "transaction_identity_sha256": { "$ref": "#/$defs/sha256" },
+            "raw_transaction_sha256": { "$ref": "#/$defs/sha256" },
+            "transaction_sha256": { "$ref": "#/$defs/sha256" },
+            "signing_message_sha256": { "$ref": "#/$defs/sha256" }
+          }
+        },
+        "simulation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["file", "sha256"],
+          "properties": { "file": { "const": "simulation-response.json" }, "sha256": { "$ref": "#/$defs/sha256" } }
+        },
+        "approval": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["envelope_file", "envelope_sha256", "statement_file", "statement_sha256", "trusted_allowed_signers_sha256", "signatures", "authenticated", "verifier"],
+          "properties": {
+            "envelope_file": { "const": "approval-envelope.json" },
+            "envelope_sha256": { "$ref": "#/$defs/sha256" },
+            "statement_file": { "const": "approval-statement.json" },
+            "statement_sha256": { "$ref": "#/$defs/sha256" },
+            "trusted_allowed_signers_sha256": { "$ref": "#/$defs/sha256" },
+            "signatures": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["identity", "key_fingerprint", "signature_file", "signature_sha256"],
+                "properties": {
+                  "identity": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9@._+-]{0,127}$" },
+                  "key_fingerprint": { "type": "string", "pattern": "^SHA256:[A-Za-z0-9+/=]{43,44}$" },
+                  "signature_file": { "$ref": "#/$defs/local_file" },
+                  "signature_sha256": { "$ref": "#/$defs/sha256" }
+                }
+              }
+            },
+            "authenticated": { "const": true },
+            "verifier": { "const": "OpenSSH ssh-keygen -Y verify" }
+          }
+        },
+        "collection": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["transaction_type", "sender", "secondary_signers", "sequence_number", "expiration_timestamp_secs", "payload", "transaction_semantics_sha256", "ledger_version", "ledger_head_at_observation", "chain_id", "success", "vm_status", "gas_used", "max_gas_amount", "gas_unit_price", "actual_fee_base_units", "gas_budget_satisfied", "package_registry", "rest_signature_type", "fee_payer_present", "rest_observation_boundaries", "collected_at", "raw_transaction_response_file", "raw_transaction_response_sha256", "ledger_info_response_file", "ledger_info_response_sha256", "read_only_requests"],
+          "properties": {
+            "transaction_type": { "const": "user_transaction" },
+            "sender": { "$ref": "#/$defs/address" },
+            "secondary_signers": { "type": "array", "items": { "$ref": "#/$defs/address" } },
+            "sequence_number": { "$ref": "#/$defs/decimal" },
+            "expiration_timestamp_secs": { "$ref": "#/$defs/positive_decimal" },
+            "payload": { "$ref": "#/$defs/payload" },
+            "transaction_semantics_sha256": { "$ref": "#/$defs/sha256" },
+            "ledger_version": { "$ref": "#/$defs/decimal" },
+            "ledger_head_at_observation": { "$ref": "#/$defs/decimal" },
+            "chain_id": { "const": "2" },
+            "success": { "const": true },
+            "vm_status": { "type": "string", "minLength": 1 },
+            "gas_used": { "$ref": "#/$defs/decimal" },
+            "max_gas_amount": { "$ref": "#/$defs/positive_decimal" },
+            "gas_unit_price": { "$ref": "#/$defs/positive_decimal" },
+            "actual_fee_base_units": { "$ref": "#/$defs/decimal" },
+            "gas_budget_satisfied": { "const": true },
+            "package_registry": {
+              "oneOf": [
+                { "type": "null" },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["resource_address", "resource_type", "package_name", "source_digest", "upgrade_number", "upgrade_policy_number"],
+                  "properties": {
+                    "resource_address": { "$ref": "#/$defs/address" },
+                    "resource_type": { "const": "0x1::code::PackageRegistry" },
+                    "package_name": { "enum": ["ReflectionCore", "TestAssets", "TestAmm"] },
+                    "source_digest": { "type": "string", "pattern": "^[0-9A-F]{64}$" },
+                    "upgrade_number": { "const": "0" },
+                    "upgrade_policy_number": { "const": 2 }
+                  }
+                }
+              ]
+            },
+            "rest_signature_type": { "enum": ["ed25519_signature", "multi_agent_signature"] },
+            "fee_payer_present": { "const": false },
+            "rest_observation_boundaries": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["fee_payer_absence_observed", "fungible_asset_gas_type_observed", "raw_transaction_bcs_observed", "transaction_wrapper_bcs_observed", "signing_message_observed"],
+              "properties": {
+                "fee_payer_absence_observed": { "const": true },
+                "fungible_asset_gas_type_observed": { "const": false },
+                "raw_transaction_bcs_observed": { "const": false },
+                "transaction_wrapper_bcs_observed": { "const": false },
+                "signing_message_observed": { "const": false }
+              }
+            },
+            "collected_at": { "$ref": "#/$defs/timestamp" },
+            "raw_transaction_response_file": { "const": "transaction-response.json" },
+            "raw_transaction_response_sha256": { "$ref": "#/$defs/sha256" },
+            "ledger_info_response_file": { "const": "ledger-info-response.json" },
+            "ledger_info_response_sha256": { "$ref": "#/$defs/sha256" },
+            "read_only_requests": { "const": ["GET /transactions/by_hash/{hash}", "GET /"] }
+          }
+        },
+        "state_changes_performed_by_collector": { "const": false }
+      }
+    }
+  }
+}

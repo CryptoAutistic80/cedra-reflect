@@ -1,0 +1,434 @@
+{
+  "name": "epoch_lifecycle_and_zero_denominator_conformance",
+  "initial": {
+    "fixed_supply": 1000000000000000,
+    "fee_bps": 100,
+    "amm_fee_bps": 30,
+    "automatic_materialization": false,
+    "max_reserve_bps": 2000,
+    "max_gross_swap": 100000000000
+  },
+  "cases": [
+    {
+      "name": "shutdown_reseed_epoch_two",
+      "accounts": [
+        "alice",
+        "bob",
+        "carol",
+        "dave"
+      ],
+      "operations": [
+        {
+          "op": "faucet_grant",
+          "actor": "admin",
+          "recipient": "bob",
+          "amount": 20000000
+        },
+        {
+          "op": "mint_quote",
+          "actor": "admin",
+          "recipient": "admin",
+          "amount": 200000000
+        },
+        {
+          "op": "seed_pool",
+          "actor": "admin",
+          "rfl_amount": 100000000,
+          "usd_amount": 100000000,
+          "beneficiary": "alice",
+          "min_lp_shares": 1
+        },
+        {
+          "op": "register_wallet",
+          "actor": "carol"
+        },
+        {
+          "op": "transfer_lp_shares",
+          "sender": "alice",
+          "recipient": "carol",
+          "shares": 50000000
+        },
+        {
+          "op": "sell",
+          "seller": "bob",
+          "gross_rfl": 10000000,
+          "min_quote_out": 0
+        },
+        {
+          "op": "checkpoint_pool"
+        },
+        {
+          "op": "claim",
+          "account": "bob",
+          "amount": 9090
+        },
+        {
+          "op": "begin_shutdown",
+          "actor": "admin"
+        },
+        {
+          "op": "remove_liquidity",
+          "provider": "carol",
+          "shares": 50000000,
+          "min_rfl_output": 1,
+          "min_usd_output": 1
+        },
+        {
+          "op": "remove_liquidity",
+          "provider": "alice",
+          "shares": 50000000,
+          "min_rfl_output": 1,
+          "min_usd_output": 1
+        },
+        {
+          "op": "reseed_pool",
+          "actor": "admin",
+          "rfl_amount": 50000000,
+          "usd_amount": 50000000,
+          "beneficiary": "dave",
+          "min_lp_shares": 1
+        }
+      ],
+      "expect": {
+        "fixed_supply": 1000000000000000,
+        "index": 909090909090909090909,
+        "index_remainder": 10000000,
+        "total_shares": 169999998,
+        "aggregate_correction": {
+          "negative": true,
+          "magnitude": 54545543636363636363621818182
+        },
+        "unallocated_fees": 0,
+        "lifetime_fees": 100000,
+        "lifetime_materialized": 9090,
+        "lifetime_custody_routed": 90909,
+        "rounding_reserve": 1,
+        "reward_vault_balance": 1,
+        "distribution_vault_balance": 999999830000000,
+        "custody_shares": 50000000,
+        "custody_correction": {
+          "negative": false,
+          "magnitude": 45454454545454545454550000000
+        },
+        "custody_settled": 90909,
+        "custody_pending": 0,
+        "pool": {
+          "active_epoch": 2,
+          "seeded": true,
+          "pool_paused": true,
+          "liquidity_paused": false,
+          "lp_claims_paused": false,
+          "shutdown_mode": false,
+          "rfl_reserve": 50000000,
+          "usd_reserve": 50000000
+        },
+        "wallets": {
+          "alice": {
+            "registered": true,
+            "raw": 54995454,
+            "pending": 0,
+            "correction": {
+              "negative": true,
+              "magnitude": 49995867272727272727267727686
+            },
+            "claimed": 0,
+            "quote": 45508204
+          },
+          "bob": {
+            "registered": true,
+            "raw": 10009090,
+            "pending": 0,
+            "correction": {
+              "negative": true,
+              "magnitude": 8263636363636363636362810
+            },
+            "claimed": 9090,
+            "quote": 8983592
+          },
+          "carol": {
+            "registered": true,
+            "raw": 54995454,
+            "pending": 0,
+            "correction": {
+              "negative": true,
+              "magnitude": 49995867272727272727267727686
+            },
+            "claimed": 0,
+            "quote": 45508204
+          },
+          "dave": {
+            "registered": true,
+            "raw": 0,
+            "pending": 0,
+            "correction": {
+              "negative": false,
+              "magnitude": 0
+            },
+            "claimed": 0,
+            "quote": 0
+          }
+        },
+        "admin_quote": 50000000,
+        "epochs": {
+          "1": {
+            "status": "CLAIM_ONLY",
+            "index": 909090000000000000000,
+            "index_remainder": 0,
+            "total_shares": 0,
+            "aggregate_correction": {
+              "negative": false,
+              "magnitude": 90908000000000000000000000000
+            },
+            "unallocated_rewards": 0,
+            "rounding_reserve": 1,
+            "terminal_rounding_reserve": 1,
+            "retired_residue_magnified": 1000000000000000000000000,
+            "lifetime_received": 90909,
+            "lifetime_claimed": 90908,
+            "liability": 0,
+            "vault_balance": 1,
+            "quarantined": false,
+            "positions": {
+              "alice": {
+                "shares": 0,
+                "correction": {
+                  "negative": false,
+                  "magnitude": 45454000000000000000000000000
+                },
+                "claimed": 45454,
+                "pending": 0
+              },
+              "bob": {
+                "shares": 0,
+                "correction": {
+                  "negative": false,
+                  "magnitude": 0
+                },
+                "claimed": 0,
+                "pending": 0
+              },
+              "carol": {
+                "shares": 0,
+                "correction": {
+                  "negative": false,
+                  "magnitude": 45454000000000000000000000000
+                },
+                "claimed": 45454,
+                "pending": 0
+              },
+              "dave": {
+                "shares": 0,
+                "correction": {
+                  "negative": false,
+                  "magnitude": 0
+                },
+                "claimed": 0,
+                "pending": 0
+              }
+            }
+          },
+          "2": {
+            "status": "ACTIVE",
+            "index": 0,
+            "index_remainder": 0,
+            "total_shares": 50000000,
+            "aggregate_correction": {
+              "negative": false,
+              "magnitude": 0
+            },
+            "unallocated_rewards": 0,
+            "rounding_reserve": 0,
+            "terminal_rounding_reserve": 0,
+            "retired_residue_magnified": 0,
+            "lifetime_received": 0,
+            "lifetime_claimed": 0,
+            "liability": 0,
+            "vault_balance": 0,
+            "quarantined": false,
+            "positions": {
+              "alice": {
+                "shares": 0,
+                "correction": {
+                  "negative": false,
+                  "magnitude": 0
+                },
+                "claimed": 0,
+                "pending": 0
+              },
+              "bob": {
+                "shares": 0,
+                "correction": {
+                  "negative": false,
+                  "magnitude": 0
+                },
+                "claimed": 0,
+                "pending": 0
+              },
+              "carol": {
+                "shares": 0,
+                "correction": {
+                  "negative": false,
+                  "magnitude": 0
+                },
+                "claimed": 0,
+                "pending": 0
+              },
+              "dave": {
+                "shares": 50000000,
+                "correction": {
+                  "negative": false,
+                  "magnitude": 0
+                },
+                "claimed": 0,
+                "pending": 0
+              }
+            }
+          }
+        },
+        "route_open_events": [
+          {
+            "epoch": 2,
+            "adapter_id": 1,
+            "reserve_store": "pool",
+            "lp_reward_vault": "lp_reward_vault:2",
+            "retired_residue_magnified": 90909090909090900000000
+          }
+        ]
+      }
+    },
+    {
+      "name": "zero_denominator_quarantine",
+      "accounts": [
+        "alice"
+      ],
+      "operations": [
+        {
+          "op": "faucet_grant",
+          "actor": "admin",
+          "recipient": "alice",
+          "amount": 10000000
+        },
+        {
+          "op": "mint_quote",
+          "actor": "admin",
+          "recipient": "admin",
+          "amount": 100000000
+        },
+        {
+          "op": "seed_pool",
+          "actor": "admin",
+          "rfl_amount": 100000000,
+          "usd_amount": 100000000,
+          "beneficiary": "alice",
+          "min_lp_shares": 1
+        },
+        {
+          "op": "sell",
+          "seller": "alice",
+          "gross_rfl": 5000000,
+          "min_quote_out": 0
+        },
+        {
+          "op": "checkpoint_pool"
+        },
+        {
+          "op": "claim_lp",
+          "owner": "alice",
+          "epoch_id": 1,
+          "amount": 0
+        },
+        {
+          "op": "sell",
+          "seller": "alice",
+          "gross_rfl": 5000000,
+          "min_quote_out": 0
+        },
+        {
+          "op": "force_zero_denominator_receipt_for_test",
+          "owner": "alice"
+        }
+      ],
+      "expect": {
+        "fixed_supply": 1000000000000000,
+        "index": 952391750811760697889,
+        "index_remainder": 67150353,
+        "total_shares": 109947619,
+        "aggregate_correction": {
+          "negative": true,
+          "magnitude": 4713205356994405930741026644
+        },
+        "unallocated_fees": 0,
+        "lifetime_fees": 100000,
+        "lifetime_materialized": 0,
+        "lifetime_custody_routed": 97596,
+        "rounding_reserve": 1,
+        "reward_vault_balance": 2404,
+        "distribution_vault_balance": 999999890000000,
+        "custody_shares": 109900000,
+        "custody_correction": {
+          "negative": true,
+          "magnitude": 7071482023661072597406750000
+        },
+        "custody_settled": 97596,
+        "custody_pending": 0,
+        "pool": {
+          "active_epoch": 1,
+          "seeded": true,
+          "pool_paused": false,
+          "liquidity_paused": false,
+          "lp_claims_paused": false,
+          "shutdown_mode": false,
+          "rfl_reserve": 109900000,
+          "usd_reserve": 91016987
+        },
+        "wallets": {
+          "alice": {
+            "registered": true,
+            "raw": 47619,
+            "pending": 2403,
+            "correction": {
+              "negative": false,
+              "magnitude": 2358276666666666666665723356
+            },
+            "claimed": 0,
+            "quote": 8983013
+          }
+        },
+        "admin_quote": 0,
+        "epochs": {
+          "1": {
+            "status": "ACTIVE",
+            "index": 476190000000000000000,
+            "index_remainder": 0,
+            "total_shares": 0,
+            "aggregate_correction": {
+              "negative": false,
+              "magnitude": 47619000000000000000000000000
+            },
+            "unallocated_rewards": 49977,
+            "rounding_reserve": 0,
+            "terminal_rounding_reserve": 0,
+            "retired_residue_magnified": 0,
+            "lifetime_received": 97596,
+            "lifetime_claimed": 47619,
+            "liability": 0,
+            "vault_balance": 49977,
+            "quarantined": true,
+            "positions": {
+              "alice": {
+                "shares": 0,
+                "correction": {
+                  "negative": false,
+                  "magnitude": 47619000000000000000000000000
+                },
+                "claimed": 47619,
+                "pending": 0
+              }
+            }
+          }
+        },
+        "route_open_events": []
+      }
+    }
+  ]
+}

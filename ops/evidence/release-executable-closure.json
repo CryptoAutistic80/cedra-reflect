@@ -1,0 +1,40 @@
+{
+  "dist": {
+    "file_count": 36,
+    "path": "fresh-private-tsc-outdir",
+    "sha256": "dcba95d727339f5221089101e3c95a56f298851432dc1e76611e41982514fef7"
+  },
+  "evidence_scope": "reviewed-release-executable-closure",
+  "node_modules": {
+    "file_count": 2210,
+    "path": "node_modules",
+    "sha256": "506413041aad28aa2f2b4503503f43a0859eee9515c48a1d060966a66771f803"
+  },
+  "node_runtime": {
+    "byte_length": 121116896,
+    "sha256": "5796fd9700e83170bc7ddfdf7f18858c794a9f91cb39dd6f9e95060b292f2563"
+  },
+  "package_json_sha256": "73c49dda7f808ec6f2e13ff57499590f19b4173895e893081e649a4098737d27",
+  "package_lock_sha256": "6afba139af2ed4006fd109665ab1cd1edd910dad7a16c8cdd92b789a80a0eabb",
+  "python_runtime": {
+    "byte_length": 8020928,
+    "sha256": "1643dacd9feaedc58f3cc581e4d22577dfe25c09b10282936186ccf0f2e61118"
+  },
+  "release_javascript": {
+    "bcs_validator_sha256": "1a50bc86d4aaf67af4450fc60a4ee77a16f80572cf42a8f0aefacb00100693fb",
+    "rename_noreplace_helper_sha256": "5b2680dfee404112f30c892df32bd6efb1e98ab271e3140c4576760e4871faee",
+    "typescript_bin_sha256": "8d5fa5bd883fec0979fc2004f1fe1d99aef40570155d550eadc0b03b55513bf0",
+    "typescript_compiler_sha256": "2cffde0b8c6760dfb0b5b0382bbb7e00ba6a8b2d981b9205b256a700a481d983"
+  },
+  "schema_version": 1,
+  "sdk": {
+    "file_count": 731,
+    "path": "node_modules/@cedra-labs/ts-sdk",
+    "sha256": "4958474341b376ab28e18764717aa0048fd0f83cec7777b82a2c0dc958adf4b1"
+  },
+  "typescript": {
+    "file_count": 132,
+    "path": "node_modules/typescript",
+    "sha256": "866eecc6ea3683724a66cbd074440dd3a0dfe38c757572eae570aa6fb48686e9"
+  }
+}

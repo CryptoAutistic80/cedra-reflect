@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "evidence_scope": "independent-cedra-sdk-review-attestation",
+  "reviewed_at": "REPLACE_WITH_RFC3339_UTC",
+  "reviewer_identity": "REPLACE_WITH_EXTERNAL_REVIEWER_ALLOWED_SIGNERS_IDENTITY",
+  "independence_statement": "REPLACE_WITH_THE_EXTERNAL_REVIEWERS_INDEPENDENCE_AND_CONFLICT_DISCLOSURE",
+  "review_method": "REPLACE_WITH_A_CONCISE_DESCRIPTION_OF_TARBALL_SOURCE_CODE_AND_RUNTIME_ARTIFACT_REVIEW",
+  "review_report_reference": "REPLACE_WITH_AN_EXTERNAL_IMMUTABLE_REPORT_REFERENCE",
+  "decision": "approved-for-testnet-candidate-assembly",
+  "sdk_review_pin_file": "reviewed-cedra-sdk-2.2.8.json",
+  "sdk_review_pin_sha256": "adeca264fd6c99cdcf74bc4d8381ecd1b45218ef3ba054da48d84aed86834299",
+  "sdk_package": "@cedra-labs/ts-sdk",
+  "sdk_version": "2.2.8",
+  "npm_tarball_sha256": "c75c4157ed3607e5860ec68e830a83c1c8691e658166fa1ebcf1cb934a381321",
+  "sdk_package_tree_sha256": "0259184429bdc85d4d78e1a6bf105677e8cea7707bec5dcdbba269dea36e2765",
+  "sdk_package_file_count": 731,
+  "trusted_allowed_signers_sha256": "REPLACE_WITH_SHA256_OF_EXTERNAL_ALLOWED_SIGNERS_FILE"
+}

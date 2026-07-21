@@ -1,4 +1,5 @@
 export * from "./mock-adapter.js";
+export * from "./finalized-read-adapter.js";
 export * from "./cedra-release-client.js";
 export * from "./cedra-draft-encoder.js";
 export * from "./safe-client.js";

@@ -7,7 +7,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json && tsc -p tsconfig.web.json",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.web.json --noEmit",
-    "test": "tsc -p tsconfig.json && node dist/tests/run.js",
+    "test": "tsc -p tsconfig.json && node dist/tests/run.js && node dist/tests/release-candidate-assembler.test.js",
     "dashboard": "tsc -p tsconfig.web.json",
     "demo": "tsc -p tsconfig.json && node dist/scripts/generate-demo-data.js",
     "probe:read": "tsc -p tsconfig.json && node dist/scripts/run-hook-probe-reads.js"

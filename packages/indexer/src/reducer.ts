@@ -1,4 +1,5 @@
 import { type Address } from "../../protocol-sdk/src/types.js";
+import { CEDRA_TESTNET_CHAIN_ID } from "../../protocol-sdk/src/types.js";
 import {
   REFLECTION_MAGNITUDE,
   coreIndexedLiability,
@@ -11,6 +12,16 @@ import {
   sumWalletShares,
   walletPending,
 } from "./accounting.js";
+import {
+  checkedMoveSignedU256Add,
+  checkedMoveSignedU256AddUnsigned,
+  checkedMoveSignedU256SubtractUnsigned,
+  checkedMoveU256Add,
+  checkedMoveU256Multiply,
+  checkedMoveU256Subtract,
+  assertProjectionMoveDomains,
+  assertProtocolEventMoveDomains,
+} from "./move-domains.js";
 import type {
   CriticalAlert,
   IndexedLpEpoch,
@@ -23,6 +34,9 @@ import type {
 } from "./types.js";
 
 const BPS_DENOMINATOR = 10_000n;
+const U64_MAX = (1n << 64n) - 1n;
+const U128_MAX = (1n << 128n) - 1n;
+const U256_MAX = (1n << 256n) - 1n;
 
 function ceilDiv(numerator: bigint, denominator: bigint): bigint {
   if (denominator <= 0n) throw new RangeError("division denominator must be positive");
@@ -41,8 +55,30 @@ function integerSqrt(value: bigint): bigint {
   return current;
 }
 
+function checkedVaultRemainder(
+  vaultBalance: bigint,
+  liability: bigint,
+  unallocated: bigint,
+  label: string,
+): bigint {
+  return checkedMoveU256Subtract(
+    checkedMoveU256Subtract(vaultBalance, liability, `${label} indexed liability`),
+    unallocated,
+    `${label} unallocated amount`,
+  );
+}
+
 export function createEmptyProjection(): ProtocolProjection {
   return {
+    chainId: CEDRA_TESTNET_CHAIN_ID,
+    deploymentId: "uninitialized",
+    networkLabel: "uninitialized",
+    tokenMetadata: null,
+    protocolExclusionSlots: 0n,
+    protocolExclusionsRemaining: 0n,
+    protocolExcludedStores: new Map<Address, Address>(),
+    registeredWallets: new Map<Address, Address>(),
+    registeredWalletCount: 0n,
     automaticMaterialization: false,
     feeBps: 100n,
     currentIndex: 0n,
@@ -53,6 +89,7 @@ export function createEmptyProjection(): ProtocolProjection {
     roundingReserve: 0n,
     rewardVault: null,
     distributionVault: null,
+    mockUsdPoolReserve: null,
     rewardVaultCredits: 0n,
     rewardVaultPayouts: 0n,
     lifetimeSwapFees: 0n,
@@ -70,6 +107,7 @@ export function createEmptyProjection(): ProtocolProjection {
       testAssets: null,
       testAmm: null,
     },
+    deploymentReady: false,
     pool: {
       trflReserve: 0n,
       tusdReserve: 0n,
@@ -114,6 +152,8 @@ function cloneProjection(prior: ProtocolProjection): ProtocolProjection {
     pool: { ...prior.pool },
     custody: { ...prior.custody },
     positions: new Map(prior.positions),
+    protocolExcludedStores: new Map(prior.protocolExcludedStores),
+    registeredWallets: new Map(prior.registeredWallets),
     lpEpochs,
     rewardVaultToEpoch: new Map(prior.rewardVaultToEpoch),
     stateIdToEpoch: new Map(prior.stateIdToEpoch),
@@ -189,16 +229,26 @@ function adjustWalletAsset(
     positions(context).set(account, { ...current, rawTusd: balance + delta });
     return;
   }
-  const correctionDelta = delta * context.next.currentIndex;
+  const correctionDelta = checkedMoveU256Multiply(
+    delta < 0n ? -delta : delta,
+    context.next.currentIndex,
+    "wallet correction delta",
+  );
+  const correction = delta < 0n
+    ? checkedMoveSignedU256AddUnsigned(current.correction, correctionDelta, "wallet correction")
+    : checkedMoveSignedU256SubtractUnsigned(current.correction, correctionDelta, "wallet correction");
+  const aggregateCorrection = delta < 0n
+    ? checkedMoveSignedU256AddUnsigned(context.next.aggregateCorrection, correctionDelta, "aggregate wallet correction")
+    : checkedMoveSignedU256SubtractUnsigned(context.next.aggregateCorrection, correctionDelta, "aggregate wallet correction");
   positions(context).set(account, {
     ...current,
     rawTrfl: balance + delta,
-    correction: current.correction - correctionDelta,
+    correction,
   });
   context.next = {
     ...context.next,
     eligibleSupply: context.next.eligibleSupply + delta,
-    aggregateCorrection: context.next.aggregateCorrection - correctionDelta,
+    aggregateCorrection,
   };
   if (context.next.eligibleSupply < 0n) {
     throw new RangeError(`event group would create negative global shares at ${event.id}`);
@@ -219,19 +269,19 @@ function materializeWallet(
   }
   adjustWalletAsset(context, event.account, "tRFL", event.amount, event);
   const current = positionOrEmpty(event.account, context.next.positions);
-  const claimed = current.claimed + event.amount;
+  const claimed = checkedMoveU256Add(current.claimed, event.amount, "wallet cumulative materialization");
   if (claimed !== event.totalClaimed) {
     context.alerts.push(problem(event, "POSITION_ACCOUNTING", "Wallet cumulative materialization does not match the event.", claimed, event.totalClaimed));
   }
   positions(context).set(event.account, {
     ...current,
     claimed,
-    lifetimeMaterialized: current.lifetimeMaterialized + event.amount,
+    lifetimeMaterialized: checkedMoveU256Add(current.lifetimeMaterialized, event.amount, "wallet lifetime materialization"),
   });
   context.next = {
     ...context.next,
-    rewardVaultPayouts: context.next.rewardVaultPayouts + event.amount,
-    lifetimeMaterialized: context.next.lifetimeMaterialized + event.amount,
+    rewardVaultPayouts: checkedMoveU256Add(context.next.rewardVaultPayouts, event.amount, "core reward-vault payouts"),
+    lifetimeMaterialized: checkedMoveU256Add(context.next.lifetimeMaterialized, event.amount, "core lifetime materialization"),
   };
 }
 
@@ -248,6 +298,34 @@ function updateEpoch(context: MutableContext, epoch: IndexedLpEpoch): void {
   lpEpochs(context).set(epoch.epoch, epoch);
 }
 
+function accountStateSubjects(event: ProtocolEvent): readonly Address[] {
+  switch (event.type) {
+    case "PositionCreated":
+    case "EligibleBalanceDebited":
+    case "EligibleBalanceCredited":
+    case "RewardsMaterialized":
+    case "RewardsClaimed":
+    case "SwapExecuted":
+      return [event.account];
+    case "FaucetGrant":
+      return [event.account];
+    case "WalletTransfer":
+      return [event.from, event.to];
+    case "LiquiditySeeded":
+    case "LiquidityAdded":
+    case "LiquidityRemoved":
+      return [event.provider];
+    case "LpSharesChanged":
+    case "LpRewardsClaimed":
+    case "LpFractionalResidueRetired":
+      return [event.owner];
+    case "LpSharesTransferred":
+      return [event.sender, event.recipient];
+    default:
+      return [];
+  }
+}
+
 function adjustLpShares(
   context: MutableContext,
   event: Extract<ProtocolEvent, { readonly type: "LpSharesChanged" }>,
@@ -258,24 +336,39 @@ function adjustLpShares(
     context.alerts.push(problem(event, "LP_ACCOUNTING", "LP share mutation must be positive and target the active epoch."));
     return;
   }
+  if (!context.next.registeredWallets.has(event.owner)) {
+    context.alerts.push(problem(
+      event,
+      "WALLET_REGISTRATION",
+      "LP share weight may be created or mutated only for a wallet registered earlier in replay order.",
+      "earlier WalletRegistered",
+      event.owner,
+    ));
+  }
   const delta = event.added ? event.amount : -event.amount;
   const current = lpPositionOrEmpty(event.owner, epoch.positions);
   if (current.shares + delta < 0n || epoch.totalShares + delta < 0n) {
     context.alerts.push(problem(event, "LP_ACCOUNTING", "LP share mutation would underflow a position or epoch."));
     return;
   }
-  const correctionDelta = delta * epoch.index;
+  const correctionDelta = checkedMoveU256Multiply(event.amount, epoch.index, "LP share correction delta");
+  const correction = event.added
+    ? checkedMoveSignedU256SubtractUnsigned(current.correction, correctionDelta, "LP owner correction")
+    : checkedMoveSignedU256AddUnsigned(current.correction, correctionDelta, "LP owner correction");
+  const aggregateCorrection = event.added
+    ? checkedMoveSignedU256SubtractUnsigned(epoch.aggregateCorrection, correctionDelta, "LP aggregate correction")
+    : checkedMoveSignedU256AddUnsigned(epoch.aggregateCorrection, correctionDelta, "LP aggregate correction");
   const nextPosition = {
     ...current,
     shares: current.shares + delta,
-    correction: current.correction - correctionDelta,
+    correction,
   };
   const nextPositions = new Map(epoch.positions);
   nextPositions.set(event.owner, nextPosition);
   const nextEpoch = {
     ...epoch,
     totalShares: epoch.totalShares + delta,
-    aggregateCorrection: epoch.aggregateCorrection - correctionDelta,
+    aggregateCorrection,
     positions: nextPositions,
   };
   if (nextPosition.shares !== event.ownerShares || nextEpoch.totalShares !== event.totalShares) {
@@ -316,7 +409,20 @@ export function reduceEventGroup(
 
   const groupIds = new Set<string>();
   let previousEventIndex = -1;
+  try {
+    assertProjectionMoveDomains(prior);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "invalid prior projection domain";
+    context.alerts.push(problem(first, "EVENT_DATA", detail));
+    return { projection: prior, alerts: context.alerts };
+  }
   for (const event of events) {
+    try {
+      assertProtocolEventMoveDomains(event);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "invalid event Move domain";
+      context.alerts.push(problem(event, "EVENT_DATA", detail));
+    }
     if (event.ledgerVersion !== first.ledgerVersion || event.txHash !== first.txHash) {
       context.alerts.push(problem(event, "TRANSACTION_GROUP", "One atomic event group contains more than one transaction identity."));
     }
@@ -336,6 +442,9 @@ export function reduceEventGroup(
     }
     groupIds.add(event.id);
   }
+  if (context.alerts.some((entry) => entry.code === "EVENT_DATA")) {
+    return { projection: prior, alerts: context.alerts };
+  }
 
   const swaps = events.filter((event): event is SwapExecutedEvent => event.type === "SwapExecuted");
   const liquidity = events.filter((event) => event.type === "LiquiditySeeded" || event.type === "LiquidityAdded" || event.type === "LiquidityRemoved");
@@ -343,6 +452,11 @@ export function reduceEventGroup(
   const routes = events.filter((event) => event.type === "CustodyRewardsRouted");
   const lpAdvances = events.filter((event) => event.type === "LpRewardIndexAdvanced");
   const lpQuarantines = events.filter((event) => event.type === "LpRewardQuarantined");
+  const lpResidues = events.filter((event) => event.type === "LpFractionalResidueRetired");
+  const lpTerminalClassifications = events.filter((event) => event.type === "LpEpochTerminalDustClassified");
+  const lpTerminalTransitions = events.filter((event): event is Extract<ProtocolEvent, { readonly type: "LpEpochStatusChanged" }> => (
+    event.type === "LpEpochStatusChanged" && event.newStatus === "claim-only"
+  ));
   const lpOpenings = events.filter((event) => event.type === "LpEpochOpened");
   const adapterRegistrations = events.filter((event) => event.type === "CustodyAdapterRegistered");
   const routeOpenings = events.filter((event) => event.type === "CustodyEpochRouteOpened");
@@ -351,6 +465,23 @@ export function reduceEventGroup(
   const walletTransfers = events.filter((event) => event.type === "WalletTransfer");
   const materialized = events.filter((event) => event.type === "RewardsMaterialized");
   const explicitClaims = events.filter((event) => event.type === "RewardsClaimed");
+
+  for (const registration of events.filter((event) => event.type === "WalletRegistered")) {
+    const precedingAccountMutation = events.find((candidate) => (
+      candidate.id !== registration.id
+      && accountStateSubjects(candidate).includes(registration.account)
+      && candidate.eventIndex <= registration.eventIndex
+    ));
+    if (precedingAccountMutation !== undefined) {
+      context.alerts.push(problem(
+        registration,
+        "WALLET_REGISTRATION",
+        "WalletRegistered must precede every same-transaction position or account-balance event for that account.",
+        `registration before ${precedingAccountMutation.type}`,
+        `${precedingAccountMutation.type} at ${precedingAccountMutation.eventIndex}`,
+      ));
+    }
+  }
 
   if (swaps.length > 1 || liquidity.length > 1) {
     context.alerts.push(problem(first, "TRANSACTION_GROUP", "A transaction contains multiple terminal pool receipts."));
@@ -364,7 +495,7 @@ export function reduceEventGroup(
       added: swaps[0]!.direction === "sell",
       amount: swaps[0]!.direction === "sell" ? swaps[0]!.netReserveInput : swaps[0]!.grossPoolOutput,
     }
-    : liquidity.length === 1
+    : liquidity.length === 1 && liquidity[0]!.trflAmount > 0n
       ? {
         added: liquidity[0]!.type !== "LiquidityRemoved",
         amount: liquidity[0]!.trflAmount,
@@ -416,6 +547,59 @@ export function reduceEventGroup(
       context.alerts.push(problem(routeOpening, "ROUTE_PAIR", "Fresh custody epoch route lacks a same-transaction LP epoch opening."));
     }
   }
+  for (const transition of lpTerminalTransitions) {
+    const matches = lpTerminalClassifications.filter((candidate) => (
+      candidate.epoch === transition.epoch && candidate.eventIndex > transition.eventIndex
+    ));
+    if (matches.length !== 1) {
+      context.alerts.push(problem(
+        transition,
+        "LP_ACCOUNTING",
+        "Every active-to-claim-only transition requires exactly one later terminal-dust classification in the same transaction.",
+        1,
+        matches.length,
+      ));
+    }
+  }
+  for (const classification of lpTerminalClassifications) {
+    const matches = lpTerminalTransitions.filter((candidate) => (
+      candidate.epoch === classification.epoch && candidate.eventIndex < classification.eventIndex
+    ));
+    if (matches.length !== 1) {
+      context.alerts.push(problem(
+        classification,
+        "LP_ACCOUNTING",
+        "Terminal dust classification must follow exactly one matching status transition in its transaction.",
+        1,
+        matches.length,
+      ));
+    }
+  }
+  for (const residue of lpResidues) {
+    const burns = events.filter((candidate) => (
+      candidate.type === "LpSharesChanged"
+      && !candidate.added
+      && candidate.epoch === residue.epoch
+      && candidate.owner === residue.owner
+      && candidate.ownerShares === 0n
+      && candidate.eventIndex > residue.eventIndex
+    ));
+    const transfers = events.filter((candidate) => (
+      candidate.type === "LpSharesTransferred"
+      && candidate.epoch === residue.epoch
+      && candidate.sender === residue.owner
+      && candidate.eventIndex > residue.eventIndex
+    ));
+    if (burns.length + transfers.length !== 1) {
+      context.alerts.push(problem(
+        residue,
+        "LP_ACCOUNTING",
+        "Fractional residue retirement must precede exactly one complete owner exit in the same transaction.",
+        1,
+        burns.length + transfers.length,
+      ));
+    }
+  }
 
   if (liquidity.length === 1) {
     const receipt = liquidity[0]!;
@@ -443,8 +627,14 @@ export function reduceEventGroup(
       if (epoch!.totalShares <= 0n || prior.pool.trflReserve <= 0n || prior.pool.tusdReserve <= 0n) {
         context.alerts.push(problem(receipt, "LP_ACCOUNTING", "Liquidity addition requires nonzero reserves and existing LP shares."));
       } else {
-        const expectedRfl = ceilDiv(receipt.lpShares * prior.pool.trflReserve, epoch!.totalShares);
-        const expectedUsd = ceilDiv(receipt.lpShares * prior.pool.tusdReserve, epoch!.totalShares);
+        const expectedRfl = ceilDiv(
+          checkedMoveU256Multiply(receipt.lpShares, prior.pool.trflReserve, "LP mint tRFL numerator"),
+          epoch!.totalShares,
+        );
+        const expectedUsd = ceilDiv(
+          checkedMoveU256Multiply(receipt.lpShares, prior.pool.tusdReserve, "LP mint tUSD numerator"),
+          epoch!.totalShares,
+        );
         if (receipt.trflAmount !== expectedRfl || receipt.tusdAmount !== expectedUsd) {
           context.alerts.push(problem(receipt, "LP_ACCOUNTING", "Liquidity input amounts do not match the shares' proportional ceil arithmetic.", `${expectedRfl}/${expectedUsd}`, `${receipt.trflAmount}/${receipt.tusdAmount}`));
         }
@@ -452,18 +642,73 @@ export function reduceEventGroup(
     } else if (epoch!.totalShares <= 0n || receipt.lpShares > epoch!.totalShares) {
       context.alerts.push(problem(receipt, "LP_ACCOUNTING", "Liquidity removal exceeds replayed epoch shares."));
     } else {
+      const fullExit = receipt.lpShares === epoch!.totalShares;
       const expectedRfl = receipt.lpShares === epoch!.totalShares
         ? prior.pool.trflReserve
-        : receipt.lpShares * prior.pool.trflReserve / epoch!.totalShares;
+        : checkedMoveU256Multiply(receipt.lpShares, prior.pool.trflReserve, "LP withdrawal tRFL numerator") / epoch!.totalShares;
       const expectedUsd = receipt.lpShares === epoch!.totalShares
         ? prior.pool.tusdReserve
-        : receipt.lpShares * prior.pool.tusdReserve / epoch!.totalShares;
+        : checkedMoveU256Multiply(receipt.lpShares, prior.pool.tusdReserve, "LP withdrawal tUSD numerator") / epoch!.totalShares;
       if (
         receipt.trflAmount !== expectedRfl
         || receipt.tusdAmount !== expectedUsd
-        || receipt.finalExit !== (receipt.lpShares === epoch!.totalShares)
+        || receipt.finalExit !== fullExit
       ) {
-        context.alerts.push(problem(receipt, "LP_ACCOUNTING", "Liquidity withdrawal does not match proportional floor/final-exit arithmetic.", `${expectedRfl}/${expectedUsd}/${receipt.lpShares === epoch!.totalShares}`, `${receipt.trflAmount}/${receipt.tusdAmount}/${receipt.finalExit}`));
+        context.alerts.push(problem(receipt, "LP_ACCOUNTING", "Liquidity withdrawal does not match proportional floor/final-exit arithmetic.", `${expectedRfl}/${expectedUsd}/${fullExit}`, `${receipt.trflAmount}/${receipt.tusdAmount}/${receipt.finalExit}`));
+      }
+      if (
+        !fullExit
+        && !prior.pool.shutdownMode
+        && checkedMoveU256Multiply(receipt.lpShares, BPS_DENOMINATOR, "LP withdrawal limit request")
+          > checkedMoveU256Multiply(epoch!.totalShares, prior.pool.maximumNonFinalWithdrawalShareBps, "LP withdrawal limit allowance")
+      ) {
+        context.alerts.push(problem(
+          receipt,
+          "POOL_LIMITS",
+          "Normal-mode non-final withdrawal exceeds the configured proportional share limit.",
+          checkedMoveU256Multiply(epoch!.totalShares, prior.pool.maximumNonFinalWithdrawalShareBps, "LP withdrawal limit allowance"),
+          checkedMoveU256Multiply(receipt.lpShares, BPS_DENOMINATOR, "LP withdrawal limit request"),
+        ));
+      }
+
+      const epochTransitions = lpTerminalTransitions.filter((event) => event.epoch === receipt.epoch);
+      const epochClassifications = lpTerminalClassifications.filter((event) => event.epoch === receipt.epoch);
+      if (fullExit) {
+        const shareExits = events.filter((event) => (
+          event.type === "LpSharesChanged"
+          && !event.added
+          && event.epoch === receipt.epoch
+          && event.owner === receipt.provider
+          && event.amount === receipt.lpShares
+          && event.ownerShares === 0n
+          && event.totalShares === 0n
+          && event.eventIndex < receipt.eventIndex
+        ));
+        const transition = epochTransitions.length === 1 ? epochTransitions[0] : undefined;
+        const classification = epochClassifications.length === 1 ? epochClassifications[0] : undefined;
+        if (
+          !prior.pool.shutdownMode
+          || !receipt.finalExit
+          || shareExits.length !== 1
+          || transition === undefined
+          || transition.oldStatus !== "active"
+          || classification === undefined
+          || !(shareExits[0]!.eventIndex < transition.eventIndex
+            && transition.eventIndex < classification.eventIndex
+            && classification.eventIndex < receipt.eventIndex)
+        ) {
+          context.alerts.push(problem(
+            receipt,
+            "LP_ACCOUNTING",
+            "Final liquidity removal requires prior shutdown and one ordered same-transaction share exit, active-to-claim-only transition, terminal classification, then receipt.",
+          ));
+        }
+      } else if (epochTransitions.length > 0 || epochClassifications.length > 0) {
+        context.alerts.push(problem(
+          receipt,
+          "LP_ACCOUNTING",
+          "A non-final liquidity removal cannot terminate or classify its active LP epoch.",
+        ));
       }
     }
   }
@@ -489,8 +734,20 @@ export function reduceEventGroup(
           if (event.feeBps > 100n) {
             context.alerts.push(problem(event, "EVENT_DATA", "Protocol initialized with a reflection fee above 100 bps."));
           }
+          if (
+            event.deploymentId.length === 0
+            || event.networkLabel !== "cedra-testnet"
+            || event.protocolExclusionSlots !== 2n
+          ) {
+            context.alerts.push(problem(event, "EVENT_DATA", "Protocol initialization identity or exclusion-slot policy is invalid."));
+          }
           context.next = {
             ...context.next,
+            deploymentId: event.deploymentId,
+            networkLabel: event.networkLabel,
+            tokenMetadata: event.tokenMetadata,
+            protocolExclusionSlots: event.protocolExclusionSlots,
+            protocolExclusionsRemaining: event.protocolExclusionSlots,
             automaticMaterialization: event.automaticMaterialization,
             feeBps: event.feeBps,
             currentIndex: event.initialIndex,
@@ -500,7 +757,90 @@ export function reduceEventGroup(
           };
           break;
 
+        case "ProtocolPrimaryStoreExcluded": {
+          const stores = new Map(context.next.protocolExcludedStores);
+          if (
+            /^0x0+$/.test(event.account)
+            || /^0x0+$/.test(event.store)
+            || context.next.protocolExclusionsRemaining <= 0n
+            || event.remainingSlots !== context.next.protocolExclusionsRemaining - 1n
+            || stores.has(event.account)
+            || [...stores.values()].includes(event.store)
+            || context.next.registeredWallets.has(event.account)
+            || [...context.next.registeredWallets.values()].includes(event.store)
+          ) {
+            context.alerts.push(problem(event, "IDENTIFIER_REUSE", "Protocol publisher exclusion is zero, registered, duplicated, or exceeds the finite bootstrap slots."));
+          }
+          stores.set(event.account, event.store);
+          context.next = {
+            ...context.next,
+            protocolExclusionsRemaining: event.remainingSlots,
+            protocolExcludedStores: stores,
+          };
+          break;
+        }
+
+        case "OperationalPrimaryStoreExcluded": {
+          const stores = new Map(context.next.protocolExcludedStores);
+          if (
+            /^0x0+$/.test(event.account)
+            || /^0x0+$/.test(event.store)
+            || stores.has(event.account)
+            || [...stores.values()].includes(event.store)
+            || context.next.registeredWallets.has(event.account)
+            || [...context.next.registeredWallets.values()].includes(event.store)
+          ) {
+            context.alerts.push(problem(
+              event,
+              "IDENTIFIER_REUSE",
+              "Operational primary-store exclusion is zero, duplicated, or reuses an already classified store.",
+            ));
+          }
+          stores.set(event.account, event.store);
+          context.next = {
+            ...context.next,
+            // Operational appointments are outside the two finite publisher
+            // bootstrap slots and therefore cannot change the remaining count.
+            protocolExcludedStores: stores,
+          };
+          break;
+        }
+
+        case "WalletRegistered": {
+          const wallets = new Map(context.next.registeredWallets);
+          const expectedCount = context.next.registeredWalletCount + 1n;
+          if (
+            /^0x0+$/.test(event.account)
+            || /^0x0+$/.test(event.primaryStore)
+            || event.registeredWalletCount <= 0n
+            || event.registeredWalletCount > U64_MAX
+            || event.registeredWalletCount !== expectedCount
+            || wallets.has(event.account)
+            || [...wallets.values()].includes(event.primaryStore)
+            || context.next.protocolExcludedStores.has(event.account)
+            || [...context.next.protocolExcludedStores.values()].includes(event.primaryStore)
+          ) {
+            context.alerts.push(problem(
+              event,
+              "WALLET_REGISTRATION",
+              "Wallet registration must bind one fresh non-excluded account/store and advance the exact u64 count once.",
+              expectedCount,
+              event.registeredWalletCount,
+            ));
+          }
+          wallets.set(event.account, event.primaryStore);
+          context.next = {
+            ...context.next,
+            registeredWallets: wallets,
+            registeredWalletCount: event.registeredWalletCount,
+          };
+          break;
+        }
+
         case "PositionCreated":
+          if (context.next.positions.has(event.account)) {
+            context.alerts.push(problem(event, "IDENTIFIER_REUSE", "Wallet accounting position was created more than once."));
+          }
           positions(context).set(event.account, positionOrEmpty(event.account, context.next.positions));
           break;
 
@@ -519,6 +859,17 @@ export function reduceEventGroup(
             faucetTusdGrant: event.tusdGrant,
             faucetCooldownSeconds: event.cooldownSeconds,
           };
+          break;
+
+        case "PoolReserveBound":
+          if (
+            context.next.mockUsdPoolReserve !== null
+            || event.reserveStore === "0x0"
+            || event.custodian === "0x0"
+          ) {
+            context.alerts.push(problem(event, "IDENTIFIER_REUSE", "The one-shot tUSD pool reserve binding is invalid or repeated."));
+          }
+          context.next = { ...context.next, mockUsdPoolReserve: event.reserveStore };
           break;
 
         case "WalletTransfer": {
@@ -556,7 +907,7 @@ export function reduceEventGroup(
           const current = positionOrEmpty(event.account, context.next.positions);
           positions(context).set(event.account, {
             ...current,
-            lifetimeClaimed: current.lifetimeClaimed + event.amount,
+            lifetimeClaimed: checkedMoveU256Add(current.lifetimeClaimed, event.amount, "wallet lifetime claimed"),
           });
           break;
         }
@@ -604,12 +955,48 @@ export function reduceEventGroup(
           ) {
             context.alerts.push(problem(event, "OLD_EPOCH_ROUTE", "Custody route epochs must advance exactly once."));
           }
+          if (context.next.custody.correction < 0n) {
+            throw new RangeError("custody route correction cannot be negative during residue normalization");
+          }
+          const normalizedCustodyClaim = checkedMoveU256Multiply(
+            context.next.custody.claimed,
+            REFLECTION_MAGNITUDE,
+            "custody normalized claim",
+          );
+          const expectedResidue = checkedMoveU256Subtract(
+            context.next.custody.correction,
+            normalizedCustodyClaim,
+            "custody route residue",
+          );
+          if (
+            expectedResidue < 0n
+            || expectedResidue >= REFLECTION_MAGNITUDE
+            || event.retiredResidueMagnified !== expectedResidue
+          ) {
+            context.alerts.push(problem(
+              event,
+              "CUSTODY_ACCOUNTING",
+              "Custody route did not retire exactly the prior epoch's fractional magnified residue.",
+              expectedResidue,
+              event.retiredResidueMagnified,
+            ));
+          }
           context.next = {
             ...context.next,
+            aggregateCorrection: checkedMoveSignedU256SubtractUnsigned(
+              context.next.aggregateCorrection,
+              event.retiredResidueMagnified,
+              "aggregate custody residue correction",
+            ),
             custody: {
               ...context.next.custody,
               activeRouteEpoch: event.epoch,
               activeLpRewardVault: event.lpRewardVault,
+              correction: checkedMoveSignedU256SubtractUnsigned(
+                context.next.custody.correction,
+                event.retiredResidueMagnified,
+                "custody residue correction",
+              ),
             },
           };
           break;
@@ -632,8 +1019,8 @@ export function reduceEventGroup(
           }
           context.next = {
             ...context.next,
-            rewardVaultCredits: context.next.rewardVaultCredits + event.feeAmount,
-            lifetimeSwapFees: context.next.lifetimeSwapFees + event.feeAmount,
+            rewardVaultCredits: checkedMoveU256Add(context.next.rewardVaultCredits, event.feeAmount, "core reward-vault credits"),
+            lifetimeSwapFees: checkedMoveU256Add(context.next.lifetimeSwapFees, event.feeAmount, "core lifetime fees"),
           };
           pendingCoreFees.push({ event, sharesAtCollection: context.next.eligibleSupply });
           break;
@@ -649,8 +1036,16 @@ export function reduceEventGroup(
             context.alerts.push(problem(event, "GLOBAL_INDEX", "Global index advanced with a zero denominator."));
             break;
           }
-          const numerator = pending.event.feeAmount * REFLECTION_MAGNITUDE + context.next.indexRemainder;
-          const expectedIndex = context.next.currentIndex + numerator / pending.sharesAtCollection;
+          const numerator = checkedMoveU256Add(
+            checkedMoveU256Multiply(pending.event.feeAmount, REFLECTION_MAGNITUDE, "core index fee numerator"),
+            context.next.indexRemainder,
+            "core index numerator with remainder",
+          );
+          const expectedIndex = checkedMoveU256Add(
+            context.next.currentIndex,
+            numerator / pending.sharesAtCollection,
+            "core reflection index",
+          );
           const expectedRemainder = numerator % pending.sharesAtCollection;
           if (
             event.feeAmount !== pending.event.feeAmount
@@ -676,17 +1071,23 @@ export function reduceEventGroup(
           if (event.amount <= 0n) throw new RangeError("custody share mutation must be positive");
           const delta = event.added ? event.amount : -event.amount;
           if (context.next.custody.shares + delta < 0n) throw new RangeError("custody shares cannot underflow");
-          const correctionDelta = delta * context.next.currentIndex;
+          const correctionDelta = checkedMoveU256Multiply(event.amount, context.next.currentIndex, "custody correction delta");
+          const correction = event.added
+            ? checkedMoveSignedU256SubtractUnsigned(context.next.custody.correction, correctionDelta, "custody correction")
+            : checkedMoveSignedU256AddUnsigned(context.next.custody.correction, correctionDelta, "custody correction");
+          const aggregateCorrection = event.added
+            ? checkedMoveSignedU256SubtractUnsigned(context.next.aggregateCorrection, correctionDelta, "aggregate custody correction")
+            : checkedMoveSignedU256AddUnsigned(context.next.aggregateCorrection, correctionDelta, "aggregate custody correction");
           const custody = {
             ...context.next.custody,
             shares: context.next.custody.shares + delta,
-            correction: context.next.custody.correction - correctionDelta,
+            correction,
           };
           context.next = {
             ...context.next,
             custody,
             eligibleSupply: context.next.eligibleSupply + delta,
-            aggregateCorrection: context.next.aggregateCorrection - correctionDelta,
+            aggregateCorrection,
           };
           if (custody.shares !== event.custodyShares || context.next.eligibleSupply !== event.globalShares) {
             context.alerts.push(problem(
@@ -721,7 +1122,7 @@ export function reduceEventGroup(
           if (event.amount !== pending || event.amount <= 0n) {
             context.alerts.push(problem(event, "CUSTODY_ACCOUNTING", "Custody route must settle the exact whole pending amount.", pending, event.amount));
           }
-          const claimed = context.next.custody.claimed + event.amount;
+          const claimed = checkedMoveU256Add(context.next.custody.claimed, event.amount, "custody cumulative routed");
           if (claimed !== event.totalRouted) {
             context.alerts.push(problem(event, "CUSTODY_ACCOUNTING", "Custody cumulative routed amount disagrees with replay.", claimed, event.totalRouted));
           }
@@ -731,10 +1132,10 @@ export function reduceEventGroup(
               ...context.next.custody,
               reserveStore: context.next.custody.reserveStore ?? event.reserveStore,
               claimed,
-              lifetimeRouted: context.next.custody.lifetimeRouted + event.amount,
+              lifetimeRouted: checkedMoveU256Add(context.next.custody.lifetimeRouted, event.amount, "custody lifetime routed"),
             },
-            lifetimeCustodyRouted: context.next.lifetimeCustodyRouted + event.amount,
-            rewardVaultPayouts: context.next.rewardVaultPayouts + event.amount,
+            lifetimeCustodyRouted: checkedMoveU256Add(context.next.lifetimeCustodyRouted, event.amount, "core lifetime custody routed"),
+            rewardVaultPayouts: checkedMoveU256Add(context.next.rewardVaultPayouts, event.amount, "core reward-vault payouts"),
           };
           break;
         }
@@ -762,6 +1163,8 @@ export function reduceEventGroup(
             aggregateCorrection: 0n,
             unallocatedRewards: 0n,
             roundingReserve: 0n,
+            retiredResidueMagnified: 0n,
+            terminalRoundingBaseUnits: null,
             lifetimeReceived: 0n,
             lifetimeClaimed: 0n,
             quarantined: false,
@@ -791,6 +1194,151 @@ export function reduceEventGroup(
           break;
         }
 
+        case "LpFractionalResidueRetired": {
+          const epoch = requireEpoch(context, event, event.epoch);
+          if (epoch === null) break;
+          const current = epoch.positions.get(event.owner);
+          const exit = events.find((candidate) => (
+            (
+              candidate.type === "LpSharesChanged"
+              && !candidate.added
+              && candidate.epoch === event.epoch
+              && candidate.owner === event.owner
+              && candidate.ownerShares === 0n
+            )
+            || (
+              candidate.type === "LpSharesTransferred"
+              && candidate.epoch === event.epoch
+              && candidate.sender === event.owner
+            )
+          ) && candidate.eventIndex > event.eventIndex);
+          const exitAmount = exit?.type === "LpSharesChanged" || exit?.type === "LpSharesTransferred"
+            ? exit.amount
+            : 0n;
+          if (
+            event.epoch <= 0n
+            || event.epoch > U64_MAX
+            || event.residueMagnified <= 0n
+            || event.residueMagnified > U256_MAX
+            || event.cumulativeRetiredResidueMagnified > U256_MAX
+            || event.roundingReserveBaseUnits > U128_MAX
+            || current === undefined
+            || current.shares <= 0n
+            || exitAmount !== current.shares
+          ) {
+            context.alerts.push(problem(
+              event,
+              "LP_ACCOUNTING",
+              "Fractional residue must use exact u64/u128/u256 units and precede a complete non-zero position exit.",
+            ));
+            break;
+          }
+          const correctionAfterExit = checkedMoveSignedU256AddUnsigned(
+            current.correction,
+            checkedMoveU256Multiply(current.shares, epoch.index, "LP exit correction delta"),
+            "LP zero-share correction",
+          );
+          if (correctionAfterExit < 0n) {
+            throw new RangeError("LP zero-share correction cannot remain negative");
+          }
+          const expectedResidue = checkedMoveU256Subtract(
+            correctionAfterExit,
+            checkedMoveU256Multiply(current.claimed, REFLECTION_MAGNITUDE, "LP normalized claim"),
+            "LP fractional residue",
+          );
+          const expectedCumulative = checkedMoveU256Add(
+            epoch.retiredResidueMagnified,
+            expectedResidue,
+            "LP cumulative retired residue",
+          );
+          if (
+            expectedResidue <= 0n
+            || expectedResidue >= REFLECTION_MAGNITUDE
+            || expectedCumulative > U256_MAX
+            || event.residueMagnified !== expectedResidue
+            || event.cumulativeRetiredResidueMagnified !== expectedCumulative
+          ) {
+            context.alerts.push(problem(
+              event,
+              "LP_ACCOUNTING",
+              "Fractional residue receipt disagrees with the zero-share correction normalization.",
+              `${expectedResidue}/${expectedCumulative}`,
+              `${event.residueMagnified}/${event.cumulativeRetiredResidueMagnified}`,
+            ));
+            break;
+          }
+          const nextPositions = new Map(epoch.positions);
+          nextPositions.set(event.owner, {
+            ...current,
+            correction: checkedMoveSignedU256SubtractUnsigned(current.correction, expectedResidue, "LP retired owner residue correction"),
+          });
+          const withoutRounding: IndexedLpEpoch = {
+            ...epoch,
+            aggregateCorrection: checkedMoveSignedU256SubtractUnsigned(epoch.aggregateCorrection, expectedResidue, "LP retired aggregate residue correction"),
+            retiredResidueMagnified: expectedCumulative,
+            positions: nextPositions,
+          };
+          const expectedRounding = checkedVaultRemainder(
+            expectedLpVaultBalance(withoutRounding),
+            lpIndexedLiability(withoutRounding),
+            withoutRounding.unallocatedRewards,
+            "LP residue rounding reserve",
+          );
+          if (
+            expectedRounding < 0n
+            || expectedRounding > U128_MAX
+            || event.roundingReserveBaseUnits !== expectedRounding
+          ) {
+            context.alerts.push(problem(
+              event,
+              "LP_VAULT_BACKING",
+              "Fractional residue retirement reports the wrong physical rounding reserve.",
+              expectedRounding,
+              event.roundingReserveBaseUnits,
+            ));
+          }
+          updateEpoch(context, { ...withoutRounding, roundingReserve: expectedRounding });
+          break;
+        }
+
+        case "LpEpochTerminalDustClassified": {
+          const epoch = requireEpoch(context, event, event.epoch);
+          if (epoch === null) break;
+          const expectedVaultBalance = expectedLpVaultBalance(epoch);
+          const calculatedLiability = lpIndexedLiability(epoch);
+          if (
+            event.epoch <= 0n
+            || event.epoch > U64_MAX
+            || event.terminalRoundingBaseUnits > U128_MAX
+            || event.retiredResidueMagnified > U256_MAX
+            || event.lifetimeReceivedBaseUnits > U256_MAX
+            || event.lifetimeClaimedBaseUnits > U256_MAX
+            || epoch.status !== "claim-only"
+            || epoch.terminalRoundingBaseUnits !== null
+            || epoch.rewardVault !== event.rewardVault
+            || epoch.totalShares !== 0n
+            || epoch.quarantined
+            || epoch.unallocatedRewards !== 0n
+            || calculatedLiability !== 0n
+            || expectedVaultBalance !== epoch.roundingReserve
+            || event.terminalRoundingBaseUnits !== epoch.roundingReserve
+            || event.retiredResidueMagnified !== epoch.retiredResidueMagnified
+            || event.lifetimeReceivedBaseUnits !== epoch.lifetimeReceived
+            || event.lifetimeClaimedBaseUnits !== epoch.lifetimeClaimed
+          ) {
+            context.alerts.push(problem(
+              event,
+              "LP_ACCOUNTING",
+              "Terminal dust classification must exactly match the healthy zero-share claim-only epoch and its immutable vault/lifetime evidence.",
+            ));
+          }
+          updateEpoch(context, {
+            ...epoch,
+            terminalRoundingBaseUnits: epoch.roundingReserve,
+          });
+          break;
+        }
+
         case "LpSharesChanged":
           adjustLpShares(context, event);
           break;
@@ -802,16 +1350,36 @@ export function reduceEventGroup(
             context.alerts.push(problem(event, "LP_ACCOUNTING", "LP transfer must be positive and target the active epoch."));
             break;
           }
+          if (
+            !context.next.registeredWallets.has(event.sender)
+            || !context.next.registeredWallets.has(event.recipient)
+          ) {
+            context.alerts.push(problem(
+              event,
+              "WALLET_REGISTRATION",
+              "LP sender and recipient must both have WalletRegistered evidence earlier in replay order.",
+              "registered sender and recipient",
+              `${event.sender}/${event.recipient}`,
+            ));
+          }
           const sender = lpPositionOrEmpty(event.sender, epoch.positions);
           const recipient = lpPositionOrEmpty(event.recipient, epoch.positions);
           if (sender.shares < event.amount || event.sender === event.recipient) {
             context.alerts.push(problem(event, "LP_ACCOUNTING", "LP transfer would underflow or transfer to self."));
             break;
           }
-          const delta = event.amount * epoch.index;
+          const delta = checkedMoveU256Multiply(event.amount, epoch.index, "LP transfer correction delta");
           const nextPositions = new Map(epoch.positions);
-          nextPositions.set(event.sender, { ...sender, shares: sender.shares - event.amount, correction: sender.correction + delta });
-          nextPositions.set(event.recipient, { ...recipient, shares: recipient.shares + event.amount, correction: recipient.correction - delta });
+          nextPositions.set(event.sender, {
+            ...sender,
+            shares: sender.shares - event.amount,
+            correction: checkedMoveSignedU256AddUnsigned(sender.correction, delta, "LP transfer sender correction"),
+          });
+          nextPositions.set(event.recipient, {
+            ...recipient,
+            shares: recipient.shares + event.amount,
+            correction: checkedMoveSignedU256SubtractUnsigned(recipient.correction, delta, "LP transfer recipient correction"),
+          });
           updateEpoch(context, { ...epoch, positions: nextPositions });
           break;
         }
@@ -838,18 +1406,29 @@ export function reduceEventGroup(
             context.alerts.push(problem(event, "LP_ACCOUNTING", "LP index cannot advance with zero shares."));
             break;
           }
-          const numerator = event.received * REFLECTION_MAGNITUDE + epoch.indexRemainder;
-          const expectedIndex = epoch.index + numerator / epoch.totalShares;
+          const numerator = checkedMoveU256Add(
+            checkedMoveU256Multiply(event.received, REFLECTION_MAGNITUDE, "LP reward index numerator"),
+            epoch.indexRemainder,
+            "LP reward index numerator with remainder",
+          );
+          const expectedIndex = checkedMoveU256Add(
+            epoch.index,
+            numerator / epoch.totalShares,
+            "LP reward index",
+          );
           const expectedRemainder = numerator % epoch.totalShares;
           let nextEpoch: IndexedLpEpoch = {
             ...epoch,
             index: event.newIndex,
             indexRemainder: event.indexRemainder,
-            lifetimeReceived: epoch.lifetimeReceived + event.received,
+            lifetimeReceived: checkedMoveU256Add(epoch.lifetimeReceived, event.received, "LP lifetime received"),
           };
-          const calculatedRounding = expectedLpVaultBalance(nextEpoch)
-            - lpIndexedLiability(nextEpoch)
-            - nextEpoch.unallocatedRewards;
+          const calculatedRounding = checkedVaultRemainder(
+            expectedLpVaultBalance(nextEpoch),
+            lpIndexedLiability(nextEpoch),
+            nextEpoch.unallocatedRewards,
+            "LP index rounding reserve",
+          );
           if (
             event.previousIndex !== epoch.index
             || event.newIndex !== expectedIndex
@@ -899,13 +1478,18 @@ export function reduceEventGroup(
           }
           const nextEpoch: IndexedLpEpoch = {
             ...epoch,
-            lifetimeReceived: epoch.lifetimeReceived + event.amount,
+            lifetimeReceived: checkedMoveU256Add(epoch.lifetimeReceived, event.amount, "quarantined LP lifetime received"),
             unallocatedRewards,
             quarantined: true,
           };
           updateEpoch(context, {
             ...nextEpoch,
-            roundingReserve: expectedLpVaultBalance(nextEpoch) - lpIndexedLiability(nextEpoch) - unallocatedRewards,
+            roundingReserve: checkedVaultRemainder(
+              expectedLpVaultBalance(nextEpoch),
+              lpIndexedLiability(nextEpoch),
+              unallocatedRewards,
+              "quarantined LP rounding reserve",
+            ),
           });
           break;
         }
@@ -918,7 +1502,7 @@ export function reduceEventGroup(
           if (event.amount <= 0n || event.amount > pending) {
             context.alerts.push(problem(event, "LP_ACCOUNTING", "LP claim exceeds independently calculated pending rewards.", pending, event.amount));
           }
-          const claimed = current.claimed + event.amount;
+          const claimed = checkedMoveU256Add(current.claimed, event.amount, "LP position cumulative claim");
           if (claimed !== event.totalClaimed) {
             context.alerts.push(problem(event, "POSITION_ACCOUNTING", "LP position cumulative claim disagrees with replay.", claimed, event.totalClaimed));
           }
@@ -927,7 +1511,7 @@ export function reduceEventGroup(
           const nextEpoch = {
             ...epoch,
             positions: nextPositions,
-            lifetimeClaimed: epoch.lifetimeClaimed + event.amount,
+            lifetimeClaimed: checkedMoveU256Add(epoch.lifetimeClaimed, event.amount, "LP lifetime claimed"),
           };
           updateEpoch(context, nextEpoch);
           // Core payout attaches LP tRFL to the wallet at the current global index.
@@ -997,8 +1581,20 @@ export function reduceEventGroup(
         case "LiquiditySeeded":
         case "LiquidityAdded":
         case "LiquidityRemoved": {
-          if (event.trflAmount <= 0n || event.tusdAmount <= 0n || event.lpShares <= 0n) {
-            context.alerts.push(problem(event, "EVENT_DATA", "Liquidity amounts and shares must be positive."));
+          const oneSidedRemoval = event.type === "LiquidityRemoved"
+            && ((event.trflAmount === 0n) !== (event.tusdAmount === 0n));
+          const invalidAmounts = event.lpShares <= 0n
+            || event.trflAmount < 0n
+            || event.tusdAmount < 0n
+            || (event.trflAmount === 0n && event.tusdAmount === 0n)
+            || (event.type !== "LiquidityRemoved" && (event.trflAmount === 0n || event.tusdAmount === 0n))
+            || (oneSidedRemoval && !prior.pool.shutdownMode);
+          if (invalidAmounts) {
+            context.alerts.push(problem(
+              event,
+              "EVENT_DATA",
+              "Liquidity shares must be positive; both assets are required except a one-sided, non-empty shutdown removal.",
+            ));
           }
           const sign = event.type === "LiquidityRemoved" ? -1n : 1n;
           const expectedTrfl = context.next.pool.trflReserve + sign * event.trflAmount;
@@ -1010,8 +1606,12 @@ export function reduceEventGroup(
             adjustWalletAsset(context, event.provider, "tRFL", -event.trflAmount, event);
             adjustWalletAsset(context, event.provider, "tUSD", -event.tusdAmount, event);
           } else if (event.type === "LiquidityRemoved") {
-            adjustWalletAsset(context, event.provider, "tRFL", event.trflAmount, event);
-            adjustWalletAsset(context, event.provider, "tUSD", event.tusdAmount, event);
+            if (event.trflAmount > 0n) {
+              adjustWalletAsset(context, event.provider, "tRFL", event.trflAmount, event);
+            }
+            if (event.tusdAmount > 0n) {
+              adjustWalletAsset(context, event.provider, "tUSD", event.tusdAmount, event);
+            }
           }
           context.next = {
             ...context.next,
@@ -1024,6 +1624,9 @@ export function reduceEventGroup(
                 : event.type === "LiquidityRemoved" && event.finalExit
                   ? false
                   : context.next.pool.seeded,
+              shutdownMode: event.type === "LiquidityRemoved" && event.finalExit
+                ? false
+                : context.next.pool.shutdownMode,
             },
           };
           break;
@@ -1098,27 +1701,70 @@ export function reduceEventGroup(
             ? "reflectionCore"
             : event.scope === "test-assets"
               ? "testAssets"
-              : "testAmm";
+              : event.scope === "test-amm"
+                ? "testAmm"
+                : null;
+          // ProtocolEvent is a TypeScript union, but snapshots, adapters, and
+          // external callers still cross a runtime trust boundary. Never map
+          // an unknown authority scope onto the AMM role by default.
+          if (key === null) {
+            context.alerts.push(problem(
+              event,
+              "OPERATIONAL_ADMIN",
+              "Operational-admin event has an unsupported authority scope.",
+              "reflection-core|test-assets|test-amm",
+              String(event.scope),
+            ));
+            break;
+          }
           const previous = context.next.operationalAdmins[key];
+          const initializing = previous === null && /^0x0+$/.test(event.oldOperationalAdmin);
+          const continuesAuthorityChain = previous === null
+            ? initializing
+            : previous === event.oldOperationalAdmin;
+          const hasPermanentExclusion = context.next.protocolExcludedStores.has(event.newOperationalAdmin);
+          const alignedToCore = event.scope === "reflection-core"
+            || event.newOperationalAdmin === context.next.operationalAdmins.reflectionCore;
           if (
-            (previous !== null && previous !== event.oldOperationalAdmin)
+            !continuesAuthorityChain
             || /^0x0+$/.test(event.newOperationalAdmin)
+            || (!initializing && (!hasPermanentExclusion || !alignedToCore))
           ) {
             context.alerts.push(problem(
               event,
               "OPERATIONAL_ADMIN",
-              "Operational-admin handoff does not continue the evented authority chain or targets the zero address.",
-              previous ?? event.oldOperationalAdmin,
+              "Operational-admin handoff breaks authority continuity, lacks permanent primary-store exclusion, is not aligned to core, or targets zero.",
+              previous ?? context.next.operationalAdmins.reflectionCore ?? event.oldOperationalAdmin,
               event.newOperationalAdmin,
             ));
           }
+          const operationalAdmins = {
+            ...context.next.operationalAdmins,
+            [key]: event.newOperationalAdmin,
+          };
           context.next = {
             ...context.next,
-            operationalAdmins: {
-              ...context.next.operationalAdmins,
-              [key]: event.newOperationalAdmin,
-            },
+            operationalAdmins,
+            deploymentReady: operationalAdmins.reflectionCore !== null
+              && operationalAdmins.testAssets !== null
+              && operationalAdmins.testAmm !== null,
           };
+          break;
+        }
+
+        default: {
+          // ProtocolEvent is a compile-time discriminated union, but event
+          // sources are a runtime trust boundary. An unknown discriminant must
+          // never be treated as an ignorable project event because doing so
+          // would advance the durable cursor past unaudited state.
+          const unknownEvent = event as ProtocolEvent & { readonly type: unknown };
+          context.alerts.push(problem(
+            unknownEvent,
+            "EVENT_DATA",
+            "Event has an unsupported runtime type and cannot be checkpointed.",
+            "known ProtocolEvent type",
+            String(unknownEvent.type),
+          ));
           break;
         }
 
@@ -1156,6 +1802,38 @@ export function reduceEventGroup(
       }
     }
 
+    if (
+      context.next.registeredWalletCount !== BigInt(context.next.registeredWallets.size)
+      || context.next.registeredWalletCount < 0n
+      || context.next.registeredWalletCount > U64_MAX
+      || new Set(context.next.registeredWallets.values()).size !== context.next.registeredWallets.size
+      || [...context.next.registeredWallets].some(([account, store]) => (
+        /^0x0+$/.test(account)
+        || /^0x0+$/.test(store)
+        || context.next.protocolExcludedStores.has(account)
+        || [...context.next.protocolExcludedStores.values()].includes(store)
+      ))
+    ) {
+      context.alerts.push(problem(
+        first,
+        "WALLET_REGISTRATION",
+        "Registered-wallet count and unique primary-store bindings must exactly match replayed registration events.",
+        context.next.registeredWallets.size,
+        context.next.registeredWalletCount,
+      ));
+    }
+    for (const account of context.next.positions.keys()) {
+      if (!context.next.registeredWallets.has(account)) {
+        context.alerts.push(problem(
+          first,
+          "WALLET_REGISTRATION",
+          "Every wallet accounting position must have an exact prior or same-transaction registration event.",
+          "registered wallet",
+          account,
+        ));
+      }
+    }
+
     const walletShares = sumWalletShares(context.next.positions);
     if (walletShares + context.next.custody.shares !== context.next.eligibleSupply) {
       context.alerts.push(problem(
@@ -1167,7 +1845,13 @@ export function reduceEventGroup(
       ));
     }
     let positionCorrection = context.next.custody.correction;
-    for (const position of context.next.positions.values()) positionCorrection += position.correction;
+    for (const position of context.next.positions.values()) {
+      positionCorrection = checkedMoveSignedU256Add(
+        positionCorrection,
+        position.correction,
+        "summed core position correction",
+      );
+    }
     if (positionCorrection !== context.next.aggregateCorrection) {
       context.alerts.push(problem(first, "CORE_ACCOUNTING", "Aggregate correction does not equal wallet plus custody corrections.", positionCorrection, context.next.aggregateCorrection));
     }
@@ -1188,20 +1872,38 @@ export function reduceEventGroup(
 
     const expectedCoreVault = expectedCoreVaultBalance(context.next);
     const coreLiability = coreIndexedLiability(context.next);
-    const coreRounding = expectedCoreVault - coreLiability - context.next.unallocatedFees;
-    if (coreRounding < 0n) {
-      context.alerts.push(problem(first, "VAULT_BACKING", "Core vault buckets exceed independently replayed vault credits less payouts."));
-    } else {
-      context.next = { ...context.next, roundingReserve: coreRounding };
-    }
+    const coreRounding = checkedVaultRemainder(
+      expectedCoreVault,
+      coreLiability,
+      context.next.unallocatedFees,
+      "core rounding reserve",
+    );
+    context.next = { ...context.next, roundingReserve: coreRounding };
 
     for (const epoch of context.next.lpEpochs.values()) {
       const summedShares = sumLpShares(epoch.positions);
       let summedCorrection = 0n;
       let summedClaims = 0n;
       for (const position of epoch.positions.values()) {
-        summedCorrection += position.correction;
-        summedClaims += position.claimed;
+        if (position.shares > 0n && !context.next.registeredWallets.has(position.owner)) {
+          context.alerts.push(problem(
+            first,
+            "WALLET_REGISTRATION",
+            `Every positive LP position in epoch ${epoch.epoch.toString()} must belong to a previously registered wallet.`,
+            "registered wallet",
+            position.owner,
+          ));
+        }
+        summedCorrection = checkedMoveSignedU256Add(
+          summedCorrection,
+          position.correction,
+          `summed LP epoch ${epoch.epoch.toString()} correction`,
+        );
+        summedClaims = checkedMoveU256Add(
+          summedClaims,
+          position.claimed,
+          `summed LP epoch ${epoch.epoch.toString()} claims`,
+        );
       }
       if (
         summedShares !== epoch.totalShares
@@ -1210,14 +1912,43 @@ export function reduceEventGroup(
       ) {
         context.alerts.push(problem(first, "LP_ACCOUNTING", `LP epoch ${epoch.epoch.toString()} aggregate state disagrees with its positions.`));
       }
-      const rounding = expectedLpVaultBalance(epoch) - lpIndexedLiability(epoch) - epoch.unallocatedRewards;
-      if (rounding < 0n || rounding !== epoch.roundingReserve) {
+      if (
+        epoch.retiredResidueMagnified < 0n
+        || epoch.retiredResidueMagnified > U256_MAX
+        || (epoch.status === "active" && epoch.terminalRoundingBaseUnits !== null)
+        || (epoch.status === "claim-only" && epoch.terminalRoundingBaseUnits === null)
+        || (
+          epoch.terminalRoundingBaseUnits !== null
+          && (
+            epoch.terminalRoundingBaseUnits < 0n
+            || epoch.terminalRoundingBaseUnits > U128_MAX
+            || epoch.terminalRoundingBaseUnits !== epoch.roundingReserve
+          )
+        )
+      ) {
+        context.alerts.push(problem(
+          first,
+          "LP_ACCOUNTING",
+          `LP epoch ${epoch.epoch.toString()} residue units or terminal classification state is invalid.`,
+        ));
+      }
+      const rounding = checkedVaultRemainder(
+        expectedLpVaultBalance(epoch),
+        lpIndexedLiability(epoch),
+        epoch.unallocatedRewards,
+        `LP epoch ${epoch.epoch.toString()} rounding reserve`,
+      );
+      if (rounding !== epoch.roundingReserve) {
         context.alerts.push(problem(first, "LP_VAULT_BACKING", `LP epoch ${epoch.epoch.toString()} bucket identity is not exact.`, epoch.roundingReserve, rounding));
       }
     }
+    // Arithmetic is performed with unbounded JavaScript bigint. Refuse any
+    // transaction whose resulting state could not exist in the Move structs.
+    assertProjectionMoveDomains(context.next);
   } catch (error) {
     const detail = error instanceof Error ? error.message : "unknown event replay error";
     context.alerts.push(problem(first, "EVENT_DATA", detail));
+    context.next = cloneProjection(prior);
   }
 
   for (const event of events) {

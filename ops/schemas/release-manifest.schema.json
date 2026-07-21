@@ -1,0 +1,259 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/CryptoAutistic80/cedra-reflect/ops/schemas/release-manifest.schema.json",
+  "title": "Cedra Reflect cryptographically cross-bound finalized Testnet release manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "evidence_scope", "status", "network", "chain_id", "api_url",
+    "deployment_id", "release", "event_schema_version", "no_value_notice",
+    "framework_commit", "application_commit", "roles", "provenance", "approval_policy",
+    "external_execution_boundary", "execution_order", "packages", "transactions", "contract_configuration",
+    "metadata", "operational_authority", "bootstrap_liquidity", "objects", "initialization",
+    "initial_reconciliation_snapshot", "hook_probe", "review"
+  ],
+  "properties": {
+    "schema_version": { "const": 2 },
+    "evidence_scope": { "const": "finalized-testnet-release-manifest" },
+    "status": { "const": "finalized" },
+    "network": { "const": "cedra-testnet" },
+    "chain_id": { "const": "2" },
+    "api_url": { "const": "https://testnet.cedra.dev/v1" },
+    "deployment_id": { "type": "string", "pattern": "^[A-Za-z0-9._-]{1,80}$" },
+    "release": { "type": "string", "pattern": "^testnet-v[0-9]+\\.[0-9]+\\.[0-9]+([+-][A-Za-z0-9.-]+)?$" },
+    "event_schema_version": { "const": 1 },
+    "no_value_notice": { "const": "TESTNET ASSET — NO MONETARY VALUE — STATE AND ADDRESSES MAY CHANGE" },
+    "framework_commit": { "$ref": "#/$defs/commit" },
+    "application_commit": { "$ref": "#/$defs/commit" },
+    "roles": { "$ref": "#/$defs/roles" },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["application_tree", "working_tree_clean", "release_source_sha256", "public_role_candidate", "public_profile_preflight", "clean_verification_record", "exact_address_artifacts"],
+      "properties": {
+        "application_tree": { "$ref": "#/$defs/commit" },
+        "working_tree_clean": { "const": true },
+        "release_source_sha256": { "$ref": "#/$defs/sha256" },
+        "public_role_candidate": { "$ref": "#/$defs/binding" },
+        "public_profile_preflight": { "$ref": "#/$defs/binding" },
+        "clean_verification_record": { "$ref": "#/$defs/binding" },
+        "exact_address_artifacts": { "$ref": "#/$defs/binding" }
+      }
+    },
+    "approval_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["signature_namespace", "trusted_allowed_signers_sha256", "required_distinct_identities", "required_distinct_signing_keys"],
+      "properties": {
+        "signature_namespace": { "const": "cedra-reflect-testnet-release-v1" },
+        "trusted_allowed_signers_sha256": { "$ref": "#/$defs/sha256" },
+        "required_distinct_identities": { "const": 2 },
+        "required_distinct_signing_keys": { "const": 2 }
+      }
+    },
+    "external_execution_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository_reads_private_keys", "repository_signs_transactions", "repository_submits_transactions", "approved_candidate_may_be_rebuilt", "external_signing_and_submission_ceremony_required"],
+      "properties": {
+        "repository_reads_private_keys": { "const": false },
+        "repository_signs_transactions": { "const": false },
+        "repository_submits_transactions": { "const": false },
+        "approved_candidate_may_be_rebuilt": { "const": false },
+        "external_signing_and_submission_ceremony_required": { "const": true }
+      }
+    },
+    "execution_order": {
+      "const": ["core_publish", "core_initialize", "assets_publish", "amm_publish", "faucet_initialize", "amm_tusd_claim", "pool_initialize", "atomic_operational_handoff", "pool_seed"]
+    },
+    "packages": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reflection_core", "test_assets", "test_amm"],
+      "properties": {
+        "reflection_core": { "$ref": "#/$defs/package" },
+        "test_assets": { "$ref": "#/$defs/package" },
+        "test_amm": { "$ref": "#/$defs/package" }
+      }
+    },
+    "transactions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["core_publish", "assets_publish", "amm_publish", "core_initialize", "faucet_initialize", "amm_tusd_claim", "pool_initialize", "atomic_operational_handoff", "pool_seed"],
+      "properties": {
+        "core_publish": { "$ref": "#/$defs/transaction_binding" },
+        "assets_publish": { "$ref": "#/$defs/transaction_binding" },
+        "amm_publish": { "$ref": "#/$defs/transaction_binding" },
+        "core_initialize": { "$ref": "#/$defs/transaction_binding" },
+        "faucet_initialize": { "$ref": "#/$defs/transaction_binding" },
+        "amm_tusd_claim": { "$ref": "#/$defs/transaction_binding" },
+        "pool_initialize": { "$ref": "#/$defs/transaction_binding" },
+        "atomic_operational_handoff": { "$ref": "#/$defs/transaction_binding" },
+        "pool_seed": { "$ref": "#/$defs/transaction_binding" }
+      }
+    },
+    "contract_configuration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["trfl_decimals", "trfl_fixed_supply_base_units", "initial_reflection_fee_bps", "maximum_reflection_fee_bps", "automatic_materialization", "supported_custody_adapters", "arbitrary_external_vaults_supported"],
+      "properties": {
+        "trfl_decimals": { "const": 6 },
+        "trfl_fixed_supply_base_units": { "const": "1000000000000000" },
+        "initial_reflection_fee_bps": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "maximum_reflection_fee_bps": { "const": 100 },
+        "automatic_materialization": { "const": false },
+        "supported_custody_adapters": { "const": 1 },
+        "arbitrary_external_vaults_supported": { "const": false }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["trfl_icon_url", "trfl_icon_sha256", "tusd_icon_url", "tusd_icon_sha256", "project_url"],
+      "properties": {
+        "trfl_icon_url": { "type": "string", "pattern": "^https://" },
+        "trfl_icon_sha256": { "$ref": "#/$defs/sha256" },
+        "tusd_icon_url": { "type": "string", "pattern": "^https://" },
+        "tusd_icon_sha256": { "$ref": "#/$defs/sha256" },
+        "project_url": { "type": "string", "pattern": "^https://" }
+      }
+    },
+    "operational_authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["address", "atomic_handoff_transaction", "reconciled_ledger_version"],
+      "properties": {
+        "address": { "$ref": "#/$defs/address" },
+        "atomic_handoff_transaction": { "$ref": "#/$defs/transaction_hash" },
+        "reconciled_ledger_version": { "$ref": "#/$defs/decimal" }
+      }
+    },
+    "bootstrap_liquidity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["beneficiary", "rfl_amount", "usd_amount", "minimum_lp_shares", "seed_transaction"],
+      "properties": {
+        "beneficiary": { "$ref": "#/$defs/address" },
+        "rfl_amount": { "$ref": "#/$defs/positive_decimal" },
+        "usd_amount": { "$ref": "#/$defs/positive_decimal" },
+        "minimum_lp_shares": { "$ref": "#/$defs/positive_decimal" },
+        "seed_transaction": { "$ref": "#/$defs/transaction_hash" }
+      }
+    },
+    "objects": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["token_metadata", "reward_vault", "distribution_vault", "pool", "pool_custody_store", "pool_quote_reserve_store", "lp_share_representation", "lp_epoch_registry", "active_lp_epoch", "active_lp_state", "lp_reward_vault", "mock_usd_metadata"],
+      "properties": {
+        "token_metadata": { "$ref": "#/$defs/address" },
+        "reward_vault": { "$ref": "#/$defs/address" },
+        "distribution_vault": { "$ref": "#/$defs/address" },
+        "pool": { "$ref": "#/$defs/address" },
+        "pool_custody_store": { "$ref": "#/$defs/address" },
+        "pool_quote_reserve_store": { "$ref": "#/$defs/address" },
+        "lp_share_representation": { "const": "account-bound-table" },
+        "lp_epoch_registry": { "$ref": "#/$defs/address" },
+        "active_lp_epoch": { "$ref": "#/$defs/decimal" },
+        "active_lp_state": { "$ref": "#/$defs/address" },
+        "lp_reward_vault": { "$ref": "#/$defs/address" },
+        "mock_usd_metadata": { "$ref": "#/$defs/address" }
+      }
+    },
+    "initialization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["automatic_materialization", "core_transaction", "faucet_transaction", "pool_transaction", "finalized_ledger_version"],
+      "properties": {
+        "automatic_materialization": { "const": false },
+        "core_transaction": { "$ref": "#/$defs/transaction_hash" },
+        "faucet_transaction": { "$ref": "#/$defs/transaction_hash" },
+        "pool_transaction": { "$ref": "#/$defs/transaction_hash" },
+        "finalized_ledger_version": { "$ref": "#/$defs/decimal" }
+      }
+    },
+    "initial_reconciliation_snapshot": { "$ref": "#/$defs/binding" },
+    "hook_probe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file", "sha256", "mode"],
+      "properties": {
+        "file": { "$ref": "#/$defs/local_path" },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "mode": { "const": "claim-backed" }
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["independent_review", "unresolved_critical_findings", "unresolved_high_findings"],
+      "properties": {
+        "independent_review": { "$ref": "#/$defs/binding" },
+        "unresolved_critical_findings": { "const": 0 },
+        "unresolved_high_findings": { "const": 0 }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "framework_source_digest": { "type": "string", "pattern": "^[0-9A-F]{64}$" },
+    "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "address": { "type": "string", "pattern": "^0x[1-9a-f][0-9a-f]{0,63}$" },
+    "transaction_hash": { "type": "string", "pattern": "^0x[0-9a-f]{64}$" },
+    "decimal": { "type": "string", "pattern": "^(0|[1-9][0-9]*)$" },
+    "positive_decimal": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+    "local_path": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,255}$" },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file", "sha256"],
+      "properties": {
+        "file": { "$ref": "#/$defs/local_path" },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "transaction_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file", "sha256", "transaction_hash"],
+      "properties": {
+        "file": { "$ref": "#/$defs/local_path" },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "transaction_hash": { "$ref": "#/$defs/transaction_hash" }
+      }
+    },
+    "roles": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["core_publisher", "assets_publisher", "amm_publisher", "operations", "bootstrap_lp"],
+      "properties": {
+        "core_publisher": { "$ref": "#/$defs/address" },
+        "assets_publisher": { "$ref": "#/$defs/address" },
+        "amm_publisher": { "$ref": "#/$defs/address" },
+        "operations": { "$ref": "#/$defs/address" },
+        "bootstrap_lp": { "$ref": "#/$defs/address" }
+      }
+    },
+    "package": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["publisher", "event_source_address", "upgrade_policy", "custom_package_source_sha256", "metadata_bcs_sha256", "compiled_package_files_manifest_sha256", "review_bundle_files_manifest_sha256", "publish_payload_sha256", "embedded_package_metadata_source_digest", "on_chain_package_metadata_source_digest", "on_chain_upgrade_number", "on_chain_upgrade_policy_number", "publish_transaction", "gas_used", "finalized_ledger_version"],
+      "properties": {
+        "publisher": { "$ref": "#/$defs/address" },
+        "event_source_address": { "$ref": "#/$defs/address" },
+        "upgrade_policy": { "const": "immutable" },
+        "custom_package_source_sha256": { "$ref": "#/$defs/sha256" },
+        "metadata_bcs_sha256": { "$ref": "#/$defs/sha256" },
+        "compiled_package_files_manifest_sha256": { "$ref": "#/$defs/sha256" },
+        "review_bundle_files_manifest_sha256": { "$ref": "#/$defs/sha256" },
+        "publish_payload_sha256": { "$ref": "#/$defs/sha256" },
+        "embedded_package_metadata_source_digest": { "$ref": "#/$defs/framework_source_digest" },
+        "on_chain_package_metadata_source_digest": { "$ref": "#/$defs/framework_source_digest" },
+        "on_chain_upgrade_number": { "const": "0" },
+        "on_chain_upgrade_policy_number": { "const": 2 },
+        "publish_transaction": { "$ref": "#/$defs/transaction_hash" },
+        "gas_used": { "$ref": "#/$defs/decimal" },
+        "finalized_ledger_version": { "$ref": "#/$defs/decimal" }
+      }
+    }
+  }
+}

@@ -4,6 +4,10 @@
  */
 export type Address = `0x${string}`;
 
+/** Cedra Testnet's consensus chain identifier. */
+export const CEDRA_TESTNET_CHAIN_ID = 2 as const;
+export type CedraTestnetChainId = typeof CEDRA_TESTNET_CHAIN_ID;
+
 export type AssetSymbol = "tRFL" | "tUSD" | "CED";
 
 export type SwapDirection = "buy" | "sell";
@@ -50,6 +54,16 @@ export interface PoolSnapshot {
   readonly ledgerVersion: bigint;
 }
 
+/** Exact finalized `pool::lp_epoch_terminal_dust` result with explicit units. */
+export interface LpEpochTerminalDustSnapshot {
+  readonly epoch: bigint;
+  /** Physical tRFL base units returned as Move u128. */
+  readonly terminalRoundingBaseUnits: bigint;
+  /** Fractional correction units scaled by the protocol magnitude, Move u256. */
+  readonly retiredResidueMagnified: bigint;
+  readonly ledgerVersion: bigint;
+}
+
 export interface ProtocolSnapshot {
   readonly automaticMaterialization: boolean;
   readonly eligibleHolders: bigint;
@@ -70,6 +84,8 @@ export interface ProtocolSnapshot {
 export interface SwapQuote {
   readonly direction: SwapDirection;
   readonly grossAmount: bigint;
+  /** Slippage selected by the caller and bound into the executable minimum. */
+  readonly slippageBps: bigint;
   readonly reflectionFee: bigint;
   readonly ammFee: bigint;
   readonly netReserveInput: bigint;
@@ -78,6 +94,28 @@ export interface SwapQuote {
   readonly minimumNetUserReceipt: bigint;
   readonly priceImpactBps: bigint;
   readonly deadlineUnixSeconds: bigint;
+  /** Exact finalized state used to independently reproduce quote economics. */
+  readonly context: SwapQuoteContext;
+}
+
+export interface SwapQuoteContext {
+  readonly chainId: CedraTestnetChainId;
+  readonly ledgerVersion: bigint;
+  readonly deploymentId: string;
+  readonly packageVersion: string;
+  readonly inputReserve: bigint;
+  readonly outputReserve: bigint;
+  readonly reflectionFeeBps: bigint;
+  readonly ammFeeBps: bigint;
+  readonly maximumGrossSwap: bigint;
+  readonly maximumReserveBps: bigint;
+}
+
+declare const verifiedSwapQuoteBrand: unique symbol;
+
+/** Opaque compile-time capability; runtime authority is client-instance-bound. */
+export interface VerifiedSwapQuote extends SwapQuote {
+  readonly [verifiedSwapQuoteBrand]: true;
 }
 
 export interface FaucetStatus {
@@ -103,9 +141,18 @@ export interface TransactionDraft {
     | "checkpoint_lp_rewards"
     | "configure_liquidity_limits"
     | "set_faucet_paused"
-    | "set_operational_admin";
+    | "set_operational_admin"
+    | "set_all_operational_admin"
+    | "seed_liquidity"
+    | "reseed_liquidity";
   readonly functionId: string;
   readonly arguments: readonly EntryArgument[];
+  /**
+   * Ordered Cedra secondary signers required by the Move ABI. An empty array
+   * means the entry is single-signer. These addresses are transaction
+   * authenticators, never forged entry-function arguments.
+   */
+  readonly secondarySignerAddresses: readonly Address[];
   readonly expirationUnixSeconds: bigint;
   readonly warning: string;
 }
@@ -123,6 +170,7 @@ export interface CedraReadAdapter {
   getPortfolio(account: Address): Promise<PortfolioSnapshot>;
   getProtocol(): Promise<ProtocolSnapshot>;
   getPool(): Promise<PoolSnapshot>;
+  getLpEpochTerminalDust(epoch: bigint): Promise<LpEpochTerminalDustSnapshot>;
   getFaucetStatus(account: Address, asset: "tRFL" | "tUSD"): Promise<FaucetStatus>;
   quoteSwap(input: {
     readonly direction: SwapDirection;
