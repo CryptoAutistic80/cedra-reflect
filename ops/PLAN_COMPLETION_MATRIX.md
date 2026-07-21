@@ -9,6 +9,8 @@ Status meanings:
 - **IMPLEMENTED:** source exists but the complete clean gate is not yet bound.
 - **PASS (local):** reproduced deterministic evidence for the selected source.
 - **PASS (Testnet):** finalized v0.2 ledger or wallet evidence.
+- **PARTIAL:** part of the stated gate has passed, with the remaining evidence
+  named explicitly.
 - **OPEN:** required evidence does not yet exist.
 - **DEFERRED:** deliberately outside v0.2 scope.
 
@@ -16,19 +18,19 @@ Status meanings:
 
 | Requirement | Status | Required or current evidence |
 |---|---|---|
-| Creation-selected fee 0–500 bps; 100 bps instance | PASS (local) | Core tests for 0, 1, 100, 500 and rejected 501; exact initialization payload is `100` |
-| Fixed tRFL supply; mint capability destroyed | PASS (local) | Source/ABI review, supply tests, and zero-discrepancy model reconciliation |
-| Atomic source-bound launch | PASS (local) | Four-signer launch tests, rollback tests, five-operation release candidate |
-| Ownerless after launch | PASS (local) | ABI deny/allowlist plus former-publisher negative tests; no setter/pause/admin/rotation/shutdown/reseed |
-| Derived wallet balance is raw plus pending | PASS (local) | Move hook tests pass; fresh Testnet CLI/REST/wallet compatibility remains open |
-| Automatic send/receive materialization | PASS (local) | Endpoint, self-transfer, spend-effective, and historical-capture tests |
-| Automatic buy/sell materialization | PASS (local) | Old/incoming/remaining/sold entitlement and exact-fee tests |
-| Automatic post-swap pool checkpoint | PASS (local) | Every successful model and Move buy/sell ends with pool pending zero and LP backing increased |
-| LP endpoint materialization | PASS (local) | Add/remove/transfer historical ownership and recipient-store tests |
+| Creation-selected fee 0–500 bps; 100 bps instance | PASS (Testnet) | Local boundary tests plus finalized `initialize(100)` and immutable fee view |
+| Fixed tRFL supply; mint capability destroyed | PASS (Testnet) | Source/ABI review plus exact live physical-supply reconciliation |
+| Atomic source-bound launch | PASS (Testnet) | Finalized four-signer launch plus repeated-launch rejection |
+| Ownerless after launch | PASS (Testnet) | Deployed ABI denylist and former-publisher surface review; no setter/pause/admin/rotation/shutdown/reseed |
+| Derived wallet balance is raw plus pending | PASS (Testnet) | Genuine raw/pending split returned identically by CLI framework view and REST; real-wallet display remains a separate gate |
+| Automatic send/receive materialization | PASS (Testnet) | Standard primary-store transfers materialized Bob, Carol and Dave before debit |
+| Automatic buy/sell materialization | PASS (Testnet) | Ten alternating finalized swaps left Alice pending zero and charged the exact immutable fee |
+| Automatic post-swap pool checkpoint | PASS (Testnet) | Pool core pending was zero and LP backing increased after every recorded swap |
+| LP endpoint materialization | PASS (Testnet) | Finalized add, reward-bearing transfer, partial removal and non-final full-position removal |
 | Permissionless exact final close | PASS (local) | Fragmented LP, exact reserve exit, zero discrepancy, permanent-close tests |
-| Manual wallet/LP fallback claims | PASS (local) | Unpausable owner/permissionless checkpoint tests, including after close where applicable |
+| Manual wallet/LP fallback claims | PASS (Testnet) | Finalized wallet `claim_all` and direct bootstrap LP claim-all both left pending zero |
 | Unsupported stores/custody fail closed | PASS (local) | Secondary/wrong/funded/aliased store negative tests |
-| O(1) holder and LP behavior | PASS (local) | No iteration over holder/LP position tables; finalized v0.2 gas comparison remains open |
+| O(1) holder and LP behavior | PASS (Testnet) | No iteration over holder/LP position tables; measured non-final live paths remain far below the Testnet ceiling |
 
 ## Local verification
 
@@ -43,8 +45,8 @@ Status meanings:
 | Random creation fees | full 0–500 range | PASS (local, working tree) |
 | Randomized accounting operations | at least 1,000,000 successful | PASS (local, working tree): 1,000,000 successful in 1,084,627 attempts |
 | Unexplained discrepancy | zero | PASS (local, working tree) |
-| Maximum-path gas | <= 2.5x v0.1 and < 80% Testnet ceiling | OPEN |
-| Exact-address artifacts | immutable policy 2, upgrade 0, exact source digests | PASS (local dummy-address build); fresh profile-address build OPEN |
+| Maximum-path gas | <= 2.5x v0.1 and < 80% Testnet ceiling | PARTIAL: all measured non-final paths PASS; final close OPEN |
+| Exact-address artifacts | immutable policy 2, upgrade 0, exact source digests | PASS (Testnet): all three finalized packages match fresh-address artifacts |
 
 The working-tree gate is useful implementation evidence, not a clean release
 record. Its million-operation digest is
@@ -56,15 +58,16 @@ to the exact-address artifacts before submission.
 
 | Gate | Status | Required evidence |
 |---|---|---|
-| Fresh v0.2 CLI profiles | OPEN | Core/assets/AMM/bootstrap plus Alice/Bob/Carol/Dave, all Testnet-bound |
-| Distinct raw/derived hook probe | OPEN | Finalized raw != derived evidence and secondary-store rejection |
-| CLI/REST/read-adapter agreement | OPEN | Same finalized version and exact derived balance |
+| Fresh v0.2 CLI profiles | PASS (Testnet) | Core/assets/AMM/bootstrap plus Alice/Bob/Carol/Dave, all separately Testnet-bound |
+| Distinct raw/derived hook probe | PARTIAL | Finalized raw != derived probe PASS; secondary-store rejection remains open |
+| CLI/REST/read-adapter agreement | PASS (Testnet) | CLI and REST returned exact derived balance `1,000,484,828` for raw `1,000,440,819` plus pending `44,009` |
 | Real wallet display | OPEN | Playwright compatibility evidence; no frontend |
-| Five release operations simulated | OPEN | Publish, initialize(100), publish, publish, launch; simulate before submission |
-| Fresh immutable v0.2 deployment | OPEN | New addresses/identity, policy 2, upgrade 0, source digests, bound fee |
-| Ownerless negative suite | OPEN | Every former publisher has no privileged post-launch success |
-| Four-holder ten-cycle exercise | OPEN | Per-trade fee/materialization/passive-holder/pool/LP/reconciliation record |
-| LP movement and final close | OPEN | Add, partial/full remove, transfer, fragmented permissionless close |
+| Five release operations simulated | PARTIAL | Initialize, assets publish, AMM publish and launch used the same simulated/submitted object; core publish did not due recorded CLI behavior |
+| Fresh immutable v0.2 deployment | PASS (Testnet) | Fresh addresses, policy 2, upgrade 0, exact source digests, fee 100 and sealed LIVE state |
+| Ownerless negative suite | PASS (Testnet) | Repeated init/launch reject; deployed ABI exposes no privileged post-launch entry point to any former publisher |
+| Four-holder ten-cycle exercise | PASS (Testnet) | Per-trade exact fee, automatic materialization, passive growth, pool checkpoint, LP growth and exact reconciliation |
+| LP add/remove/transfer | PASS (Testnet) | Finalized add, partial/full-position remove and reward-bearing endpoint transfer |
+| Fragmented permissionless final close | OPEN | Deliberately retained bootstrap position so the canonical pilot can continue |
 | Post-close failures | OPEN | Swap/liquidity/launch/reseed simulation rejection |
 
 ## Canonical pilot gates

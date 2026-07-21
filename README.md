@@ -4,8 +4,8 @@
 
 Cedra Reflect is a single-token Cedra Move reference implementation for a
 fixed-supply reflection token and its canonical tRFL/tUSD liquidity pool. The
-current v0.2 release candidate is designed to become ownerless at launch and to
-materialize wallet and LP rewards automatically during ordinary interactions.
+current v0.2 Testnet instance is ownerless after launch and materializes wallet
+and LP rewards automatically during ordinary interactions.
 It is a reference for a future factory; it is not itself a token factory.
 
 ## What is enforced on chain
@@ -80,12 +80,14 @@ The broader local repository gate is:
 make verify RELEASE_NODE_RUNTIME=/absolute/reviewed/path/to/node
 ```
 
-Before a v0.2 Testnet instance is called canonical, the project also requires
-fresh exact-address artifacts, simulation before every submission, finalized
-CLI-wallet evidence, a four-holder repeated buy/sell exercise, LP
-add/remove/transfer/final-close evidence, and zero reconciliation discrepancy.
-The larger 50,000-transaction pilot gates remain separate live evidence and
-must not be inferred from local tests.
+The fresh v0.2 Testnet instance has exact-address/source verification,
+finalized CLI/REST derived-balance evidence, a four-holder ten-cycle swap run,
+and LP add/remove/transfer evidence with zero observed reconciliation
+discrepancy. It is not yet canonical: its core publish lacks pre-submit
+simulation evidence, and secondary-store rejection, real-wallet display,
+direct LP claim, fragmented final close, post-close rejection, and the larger
+50,000-transaction pilot remain open. See the
+[`v0.2 Testnet evidence`](ops/evidence/testnet-deployment-v02-c95c4fe.md).
 
 ## Release history and scope
 

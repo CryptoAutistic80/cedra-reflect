@@ -1,8 +1,13 @@
 # Cedra Reflect v0.2 ownerless automatic-reflection Testnet plan
 
-Status: implementation and local verification in progress. v0.2 is not
-canonical until every required local, Testnet compatibility, deployment, and
-live-pilot gate below is evidenced. v0.1 is a separate historical deployment.
+Status: contract implementation and deterministic local verification passed;
+a fresh ownerless v0.2 instance is deployed and has passed the bounded
+four-wallet and non-final LP Testnet exercises. It is not canonical until the
+remaining compatibility, final-close, release-procedure and live-pilot gates
+below are evidenced. The current results and exact open gates are recorded in
+[`ops/evidence/testnet-deployment-v02-c95c4fe.md`](ops/evidence/testnet-deployment-v02-c95c4fe.md)
+and [`ops/PLAN_COMPLETION_MATRIX.md`](ops/PLAN_COMPLETION_MATRIX.md). v0.1 is a
+separate historical deployment.
 
 ## Objective
 
