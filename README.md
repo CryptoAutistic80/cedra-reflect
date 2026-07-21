@@ -86,7 +86,7 @@ authorization. See `CHANGELOG.md` for the candidate history.
 
 ## Local verification
 
-The latest settled dirty-tree evidence is 118/118 Move tests (2 hook probe, 8
+The latest clean, provenance-bound evidence is 118/118 Move tests (2 hook probe, 8
 core, 0 asset-local, 5 AMM, 103 integration), 60/60 Python tests, 78/78
 TypeScript SDK/indexer tests, and 21/21 release-candidate assembler tests.
 Generated conformance is current. The latest claim-backed million-operation run
@@ -94,8 +94,9 @@ completed 1,000,000 successful transitions from 1,071,570 attempts, with
 70,626 no-ops, 944 rejected operations, 2,002 full audits, 1,024 holders,
 `automatic_materialization=false`, and digest
 `a40abf6fd8f4b91c7152ba8a63016ef2ef49d2be6c698fdb4dcd87f6c16d90e9`.
-Every figure in this paragraph is local dirty-tree evidence; the entire suite
-and workload must be reproduced from the final clean exact commit.
+The clean record binds the exact Git commit/tree, source, Cedra CLI/framework,
+verification log, model report, and local release builds. It remains local
+evidence, and it must be regenerated whenever the reviewed commit changes.
 
 Independent local re-audits currently report GO for the contract with no
 remaining Critical, High, Medium, or Low finding, for SDK/indexer parity, and
@@ -113,9 +114,8 @@ release-tooling security, executable-closure, and JSON-schema suites with the
 current toolchains. Exact counts must be reproduced at the clean reviewed
 commit rather than copied from an earlier run. See the individual package
 READMEs for setup.
-`make pilot-gate` runs the expanded randomized accounting gate; the latest
-million-operation run passed on a dirty tree and must also be repeated for the
-clean release record. Neither command submits transactions or contacts a
+`make pilot-gate` runs the expanded randomized accounting gate; the clean
+release capture runs it and preserves its provenance report. Neither command submits transactions or contacts a
 wallet. These local checks validate implementation and evidence handling, not
 a live release or independent human SDK approval.
 

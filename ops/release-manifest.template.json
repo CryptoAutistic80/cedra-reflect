@@ -138,9 +138,9 @@
   },
   "metadata": {
     "trfl_icon_url": "https://raw.githubusercontent.com/CryptoAutistic80/cedra-reflect/main/assets/trfl-testnet.svg",
-    "trfl_icon_sha256": "367fb3b1fca3ff39379c1377b985cbcda744cf1f88cc7bbac153d76a5b53c16c",
+    "trfl_icon_sha256": "da31d797933a9859020db3f1f83482eeb7e02f0b594892ba2d1220fb8ad7c75d",
     "tusd_icon_url": "https://raw.githubusercontent.com/CryptoAutistic80/cedra-reflect/main/assets/tusd-testnet.svg",
-    "tusd_icon_sha256": "9686d23f60b3c6616ff43ad305d57b050b1bb31dd92a4ce48f26f2c9e13daa90",
+    "tusd_icon_sha256": "1f13c0dd2c856711cc72dae8f74d92e616ef2f67ab1fadee977c10805b817caa",
     "project_url": "https://github.com/CryptoAutistic80/cedra-reflect"
   },
   "operational_authority": {

@@ -47,7 +47,7 @@ module test_assets::mock_usd {
         primary_fungible_store::create_primary_store_enabled_fungible_asset(
             &constructor_ref,
             option::none(),
-            string::utf8(b"Reflection Pilot Test USD"),
+            string::utf8(b"TESTNET ASSET NO VALUE tUSD"),
             string::utf8(b"tUSD"),
             6,
             string::utf8(b"https://raw.githubusercontent.com/CryptoAutistic80/cedra-reflect/main/assets/tusd-testnet.svg"),

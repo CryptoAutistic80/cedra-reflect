@@ -70,7 +70,7 @@ evidence only. The isolated hook-probe publication is separately preserved in
 `ops/evidence/hook-probe-testnet.json`; it is not a deployment of the core,
 test-assets, or AMM packages and is not participant or public-pilot evidence.
 
-**Latest local dirty-tree gate — passed July 21, 2026:** the Cedra CLI passes
+**Latest clean local release-evidence gate — passed July 21, 2026:** the Cedra CLI passes
 **118/118 Move tests**: 2 hook-probe, 8 reflection-core, 0 asset-local, 5 AMM,
 and **103/103 integration tests**. The independent Python model,
 evidence-template, workload-harness, conformance, and Move-surface checks pass
@@ -82,13 +82,14 @@ completes exactly **1,000,000 applied state changes across 1,024 holders** from
 separately while performing 2,002 full invariant audits. It records
 `automatic_materialization=false` and final SHA-256 state digest
 `a40abf6fd8f4b91c7152ba8a63016ef2ef49d2be6c698fdb4dcd87f6c16d90e9`.
-These are local dirty-tree results, not release-bound evidence. The complete
-gate, including the million-operation workload, must run again from the final
-clean exact commit; `make release-artifacts` then compiles every package with
-Cedra CLI 1.0.4, records
-local source digests, and fails closed if any publishable package's module
-bytecode plus sparse metadata exceeds the normal 65,536-byte publication
-boundary. These results authorize no funding, publication, or live transaction.
+The clean capture binds the exact Git commit/tree, release-source digest,
+Cedra CLI/framework identity, full verification log, million-operation report,
+and local release builds. The exact-address build then binds all five public
+roles to the three immutable package payloads and fails closed if any package's
+module bytecode plus sparse metadata exceeds the normal 65,536-byte publication
+boundary. Both records are local release-review evidence and must be regenerated
+after any change to the selected commit. They authorize no funding,
+publication, or live transaction.
 
 Independent local code re-audits report **GO** for the contract (no remaining
 Critical, High, Medium, or Low finding), the SDK/indexer parity surface, and the
@@ -154,14 +155,17 @@ exists and a concrete change actually requires them.
 The public pilot should be called something visibly non-economic, for example:
 
 ```text
-Name: Reflection Pilot Test Token
+Display label: Reflection Pilot Test Token
+On-chain metadata name: TESTNET ASSET NO VALUE tRFL
 Symbol: tRFL
 Network: Cedra Testnet
 Value: No real-world value
 Reflection fee: 1% on supported swaps
 ```
 
-The metadata, website, wallet interface, documentation, and faucet should all display:
+The framework caps the metadata name at 32 characters. The on-chain name carries
+the Testnet/no-value warning directly; its metadata-bound icon and project URI,
+the website, wallet interface, documentation, and faucet display the complete:
 
 ```text
 TESTNET ASSET
@@ -1597,9 +1601,10 @@ public accounting dashboard
 fresh-deployment recovery rehearsal
 ```
 
-The compatibility probe and accounting specification are complete. The current
-next deliverable is a final green clean-commit verification record, an
-exact-address human-review bundle, and the first validator-accepted keyless
-Testnet candidate. Funding/account-control proof, independent human review,
+The compatibility probe, accounting specification, clean verification capture,
+and exact-address review bundle are complete locally. The current next gate is
+independent human source/bytecode and SDK review, followed by the first
+validator-accepted keyless Testnet candidate. Funding/account-control proof,
+independent human review,
 per-transaction approvals, external signing/submission, and finalized Testnet
 evidence remain separate gates.

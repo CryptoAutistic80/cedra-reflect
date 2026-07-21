@@ -85,12 +85,15 @@ class MoveVisibilitySurfaceTests(unittest.TestCase):
         core = (ROOT / "move/reflection-core/sources/reflection_token.move").read_text()
         quote = (ROOT / "move/test-assets/sources/mock_usd.move").read_text()
         self.assertNotIn("example.invalid", core + quote)
+        self.assertIn('b"TESTNET ASSET NO VALUE tRFL"', core)
+        self.assertIn('b"TESTNET ASSET NO VALUE tUSD"', quote)
         self.assertIn("trfl-testnet.svg", core)
         self.assertIn("tusd-testnet.svg", quote)
         for asset in ("trfl-testnet.svg", "tusd-testnet.svg"):
             contents = (ROOT / "assets" / asset).read_text()
-            self.assertIn("CEDRA TESTNET", contents)
-            self.assertIn("NO VALUE", contents)
+            self.assertIn("TESTNET ASSET", contents)
+            self.assertIn("NO MONETARY VALUE", contents)
+            self.assertIn("STATE AND ADDRESSES MAY CHANGE", contents)
 
     def test_publishable_packages_are_immutable(self) -> None:
         for package in ("reflection-core", "test-assets", "test-amm"):

@@ -145,7 +145,7 @@ module reflection_core::reflection_token {
         primary_fungible_store::create_primary_store_enabled_fungible_asset(
             &constructor_ref,
             option::some(TOTAL_SUPPLY as u128),
-            string::utf8(b"Reflection Pilot Test Token"),
+            string::utf8(b"TESTNET ASSET NO VALUE tRFL"),
             string::utf8(b"tRFL"),
             6,
             string::utf8(b"https://raw.githubusercontent.com/CryptoAutistic80/cedra-reflect/main/assets/trfl-testnet.svg"),
